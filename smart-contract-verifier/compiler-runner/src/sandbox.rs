@@ -80,6 +80,19 @@ pub struct SandboxOutput {
     pub max_bytes: usize,
 }
 
+/// What a sandbox holds for its whole life, when its steps are decided as it goes rather than
+/// listed up front as in a [`SandboxJob`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SandboxSpec {
+    pub volumes: Vec<SandboxVolume>,
+    /// Lowercase host names that steps with [`SandboxNetwork::Egress`] may connect to. Left
+    /// empty, the sandbox has no proxy and such steps are refused.
+    pub egress_hosts: Vec<String>,
+    /// Everything the sandbox created is reclaimed this long after it started, even if its owner
+    /// died. A step whose own timeout does not fit in the time left is refused.
+    pub lifetime_seconds: u64,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SandboxJob {
     pub volumes: Vec<SandboxVolume>,
@@ -111,16 +124,7 @@ impl SandboxJob {
             return Err(invalid("a sandbox job needs at least one step"));
         }
 
-        let mut volumes = HashSet::new();
-        for volume in &self.volumes {
-            validate_name("volume", &volume.name)?;
-            if !volumes.insert(volume.name.as_str()) {
-                return Err(invalid(format!("duplicate volume: {}", volume.name)));
-            }
-            if volume.size_bytes == 0 {
-                return Err(invalid(format!("volume {} has no size", volume.name)));
-            }
-        }
+        let volumes = validate_volumes(&self.volumes)?;
 
         for step in &self.steps {
             step.validate(&volumes)?;
@@ -131,11 +135,7 @@ impl SandboxJob {
                 "egress hosts must be listed exactly when a step uses the egress network",
             ));
         }
-        if let Some(host) = self.egress_hosts.iter().find(|host| !is_host_name(host)) {
-            return Err(invalid(format!(
-                "egress host must be a lowercase DNS name: {host:?}"
-            )));
-        }
+        validate_hosts(&self.egress_hosts)?;
 
         let mut outputs = HashSet::new();
         for output in &self.outputs {
@@ -143,23 +143,65 @@ impl SandboxJob {
             if !outputs.insert(output.name.as_str()) {
                 return Err(invalid(format!("duplicate output: {}", output.name)));
             }
-            if !volumes.contains(output.volume.as_str()) {
-                return Err(invalid(format!(
-                    "output {} reads an undeclared volume: {}",
-                    output.name, output.volume
-                )));
-            }
-            if !is_normal_relative_path(&output.path) {
-                return Err(invalid(format!(
-                    "output {} needs a normalized path relative to its volume",
-                    output.name
-                )));
-            }
-            if output.max_bytes == 0 {
-                return Err(invalid(format!("output {} has no size limit", output.name)));
-            }
+            output.validate(&volumes)?;
         }
         Ok(())
+    }
+}
+
+impl SandboxSpec {
+    pub fn validate(&self) -> Result<(), ExecutionError> {
+        validate_volumes(&self.volumes)?;
+        validate_hosts(&self.egress_hosts)?;
+        if self.lifetime_seconds == 0 {
+            return Err(invalid("a sandbox needs a lifetime"));
+        }
+        Ok(())
+    }
+}
+
+impl SandboxOutput {
+    pub(crate) fn validate(&self, volumes: &HashSet<&str>) -> Result<(), ExecutionError> {
+        validate_name("output", &self.name)?;
+        if !volumes.contains(self.volume.as_str()) {
+            return Err(invalid(format!(
+                "output {} reads an undeclared volume: {}",
+                self.name, self.volume
+            )));
+        }
+        if !is_normal_relative_path(&self.path) {
+            return Err(invalid(format!(
+                "output {} needs a normalized path relative to its volume",
+                self.name
+            )));
+        }
+        if self.max_bytes == 0 {
+            return Err(invalid(format!("output {} has no size limit", self.name)));
+        }
+        Ok(())
+    }
+}
+
+pub(crate) fn validate_volumes(volumes: &[SandboxVolume]) -> Result<HashSet<&str>, ExecutionError> {
+    let mut names = HashSet::new();
+    for volume in volumes {
+        validate_name("volume", &volume.name)?;
+        if !names.insert(volume.name.as_str()) {
+            return Err(invalid(format!("duplicate volume: {}", volume.name)));
+        }
+        if volume.size_bytes == 0 {
+            return Err(invalid(format!("volume {} has no size", volume.name)));
+        }
+    }
+    Ok(names)
+}
+
+fn validate_hosts(hosts: &[String]) -> Result<(), ExecutionError> {
+    match hosts.iter().find(|host| !is_host_name(host)) {
+        Some(host) => Err(invalid(format!(
+            "egress host must be a lowercase DNS name: {host:?}"
+        ))),
+        None => Ok(()),
     }
 }
 
@@ -172,7 +214,7 @@ impl SandboxJob {
 }
 
 impl SandboxStep {
-    fn validate(&self, volumes: &HashSet<&str>) -> Result<(), ExecutionError> {
+    pub(crate) fn validate(&self, volumes: &HashSet<&str>) -> Result<(), ExecutionError> {
         validate_name("step", &self.name)?;
         let step = &self.name;
         if !is_pinned_image(&self.image) {

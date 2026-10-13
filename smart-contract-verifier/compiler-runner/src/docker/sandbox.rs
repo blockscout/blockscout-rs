@@ -16,8 +16,9 @@ use super::{
 };
 use crate::{
     metrics::{self, ContainerFamily},
-    ExecutionError, SandboxFile, SandboxJob, SandboxJobOutput, SandboxNetwork, SandboxOutput,
-    SandboxStep, SandboxVolume,
+    sandbox::validate_volumes,
+    ExecutionError, ExecutionOutput, SandboxFile, SandboxJob, SandboxJobOutput, SandboxNetwork,
+    SandboxOutput, SandboxSpec, SandboxStep, SandboxVolume,
 };
 use anyhow::Context;
 use bollard::{
@@ -58,6 +59,21 @@ const PROXY_CONFIG_PATH: &str = "/tmp/tinyproxy.conf";
 const PROXY_FILTER_PATH: &str = "/tmp/tinyproxy-filter";
 const PROXY_READY_POLL: Duration = Duration::from_millis(100);
 
+/// A running sandbox: its volumes, their holder and, with egress hosts, its proxy. Steps are run
+/// one at a time, so the caller can choose the next one from what the last one produced.
+///
+/// Call [`SandboxSession::finish`] when done. A session that is merely dropped is still cleaned
+/// up, in the background.
+pub struct SandboxSession {
+    executor: DockerCompilerExecutor,
+    spec: SandboxSpec,
+    plan: JobPlan,
+    resources: SandboxResources,
+    holder_id: String,
+    steps_run: usize,
+    observation: Option<metrics::JobObservation>,
+}
+
 impl DockerCompilerExecutor {
     /// Runs the job's steps in order and returns their output and the requested files.
     ///
@@ -67,38 +83,75 @@ impl DockerCompilerExecutor {
         &self,
         job: SandboxJob,
     ) -> Result<SandboxJobOutput, ExecutionError> {
-        let observation = metrics::JobObservation::new(metrics::DOCKER, "sandbox_job");
+        job.validate()?;
+        let mut session = self
+            .start_sandbox(SandboxSpec {
+                volumes: job.volumes.clone(),
+                egress_hosts: job.egress_hosts.clone(),
+                lifetime_seconds: job_lifetime_seconds(
+                    &job,
+                    self.settings.request_timeout_seconds(),
+                    self.settings.api_timeout_seconds,
+                ),
+            })
+            .await?;
         let result = async {
-            job.validate()?;
-            self.ensure_initialized().await?;
-            let plan = JobPlan::new(
-                &job,
-                self.settings.request_timeout_seconds(),
-                self.settings.api_timeout_seconds,
-            )?;
-            let mut resources = SandboxResources::new(self.docker.clone());
-            let result = self.run_planned_job(&job, &plan, &mut resources).await;
-            if let Err(error) = resources.remove_all().await {
-                tracing::warn!(
-                    job_id = %plan.job_id,
-                    error = ?error,
-                    "eager sandbox cleanup failed; the periodic sweep remains armed"
-                );
+            let mut steps = Vec::with_capacity(job.steps.len());
+            for step in &job.steps {
+                steps.push(session.run_step(step).await?);
             }
-            result
+            let mut outputs = Vec::with_capacity(job.outputs.len());
+            for output in &job.outputs {
+                outputs.push(session.read_output(output).await?);
+            }
+            Ok(SandboxJobOutput { steps, outputs })
         }
         .await;
-        observation.finish_result(&result);
+        session.finish().await;
         result
     }
 
-    async fn run_planned_job(
+    /// Creates the sandbox's volumes, their holder and, when egress hosts are listed, its proxy.
+    pub async fn start_sandbox(&self, spec: SandboxSpec) -> Result<SandboxSession, ExecutionError> {
+        let observation = metrics::JobObservation::new(metrics::DOCKER, "sandbox_job");
+        let started = async {
+            spec.validate()?;
+            self.ensure_initialized().await?;
+            let plan = JobPlan::new(spec.lifetime_seconds)?;
+            let mut resources = SandboxResources::new(self.docker.clone());
+            match self.provision_sandbox(&spec, &plan, &mut resources).await {
+                Ok(holder_id) => Ok((plan, resources, holder_id)),
+                Err(error) => {
+                    resources.remove_all_logged(&plan).await;
+                    Err(error)
+                }
+            }
+        }
+        .await;
+        match started {
+            Ok((plan, resources, holder_id)) => Ok(SandboxSession {
+                executor: self.clone(),
+                spec,
+                plan,
+                resources,
+                holder_id,
+                steps_run: 0,
+                observation: Some(observation),
+            }),
+            Err(error) => {
+                observation.finish_error(&error);
+                Err(error)
+            }
+        }
+    }
+
+    async fn provision_sandbox(
         &self,
-        job: &SandboxJob,
+        spec: &SandboxSpec,
         plan: &JobPlan,
         resources: &mut SandboxResources,
-    ) -> Result<SandboxJobOutput, ExecutionError> {
-        for volume in &job.volumes {
+    ) -> Result<String, ExecutionError> {
+        for volume in &spec.volumes {
             let request = plan.volume_request(volume);
             let name = plan.volume_name(&volume.name);
             retry_connect(&self.docker, || self.docker.create_volume(request.clone()))
@@ -111,7 +164,7 @@ impl DockerCompilerExecutor {
         let holder_id = self
             .create_sandbox_container(
                 plan.container_name("holder"),
-                self.holder_config(job, plan),
+                self.holder_config(&spec.volumes, plan),
                 ContainerFamily::SandboxHolder,
                 resources,
             )
@@ -123,44 +176,11 @@ impl DockerCompilerExecutor {
         .context("start sandbox holder")
         .map_err(ExecutionError::Infrastructure)?;
 
-        if job.uses_egress() {
-            self.start_egress_proxy(job, plan, resources).await?;
-        }
-
-        let mut steps = Vec::with_capacity(job.steps.len());
-        for (index, step) in job.steps.iter().enumerate() {
-            let container_id = self
-                .create_sandbox_container(
-                    plan.container_name(&format!("step-{index}")),
-                    self.step_config(step, plan),
-                    ContainerFamily::SandboxStep,
-                    resources,
-                )
+        if !spec.egress_hosts.is_empty() {
+            self.start_egress_proxy(&spec.egress_hosts, plan, resources)
                 .await?;
-            let output = self
-                .run_created_container_within(
-                    &container_id,
-                    Bytes::new(),
-                    ContainerFamily::SandboxStep,
-                    RunLimits {
-                        timeout_seconds: step.limits.timeout_seconds,
-                        max_output_bytes: step.limits.max_output_bytes,
-                    },
-                )
-                .await?;
-            // A finished step must not keep its mounts or memory while the next one runs.
-            if let Err(error) = resources.remove_container(&container_id).await {
-                tracing::warn!(container_id, error = ?error, "failed to remove sandbox step");
-            }
-            output.ensure_success(&step.name)?;
-            steps.push(output);
         }
-
-        let mut outputs = Vec::with_capacity(job.outputs.len());
-        for output in &job.outputs {
-            outputs.push(self.read_sandbox_output(&holder_id, output).await?);
-        }
-        Ok(SandboxJobOutput { steps, outputs })
+        Ok(holder_id)
     }
 
     async fn create_sandbox_container(
@@ -193,9 +213,8 @@ impl DockerCompilerExecutor {
 
     /// Keeps every volume mounted for the whole job and is where outputs are read from. It runs
     /// nothing from the job.
-    fn holder_config(&self, job: &SandboxJob, plan: &JobPlan) -> ContainerCreateBody {
-        let mounts = job
-            .volumes
+    fn holder_config(&self, volumes: &[SandboxVolume], plan: &JobPlan) -> ContainerCreateBody {
+        let mounts = volumes
             .iter()
             .map(|volume| plan.mount(&volume.name, format!("{HOLDER_ROOT}/{}", volume.name), true))
             .collect();
@@ -272,7 +291,7 @@ impl DockerCompilerExecutor {
     /// connections, so the first step cannot race it.
     async fn start_egress_proxy(
         &self,
-        job: &SandboxJob,
+        hosts: &[String],
         plan: &JobPlan,
         resources: &mut SandboxResources,
     ) -> Result<(), ExecutionError> {
@@ -287,7 +306,7 @@ impl DockerCompilerExecutor {
         let proxy_id = self
             .create_sandbox_container(
                 plan.container_name("proxy"),
-                self.proxy_config(job, plan),
+                self.proxy_config(hosts, plan),
                 ContainerFamily::SandboxProxy,
                 resources,
             )
@@ -359,7 +378,7 @@ impl DockerCompilerExecutor {
 
     /// The only container of a job with a route out. It runs the runner image's tinyproxy with a
     /// configuration built here; nothing from the job reaches it but TCP connections.
-    fn proxy_config(&self, job: &SandboxJob, plan: &JobPlan) -> ContainerCreateBody {
+    fn proxy_config(&self, hosts: &[String], plan: &JobPlan) -> ContainerCreateBody {
         let host_config = HostConfig {
             network_mode: Some("bridge".to_string()),
             tmpfs: Some(HashMap::from([(
@@ -379,7 +398,7 @@ impl DockerCompilerExecutor {
                 JOB_USER,
                 vec![
                     format!("TINYPROXY_CONF={}", proxy_configuration()),
-                    format!("TINYPROXY_FILTER={}", proxy_filter(&job.egress_hosts)),
+                    format!("TINYPROXY_FILTER={}", proxy_filter(hosts)),
                 ],
                 vec![
                     "/bin/sh".to_string(),
@@ -454,27 +473,117 @@ impl DockerCompilerExecutor {
     }
 }
 
+impl SandboxSession {
+    /// Runs one step to completion in its own container. A non-zero exit code is an
+    /// [`ExecutionError::CompilerFailed`] naming the step.
+    pub async fn run_step(
+        &mut self,
+        step: &SandboxStep,
+    ) -> Result<ExecutionOutput, ExecutionError> {
+        let result = self.run_step_unobserved(step).await;
+        self.observe_failure(&result);
+        result
+    }
+
+    async fn run_step_unobserved(
+        &mut self,
+        step: &SandboxStep,
+    ) -> Result<ExecutionOutput, ExecutionError> {
+        step.validate(&validate_volumes(&self.spec.volumes)?)?;
+        if step.network == SandboxNetwork::Egress && self.spec.egress_hosts.is_empty() {
+            return Err(ExecutionError::InvalidInvocation(format!(
+                "step {} needs egress, but the sandbox lists no hosts",
+                step.name
+            )));
+        }
+        // A step that could outlive the expiry label would be reaped mid-run.
+        if unix_timestamp()?.saturating_add(step.limits.timeout_seconds) > self.plan.deadline {
+            return Err(ExecutionError::Timeout {
+                seconds: self.plan.lifetime_seconds,
+            });
+        }
+
+        let executor = &self.executor;
+        let index = self.steps_run;
+        self.steps_run += 1;
+        let container_id = executor
+            .create_sandbox_container(
+                self.plan.container_name(&format!("step-{index}")),
+                executor.step_config(step, &self.plan),
+                ContainerFamily::SandboxStep,
+                &mut self.resources,
+            )
+            .await?;
+        let output = executor
+            .run_created_container_within(
+                &container_id,
+                Bytes::new(),
+                ContainerFamily::SandboxStep,
+                RunLimits {
+                    timeout_seconds: step.limits.timeout_seconds,
+                    max_output_bytes: step.limits.max_output_bytes,
+                },
+            )
+            .await?;
+        // A finished step must not keep its mounts or memory while the next one runs.
+        if let Err(error) = self.resources.remove_container(&container_id).await {
+            tracing::warn!(container_id, error = ?error, "failed to remove sandbox step");
+        }
+        output.ensure_success(&step.name)?;
+        Ok(output)
+    }
+
+    /// Reads a file, or every regular file under a directory, from one of the volumes.
+    pub async fn read_output(
+        &mut self,
+        output: &SandboxOutput,
+    ) -> Result<Vec<SandboxFile>, ExecutionError> {
+        let result = async {
+            output.validate(&validate_volumes(&self.spec.volumes)?)?;
+            self.executor
+                .read_sandbox_output(&self.holder_id, output)
+                .await
+        }
+        .await;
+        self.observe_failure(&result);
+        result
+    }
+
+    /// Removes everything the sandbox created.
+    pub async fn finish(mut self) {
+        if let Some(observation) = self.observation.take() {
+            observation.finish_result(&Ok::<(), ExecutionError>(()));
+        }
+        self.resources.remove_all_logged(&self.plan).await;
+    }
+
+    /// The first failure decides how the sandbox is counted.
+    fn observe_failure<T>(&mut self, result: &Result<T, ExecutionError>) {
+        if result.is_err() {
+            if let Some(observation) = self.observation.take() {
+                observation.finish_result(result);
+            }
+        }
+    }
+}
+
 /// Names, labels and lifetime shared by everything one job creates on the Docker host.
 struct JobPlan {
     job_id: Uuid,
     lifetime_seconds: u64,
+    /// When the owner must be done; the expiry adds a grace period for its cleanup.
+    deadline: u64,
     expiry: u64,
 }
 
 impl JobPlan {
-    fn new(
-        job: &SandboxJob,
-        request_timeout_seconds: u64,
-        proxy_ready_timeout_seconds: u64,
-    ) -> Result<Self, ExecutionError> {
-        let lifetime_seconds =
-            job_lifetime_seconds(job, request_timeout_seconds, proxy_ready_timeout_seconds);
+    fn new(lifetime_seconds: u64) -> Result<Self, ExecutionError> {
+        let deadline = unix_timestamp()?.saturating_add(lifetime_seconds);
         Ok(Self {
             job_id: Uuid::new_v4(),
             lifetime_seconds,
-            expiry: unix_timestamp()?
-                .saturating_add(lifetime_seconds)
-                .saturating_add(CLEANUP_GRACE_SECONDS),
+            deadline,
+            expiry: deadline.saturating_add(CLEANUP_GRACE_SECONDS),
         })
     }
 
@@ -658,6 +767,16 @@ impl SandboxResources {
         force_remove_container(&self.docker, container_id).await?;
         self.containers.retain(|(id, _)| id != container_id);
         Ok(())
+    }
+
+    async fn remove_all_logged(&mut self, plan: &JobPlan) {
+        if let Err(error) = self.remove_all().await {
+            tracing::warn!(
+                job_id = %plan.job_id,
+                error = ?error,
+                "eager sandbox cleanup failed; the periodic sweep remains armed"
+            );
+        }
     }
 
     async fn remove_all(&mut self) -> anyhow::Result<()> {
@@ -875,7 +994,7 @@ mod tests {
     fn step_container_is_locked_down_and_uses_the_step_image() {
         let executor = executor();
         let job = two_volume_job();
-        let plan = JobPlan::new(&job, 10, 10).unwrap();
+        let plan = JobPlan::new(600).unwrap();
         let config = executor.step_config(&job.steps[1], &plan);
 
         assert_eq!(config.image.as_deref(), Some(pinned("tools").as_str()));
@@ -934,7 +1053,7 @@ mod tests {
         let mut job = two_volume_job();
         job.steps[0].network = SandboxNetwork::Egress;
         job.egress_hosts = vec!["github.com".to_string()];
-        let plan = JobPlan::new(&job, 10, 10).unwrap();
+        let plan = JobPlan::new(600).unwrap();
 
         let config = executor.step_config(&job.steps[0], &plan);
         assert_eq!(config.network_disabled, Some(false));
@@ -974,7 +1093,7 @@ mod tests {
         let mut job = two_volume_job();
         job.steps[0].network = SandboxNetwork::Egress;
         job.egress_hosts = vec!["github.com".to_string(), "static.crates.io".to_string()];
-        let plan = JobPlan::new(&job, 10, 10).unwrap();
+        let plan = JobPlan::new(600).unwrap();
 
         assert_eq!(
             proxy_filter(&job.egress_hosts),
@@ -995,7 +1114,7 @@ mod tests {
             );
         }
 
-        let config = executor.proxy_config(&job, &plan);
+        let config = executor.proxy_config(&job.egress_hosts, &plan);
         assert_eq!(config.image, Some(settings().runner_image));
         assert_eq!(config.user.as_deref(), Some("65532:65532"));
         assert_eq!(config.network_disabled, Some(false));
@@ -1019,8 +1138,8 @@ mod tests {
     fn holder_mounts_every_volume_read_only_on_the_runner_image() {
         let executor = executor();
         let job = two_volume_job();
-        let plan = JobPlan::new(&job, 10, 10).unwrap();
-        let config = executor.holder_config(&job, &plan);
+        let plan = JobPlan::new(600).unwrap();
+        let config = executor.holder_config(&job.volumes, &plan);
 
         assert_eq!(config.image, Some(settings().runner_image));
         assert_eq!(config.attach_stdout, Some(false));
@@ -1056,7 +1175,7 @@ mod tests {
     #[test]
     fn volumes_are_capped_in_memory_and_owned_by_the_job_user() {
         let job = two_volume_job();
-        let plan = JobPlan::new(&job, 10, 10).unwrap();
+        let plan = JobPlan::new(600).unwrap();
         let request = plan.volume_request(&job.volumes[0]);
 
         assert_eq!(request.name, Some(plan.volume_name("data")));
@@ -1145,6 +1264,10 @@ mod tests {
             .unwrap_or_else(|_| runner_image.to_string())
     }
 
+    /// The Docker tests each assert that nothing of theirs is left on the host, so they must not
+    /// see one another's sandboxes.
+    static LOCAL_DOCKER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
     async fn leftover_sandbox_objects(docker: &Docker) -> Vec<String> {
         let filters = HashMap::from([("name".to_string(), vec![OBJECT_PREFIX.to_string()])]);
         let containers = docker
@@ -1183,10 +1306,83 @@ mod tests {
         containers.chain(volumes).chain(networks).collect()
     }
 
+    #[tokio::test]
+    #[ignore = "requires SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE"]
+    async fn local_docker_sandbox_session_chooses_steps_as_it_goes() {
+        let _exclusive = LOCAL_DOCKER.lock().await;
+        let docker = Docker::connect_with_defaults().unwrap();
+        let runner_image = std::env::var("SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE").unwrap();
+        let executor = local_executor(&docker, &runner_image);
+        let image = step_image(&runner_image);
+        let step = |name: &str, script: &str, mounts| SandboxStep {
+            image: image.clone(),
+            ..step(name, script, mounts)
+        };
+        let output = |path: &str| SandboxOutput {
+            name: "file".to_string(),
+            volume: "data".to_string(),
+            path: path.to_string(),
+            max_bytes: 64 * 1024,
+        };
+
+        let mut session = executor
+            .start_sandbox(SandboxSpec {
+                volumes: vec![volume("data", 8 << 20)],
+                egress_hosts: Vec::new(),
+                lifetime_seconds: 120,
+            })
+            .await
+            .unwrap();
+        session
+            .run_step(&step(
+                "write",
+                "echo second > /data/choice",
+                vec![mount("data", "/data", false)],
+            ))
+            .await
+            .unwrap();
+
+        // The next step is built from what the first one left behind.
+        let choice = session.read_output(&output("choice")).await.unwrap();
+        let script = format!(
+            "echo {} > /data/result",
+            String::from_utf8_lossy(&choice[0].content).trim()
+        );
+        session
+            .run_step(&step("act", &script, vec![mount("data", "/data", false)]))
+            .await
+            .unwrap();
+        assert_eq!(
+            session.read_output(&output("result")).await.unwrap()[0].content,
+            Bytes::from_static(b"second\n")
+        );
+
+        // A step that could outlive the sandbox is refused, as is egress without listed hosts.
+        let mut slow = step("slow", "true", Vec::new());
+        slow.limits.timeout_seconds = 3600;
+        assert!(matches!(
+            session.run_step(&slow).await,
+            Err(ExecutionError::Timeout { seconds: 120 })
+        ));
+        let mut online = step("online", "true", Vec::new());
+        online.network = SandboxNetwork::Egress;
+        assert!(matches!(
+            session.run_step(&online).await,
+            Err(ExecutionError::InvalidInvocation(_))
+        ));
+
+        session.finish().await;
+        assert_eq!(
+            leftover_sandbox_objects(&docker).await,
+            Vec::<String>::new()
+        );
+    }
+
     /// Needs a runner image that ships tinyproxy, and reaches github.com.
     #[tokio::test]
     #[ignore = "requires SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE and network access"]
     async fn local_docker_sandbox_egress_is_limited_to_listed_hosts() {
+        let _exclusive = LOCAL_DOCKER.lock().await;
         let docker = Docker::connect_with_defaults().unwrap();
         let runner_image = std::env::var("SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE").unwrap();
         let executor = local_executor(&docker, &runner_image);
@@ -1252,6 +1448,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE"]
     async fn local_docker_sandbox_job_round_trip() {
+        let _exclusive = LOCAL_DOCKER.lock().await;
         let docker = Docker::connect_with_defaults().unwrap();
         let runner_image = std::env::var("SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE").unwrap();
         let executor = local_executor(&docker, &runner_image);

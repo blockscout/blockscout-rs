@@ -45,6 +45,8 @@ use uuid::Uuid;
 
 mod sandbox;
 
+pub use sandbox::SandboxSession;
+
 const JOB_ROOT: &str = "/job";
 const COMPILER_CACHE_ROOT: &str = "/compiler-cache";
 const COMPILER_CACHE_MOUNT: &str = "/cache";

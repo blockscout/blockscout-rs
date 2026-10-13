@@ -22,12 +22,12 @@ use tokio::{
 
 pub use collectors::{set_metrics_namespace, MetricsNamespaceError};
 pub use concurrency::ConcurrencyLimitedCompilerExecutor;
-pub use docker::{DockerCompilerExecutor, DockerCompilerExecutorSettings};
+pub use docker::{DockerCompilerExecutor, DockerCompilerExecutorSettings, SandboxSession};
 pub use file_hash::{sha256_file, FileFingerprint};
 pub use native::NativeCompilerExecutor;
 pub use sandbox::{
     SandboxFile, SandboxJob, SandboxJobOutput, SandboxLimits, SandboxMount, SandboxNetwork,
-    SandboxOutput, SandboxStep, SandboxVolume,
+    SandboxOutput, SandboxSpec, SandboxStep, SandboxVolume,
 };
 
 pub const DEFAULT_EXECUTION_TIMEOUT_SECS: u64 = 600;
