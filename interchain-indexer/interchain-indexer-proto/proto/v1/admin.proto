@@ -1,0 +1,134 @@
+syntax = "proto3";
+
+package blockscout.interchainIndexer.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/interchain-indexer";
+
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+// Operator write API. Every method requires the `x-api-key` header. Send a JSON
+// body with `Content-Type: application/json`; int64 fields are JSON strings.
+service InterchainAdminService {
+  // Sets or clears the row icon of one bridged-token asset (the `icon_url` of a
+  // `GET /api/v1/stats/chain/{chain_id}/bridged-tokens` row). Does not change
+  // token icons. A manual asset icon is not replaced by derivation, but it is
+  // lost if the asset later loses a merge, and a concurrent fill of an empty
+  // name/symbol/icon can revert it.
+  rpc SetStatsAssetIcon(SetStatsAssetIconRequest) returns (SetStatsAssetIconResponse) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Admin"
+    };
+  }
+
+  // Sets or clears the icon of one token that already has a `tokens` row. The
+  // token-info source (Blockscout) remains the source of truth: an icon it
+  // later provides replaces the value set here; its absence never erases it.
+  // Does not change bridged-token asset icons.
+  rpc SetTokenIcon(SetTokenIconRequest) returns (SetTokenIconResponse) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Admin"
+    };
+  }
+
+  // Queues block ranges for re-scanning by the running indexer's failed-range
+  // replay. This RESCANS; it does not repair already-stored data (no deletes, no
+  // NULL-ing, no stats recount). Requests may not touch open failed ranges, the
+  // unscanned catch-up interval, or blocks at/after the realtime cursor. Use
+  // `dry_run` first. The estimate is approximate: the replay budget is shared
+  // with real failed ranges of the bridge.
+  rpc RescanBlockRanges(RescanBlockRangesRequest) returns (RescanBlockRangesResponse) {
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      security: {
+        security_requirement: {key: "ApiKeyAuth"}
+      }
+      tags: "Admin"
+    };
+  }
+}
+
+message SetStatsAssetIconRequest {
+  // `stats_asset_id` from the bridged-tokens response (a JSON string).
+  int64 stats_asset_id = 1;
+  // New icon URL (https, at most 2048 bytes). Exactly one of `icon_url`, `clear`.
+  optional string icon_url = 2;
+  // `true` clears the icon. Exactly one of `icon_url`, `clear`.
+  optional bool clear = 3;
+  // Why the change is made (1..1000 characters), e.g. a ticket link.
+  string reason = 4;
+}
+
+message SetStatsAssetIconResponse {
+  // Id of the audit-log row that recorded the change.
+  int64 audit_id = 1;
+  // `null` when the asset had no icon.
+  optional string icon_url_before = 2;
+  // `null` after `clear`.
+  optional string icon_url_after = 3;
+}
+
+message SetTokenIconRequest {
+  // Chain id (a JSON string).
+  int64 chain_id = 1;
+  // 0x-prefixed 20-byte token address. Exactly one of `address`, `native`.
+  optional string address = 2;
+  // `true` selects the chain's native token (shown with a null address in the API).
+  optional bool native = 3;
+  // New icon URL (https, at most 2048 bytes). Exactly one of `icon_url`, `clear`.
+  optional string icon_url = 4;
+  // `true` clears the icon. Exactly one of `icon_url`, `clear`.
+  optional bool clear = 5;
+  // Why the change is made (1..1000 characters), e.g. a ticket link.
+  string reason = 6;
+}
+
+message SetTokenIconResponse {
+  // Id of the audit-log row that recorded the change.
+  int64 audit_id = 1;
+  // `null` when the token had no icon.
+  optional string icon_url_before = 2;
+  // `null` after `clear`.
+  optional string icon_url_after = 3;
+}
+
+message RescanBlockRange {
+  int32 bridge_id = 1;
+  // Chain id (a JSON string).
+  int64 chain_id = 2;
+  // First block, inclusive (a JSON string).
+  uint64 from_block = 3;
+  // Last block, inclusive (a JSON string).
+  uint64 to_block = 4;
+}
+
+message RescanBlockRangesRequest {
+  // At most 100 ranges, at most 2,000,000 blocks in total after merging.
+  repeated RescanBlockRange ranges = 1;
+  // Why the rescan is requested (1..1000 characters), e.g. a ticket link.
+  string reason = 2;
+  // `true` validates and estimates without writing anything.
+  optional bool dry_run = 3;
+}
+
+message RescanBridgeEstimate {
+  int32 bridge_id = 1;
+  // Approximate time to replay this request's ranges, in seconds.
+  uint64 estimated_drain_seconds = 2;
+}
+
+message RescanBlockRangesResponse {
+  // Audit-log row id; `null` for a dry run.
+  optional int64 audit_id = 1;
+  // Accepted ranges of THIS request after normalization (merged per pair, sorted by
+  // bridge, chain, block). Not a snapshot of stored ledger rows: a stored row may be
+  // wider if an adjacent failure is merged concurrently.
+  repeated RescanBlockRange scheduled_ranges = 2;
+  // Total blocks in `scheduled_ranges`.
+  uint64 requested_blocks = 3;
+  repeated RescanBridgeEstimate estimates = 4;
+}

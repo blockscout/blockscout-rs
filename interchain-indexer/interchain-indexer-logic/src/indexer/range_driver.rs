@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 
 use alloy::{network::Ethereum, providers::DynProvider, rpc::types::Filter};
 use anyhow::bail;
@@ -346,6 +349,17 @@ impl<P: RangeProcessor> RangeDriver<P> {
                 return;
             }
         };
+        // Rows may come from a writer other than this ledger's own `record`
+        // (an external writer). Mark every pair of the successful snapshot
+        // before any `resolve` of this tick, or `resolve` would short-circuit
+        // on a pair absent from the cache and leave the row in place forever.
+        let pairs_in_snapshot: Vec<(i32, i64)> = open
+            .iter()
+            .map(|(bridge_id, chain_id, _)| (*bridge_id, *chain_id))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        self.ledger.note_open(&pairs_in_snapshot);
         let rows: Vec<(i64, FailedInterval)> = open
             .into_iter()
             .map(|(_, chain_id, interval)| (chain_id, interval))
@@ -1458,6 +1472,51 @@ mod tests {
             assert!(
                 open.is_empty(),
                 "a retried chunk returning zero logs must still resolve: {open:?}"
+            );
+        }
+
+        /// A row inserted by a writer other than this ledger's `record` (an
+        /// external writer) must not be replayed forever. The ledger cache is
+        /// warmed on an empty table, so the pair is absent from it; without
+        /// `note_open` on the retry tick's snapshot, `resolve` would short
+        /// circuit with no SQL, report the chunk as resolved and leave the
+        /// row in place.
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn retry_tick_resolves_a_row_written_behind_the_ledgers_back() {
+            let db = init_db("range_driver_retry_resolves_external_row").await;
+            fill_mock_interchain_database(&db).await;
+            let interchain_db = Arc::new(InterchainDatabase::new(db.client()));
+
+            let ledger = Arc::new(FailureLedger::new(interchain_db.clone()));
+            ledger.initialize(&[(1, 1)]).await.unwrap();
+
+            // Written directly, bypassing the ledger: its cache stays empty.
+            interchain_db
+                .record_indexer_failures(
+                    1,
+                    1,
+                    &[(BlockRange { from: 100, to: 199 }, "boom".to_string())],
+                )
+                .await
+                .unwrap();
+
+            let mock_service = MockLogsService::new();
+            mock_service.push_logs(vec![]);
+
+            let processor = TestRangeProcessor::new(1, vec![1], 100)
+                .with_provider(1, mock_provider(mock_service));
+            let settings = retry_settings(16);
+            let mut scheduler = retry_scheduler(100, &settings);
+            let driver = RangeDriver::new(processor, ledger.clone(), settings);
+            driver
+                .run_retry_tick_at(1, &[(1, 1)], &mut scheduler, retry_decision_time())
+                .await;
+
+            let open = ledger.open(&[(1, 1)]).await.unwrap();
+            assert!(
+                open.is_empty(),
+                "a row written behind the ledger's back must still be resolved: {open:?}"
             );
         }
 

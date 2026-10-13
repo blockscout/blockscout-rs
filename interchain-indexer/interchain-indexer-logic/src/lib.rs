@@ -35,6 +35,7 @@ pub use pagination::{
 pub mod test_utils;
 pub mod token_info;
 pub mod utils;
+pub mod write_api;
 
 pub use bridged_tokens_query::{BridgedTokenAggDbRow, BridgedTokenLinkEnriched};
 pub use chain_info::{ChainInfoService, ChainInfoServiceSettings};

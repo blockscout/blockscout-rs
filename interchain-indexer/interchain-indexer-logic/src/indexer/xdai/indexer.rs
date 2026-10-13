@@ -642,6 +642,7 @@ mod tests {
         indexer::xdai::types::{Message, compute_message_hash, key_from_native_id, native_id_blob},
         message_buffer::MessageBuffer,
         test_utils::init_db,
+        write_api,
     };
 
     const BRIDGE_ID: i32 = 3;
@@ -1569,6 +1570,46 @@ mod tests {
         assert_eq!(again.r#type, TokenType::Native);
         assert_eq!(again.decimals, Some(18));
         assert_eq!(again.symbol.as_deref(), Some("xDAI"));
+    }
+
+    /// The seed runs on every start and leaves `token_icon` unset. An icon set
+    /// through the write API (or filled by the token-info service) must survive
+    /// it: `upsert_token_info` keeps the stored icon when the incoming one is
+    /// NULL.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn token_icon_db_xdai_reseed_keeps_an_existing_native_icon() {
+        const ICON: &str = "https://example.com/xdai.png";
+        let db = init_db("xdai_reseed_keeps_native_icon").await;
+        let interchain_db = InterchainDatabase::new(db.client());
+        seed_bridge_and_chains(&interchain_db).await;
+
+        seed_native_sentinel_token_into(&interchain_db, BRIDGE_ID, GNO).await;
+
+        let tx = interchain_db.db.begin().await.unwrap();
+        let change = write_api::set_token_icon_tx(&tx, GNO, NATIVE_SENTINEL.as_slice(), Some(ICON))
+            .await
+            .unwrap()
+            .expect("the seeded native row exists");
+        tx.commit().await.unwrap();
+        assert_eq!(change.before, None);
+        assert_eq!(change.after.token_icon.as_deref(), Some(ICON));
+
+        seed_native_sentinel_token_into(&interchain_db, BRIDGE_ID, GNO).await;
+
+        let row = interchain_db
+            .get_token_info(GNO as u64, NATIVE_SENTINEL.as_slice().to_vec())
+            .await
+            .expect("token lookup succeeds")
+            .expect("the sentinel row must survive a second seed");
+        assert_eq!(row.token_icon.as_deref(), Some(ICON));
+        assert_eq!(row.r#type, TokenType::Native);
+        assert_eq!(
+            row.decimals,
+            Some(18),
+            "the seed still refreshes its columns"
+        );
+        assert_eq!(row.symbol.as_deref(), Some("xDAI"));
     }
 
     fn dai_address() -> Address {

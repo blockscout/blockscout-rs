@@ -181,6 +181,13 @@ Small topics may keep some sections brief.
   onto `interchain-indexer-logic/src/indexer/cleanup_guard.rs` and
   `interchain-indexer-logic/src/indexer/evm/`.
   cross-reference
+- `service-write-api.md` — catalogue of options and trade-offs for a write API
+  on this service (operator-first, extensible to automation): reachability,
+  authentication, key management, authorization by caller class, contract
+  shape, applying changes through the owning process, and audit layers; plus
+  the monorepo and Blockscout-backend precedents (`x-api-key` convention and
+  its gaps) and the interchain-indexer properties that constrain the choice.
+  v1 choices recorded in ADR-016
 - `amb-destination-only-missing-source-gap.md` — why some AMB/Omnibridge
   (`bridge_id = 1`) messages permanently keep `src_tx_hash = NULL`:
   `build_destination_only` finalizes and evicts the buffer entry before a

@@ -64,6 +64,8 @@ best-effort enrichment.
 - `interchain-indexer-logic/src/stats/service.rs`
 - `interchain-indexer-logic/src/message_buffer/maintenance.rs`
 - `interchain-indexer-logic/src/database.rs`
+- `interchain-indexer-logic/src/write_api.rs`
+- `interchain-indexer-server/src/services/admin/mod.rs`
 - `interchain-indexer-migration/src/migrations_up/m20251030_000001_initial_up.sql`
 - `interchain-indexer-migration/src/migrations_up/m20260312_175120_add_stats_tables_up.sql`
 - `interchain-indexer-server/config/example.toml`
@@ -132,8 +134,12 @@ calls `TokenInfoService::get_token_info(...)`.
 That method:
 
 1. validates `chain_id`
-2. checks the in-memory cache
-3. acquires a per-key mutex on cache miss
+2. checks the in-memory cache; the **fast path** returns a cached model
+   immediately only for a native token or a model with a non-empty icon
+   (the same icon condition as `fetch_icon_if_needed`)
+3. acquires a per-key mutex on a cache miss **and for any cached entry that
+   still lacks an icon** (an ERC-20 without an icon needs the icon refill, which
+   must run under the mutex; see section 4)
 4. checks the cache again after lock acquisition
 5. checks `error_cache` to avoid retry storms after recent failures
 6. loads from the `tokens` table on DB hit
@@ -150,10 +156,21 @@ The placeholder model contains only:
 
 This is a fact of the implementation, not an edge case.
 
+The per-key mutex is the single writer protocol of the token cache: the
+background upsert (section 6), the request-time icon
+refill (section 4) and the admin invalidation (`invalidate_cached`) all take it.
+`invalidate_cached(chain_id, address)` removes the entry under the mutex and is
+called by the write API strictly after its transaction commits (see "Token Cache
+Writers W1, W3 And Admin Invalidation Share The Per-Key Mutex" in
+`.memory-bank/gotchas.md`). Its effect is local to the process.
+
 ### 4. Existing DB rows may still trigger icon refresh on reads
 
 If a cached or DB-loaded token row exists but has no icon,
-`fetch_icon_if_needed(...)` runs during the request-time path.
+`fetch_icon_if_needed(...)` runs during the request-time path. It is only ever
+reached from the slow path of `get_token_info`, so it always runs while the
+per-key mutex is held; it must not take that mutex itself (the tokio `Mutex` is
+not reentrant).
 
 That path may:
 
@@ -162,8 +179,14 @@ That path may:
 - propagate the refreshed metadata into stats tables
 - update the in-memory cache
 
+All of these happen under the per-key mutex, so a late cache patch of this
+refill cannot overwrite a value an admin write committed and invalidated in the
+meantime.
+
 So request-time token reads are not purely read-only. They can trigger DB
-write-back for missing icons.
+write-back for missing icons. An icon returned by Blockscout replaces whatever
+the row held, including an icon set through the write API: Blockscout is the
+source of truth, and a Blockscout miss or error never erases a stored icon.
 
 ### 5. Background fetch combines two metadata sources
 
@@ -186,13 +209,19 @@ The on-chain fetcher chain currently tries:
 
 ### 6. Only successful on-chain metadata persists the token row
 
-If on-chain fetch succeeds:
+If on-chain fetch succeeds (`persist_fetched_token`):
 
-1. the service builds a full token model
-2. it upserts the `tokens` row
-3. updates the in-memory cache
-4. propagates metadata into stats tables
-5. clears any error-cache entry
+1. the service builds the upsert for the `tokens` row (`type = erc20`)
+2. under the per-key mutex it upserts the row and puts the **persisted**
+   (`RETURNING`) row into the in-memory cache, not the locally built model
+3. after releasing the mutex it propagates the persisted row into stats tables
+4. clears any error-cache entry
+
+`upsert_token_info` treats `token_icon` as a patch: it writes
+`COALESCE(EXCLUDED.token_icon, tokens.token_icon)`. An incoming icon replaces the
+stored one, an incoming `NULL` (a Blockscout miss, or the xDai native seed that
+leaves the icon unset) keeps it. So the persisted row can carry an icon the
+fetch did not find, which is why the cache and the propagation use it.
 
 If on-chain fetch fails:
 
@@ -241,7 +270,9 @@ concern for already-known tokens.
 - token metadata is keyed by `(chain_id, token_address)`
 - API reads must tolerate partial token metadata
 - background fetch spawns are deduplicated by `in_flight_fetches`
-- request-time cache / DB work is deduplicated by per-key mutexes
+- request-time cache / DB work is deduplicated by per-key mutexes, and the same
+  mutex serializes every writer of a token's cache entry (background upsert,
+  request-time icon refill, admin invalidation)
 - on-chain failures are negatively cached for `onchain_retry_interval`
 - Blockscout icon results are cached separately from on-chain failures
 - `tokens` rows are persisted from successful on-chain metadata, not from
@@ -261,6 +292,9 @@ concern for already-known tokens.
   cached as `None` until retry TTL expires
 - if DB upsert fails after successful metadata fetch, the service logs a warning
   and the in-memory cache is not refreshed from persisted state
+- the in-memory cache is process-local: after the write API changes an icon,
+  another process serving the API on the same database keeps its entry until it
+  restarts
 - if stats propagation sees conflicting edge decimals, it logs and skips the
   overwrite
 
@@ -296,6 +330,8 @@ Update this note when any of the following change:
 - request-time behavior on cache / DB miss
 - persistence rules for `tokens`
 - icon refresh rules for existing token rows
+- the `token_icon` conflict rule of `upsert_token_info` or the cache writer
+  protocol (per-key mutex, fast-path condition, `invalidate_cached`)
 - stats kickoff timing or eligibility rules
 - stats propagation semantics into `stats_assets` / `stats_asset_edges`
 - new production usage sites for `TokenInfoService`
