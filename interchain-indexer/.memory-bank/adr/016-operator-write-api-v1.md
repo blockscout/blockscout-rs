@@ -21,10 +21,8 @@ that later methods inherit. The options and the monorepo precedents are in
 `.memory-bank/research/service-write-api.md`.
 
 Three methods are in the v1 API: `SetStatsAssetIcon`, `SetTokenIcon` and
-`RescanBlockRanges`. The conventions below are decided once for all of them.
-`SetStatsAssetIcon` ships with the foundation; the other two are added by
-follow-up changes, so their decisions are recorded here to keep the contract and
-audit conventions fixed.
+`RescanBlockRanges`. The conventions below are decided once for all of them, so
+the contract and audit conventions stay the same across the three methods.
 
 ## Decision
 
@@ -116,8 +114,14 @@ would trade shared behaviour for a log line (KISS). Confirmed by the human on
 - The noise in `failed_blocks`, `catchup_complete` and hole-age signals while
   the ranges drain is accepted.
 - The contract is "scan these blocks again", not "repair the data".
-- There is no check of the indexer's state: a request for a bridge whose indexer
-  is not running waits as `failed_blocks` until the next successful start.
+- Each range is checked against the pair's stored checkpoint and rejected with
+  `FAILED_PRECONDITION` when the pair has no checkpoint yet, when the range ends
+  above the last scanned block (`realtime_cursor - 1`), or when it overlaps the
+  unscanned catch-up interval. A pair its indexer has never scanned cannot be
+  queued.
+- Whether the indexer process is running is not checked: the targets and replay
+  profiles come from the config. Ranges queued for a pair that already has a
+  checkpoint wait as `failed_blocks` until its indexer runs again.
 
 ## Alternatives Considered
 
