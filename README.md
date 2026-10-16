@@ -114,4 +114,4 @@ We appreciate your support. Before writing code and submitting a pull request, p
 ## License
 
 
-This project is primarily distributed under the terms of the MIT license. See [LICENSE-MIT](LICENSE-MIT) for details.
+This project is licensed under the Blockscout Software Licence. See the [LICENSE](LICENSE) file for full terms.
