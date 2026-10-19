@@ -163,7 +163,13 @@ fn is_public_v4(address: Ipv4Addr) -> bool {
 }
 
 fn is_public_v6(address: Ipv6Addr) -> bool {
-    let first = address.segments()[0];
+    let segments = address.segments();
+    // NAT64 (64:ff9b::/96) reaches the IPv4 address in its last 32 bits.
+    if segments[..6] == [0x64, 0xff9b, 0, 0, 0, 0] {
+        let [.., high, low] = segments;
+        return is_public_v4(Ipv4Addr::from((u32::from(high) << 16) | u32::from(low)));
+    }
+    let first = segments[0];
     !(address.is_loopback()
         || address.is_unspecified()
         || address.is_multicast()
@@ -197,10 +203,17 @@ mod tests {
             "ff02::1",
             "::ffff:10.0.0.1",
             "::ffff:127.0.0.1",
+            "64:ff9b::a00:1",
+            "64:ff9b::7f00:1",
         ] {
             assert!(!is_public(address.parse().unwrap()), "{address} is public");
         }
-        for address in ["1.1.1.1", "140.82.121.4", "2606:4700:4700::1111"] {
+        for address in [
+            "1.1.1.1",
+            "140.82.121.4",
+            "2606:4700:4700::1111",
+            "64:ff9b::101:101",
+        ] {
             assert!(is_public(address.parse().unwrap()), "{address} is private");
         }
     }

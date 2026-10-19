@@ -245,6 +245,8 @@ const MAX_INITCODE_BYTES: usize = 1024 * 1024;
 /// Docker requests around the steps: creating the volumes, the holder and the proxy, and reading
 /// the outputs.
 const OVERHEAD_SECONDS: u64 = 300;
+/// Finding the workspace root only reads manifests.
+const LOCATE_TIMEOUT_SECONDS: u64 = 60;
 
 impl JobSettings {
     pub(crate) fn sandbox(&self) -> SandboxSpec {
@@ -263,6 +265,7 @@ impl JobSettings {
             // The build limit is counted twice: once for the build, once for the ABI export.
             lifetime_seconds: self
                 .clone_timeout_seconds
+                .saturating_add(LOCATE_TIMEOUT_SECONDS)
                 .saturating_add(self.fetch_timeout_seconds)
                 .saturating_add(self.build_timeout_seconds.saturating_mul(2))
                 .saturating_add(OVERHEAD_SECONDS),
@@ -332,7 +335,7 @@ impl JobSettings {
             working_dir: "/".to_string(),
             network: SandboxNetwork::None,
             mounts: vec![mount(SOURCE_VOLUME, SOURCE_ROOT, true)],
-            limits: self.limits(self.clone_memory_bytes, self.clone_timeout_seconds),
+            limits: self.limits(self.clone_memory_bytes, LOCATE_TIMEOUT_SECONDS),
         }
     }
 
@@ -681,7 +684,7 @@ mod tests {
         let settings = JobSettings::default();
         let sandbox = settings.sandbox();
         sandbox.validate().unwrap();
-        assert_eq!(sandbox.lifetime_seconds, 300 + 600 + 2 * 900 + 300);
+        assert_eq!(sandbox.lifetime_seconds, 300 + 60 + 600 + 2 * 900 + 300);
         assert!(settings.fetch_memory_bytes > settings.registry_volume_bytes);
         assert!(settings.build_memory_bytes > settings.build_volume_bytes);
     }

@@ -383,9 +383,10 @@ fn clone_error(error: ExecutionError, repository_url: &str, commit: &str) -> Err
         clone_exit::PACKAGE_NOT_FOUND => {
             Error::BadRequest("Cargo.toml file not found in project directory".to_string())
         }
-        clone_exit::INVALID_TARGET => {
-            Error::BadRequest("the project's target path must be a directory".to_string())
-        }
+        clone_exit::INVALID_TARGET => Error::BadRequest(
+            "every `target` from the repository root to the project must be a directory"
+                .to_string(),
+        ),
         _ => internal(error),
     }
 }
@@ -544,22 +545,29 @@ fn validate_toolchain_channel(channel: &str) -> Result<Version, Error> {
     Ok(version)
 }
 
+/// The manifest comes from the repository, so what is wrong with it is the request's fault. The
+/// name is passed to `cargo stylus --contract`, so it has to be one cargo accepts.
 fn parse_package_name(package_file_contents: &str) -> Result<String, Error> {
-    let cargo_toml: toml::Value =
-        toml::from_str(package_file_contents).context("failed to parse Cargo.toml file")?;
-
-    // Extract the package name from the package section
-    let Some(package) = cargo_toml.get("package") else {
-        return Err(anyhow!("package section not found in Cargo.toml file").into());
-    };
-
-    let Some(package_name) = package.get("name") else {
-        return Err(anyhow!("could not find name in Cargo.toml's package section").into());
-    };
-    let Some(package_name) = package_name.as_str() else {
-        return Err(anyhow!("name in Cargo.toml's package section is not a string").into());
-    };
-
+    let invalid = |reason: &str| Error::BadRequest(format!("project's Cargo.toml: {reason}"));
+    let cargo_toml: toml::Value = toml::from_str(package_file_contents)
+        .map_err(|error| invalid(&format!("cannot be parsed: {error}")))?;
+    let package_name = cargo_toml
+        .get("package")
+        .ok_or_else(|| invalid("has no package section"))?
+        .get("name")
+        .ok_or_else(|| invalid("has no package name"))?
+        .as_str()
+        .ok_or_else(|| invalid("package name is not a string"))?;
+    let is_valid = package_name
+        .chars()
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+        && package_name
+            .chars()
+            .all(|char| char.is_ascii_alphanumeric() || matches!(char, '_' | '-'));
+    if !is_valid {
+        return Err(invalid("package name is not a valid crate name"));
+    }
     Ok(package_name.to_string())
 }
 
@@ -766,7 +774,19 @@ mod tests {
             parse_package_name("[package]\nname = \"stylus-single-call\"\n").unwrap(),
             "stylus-single-call"
         );
-        assert!(parse_package_name("[workspace]\n").is_err());
+        for manifest in [
+            "[workspace]\n",
+            "not toml",
+            "[package]\nname = 1\n",
+            "[package]\nname = \"--contract\"\n",
+            "[package]\nname = \"a b\"\n",
+            "[package]\nname = \"\"\n",
+        ] {
+            assert!(
+                matches!(parse_package_name(manifest), Err(Error::BadRequest(_))),
+                "{manifest:?}"
+            );
+        }
     }
 
     #[test]

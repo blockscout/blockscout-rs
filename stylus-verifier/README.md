@@ -12,7 +12,7 @@ read-only container:
 1. **clone** the repository at the requested commit. This step runs nothing from the repository
    and is the only one that can write to the sources. It may reach the listed hosts only.
 2. **fetch** the dependencies with `cargo fetch --locked`, sources read-only, same network limits.
-   It runs outside the project directory with the image's toolchain, so the repository's
+   It runs outside the project directory with the toolchain the build uses, so the repository's
    `.cargo/config.toml` and `rust-toolchain.toml` cannot make it run anything.
 3. **build** with `cargo stylus get-initcode`, without any network. The output depends on the
    path it is built at, so the build runs where cargo-stylus's own reproducible build does: at
