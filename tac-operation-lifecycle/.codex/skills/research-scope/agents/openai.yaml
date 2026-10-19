@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research Scope"
+  short_description: "Scope a durable research note before persisting it"
+  default_prompt: "Use $research-scope to investigate a codebase topic and wait for explicit confirmation before writing a research note."

@@ -114,3 +114,9 @@ construct_update_group!(NewTransfersReceivedInterchainGroup {
         NewTransfersReceivedInterchainYearly,
     ],
 });
+
+// The two rolling-24h counters share one group so that both resolve against the
+// same `cx.time` and therefore describe the same 24-hour window.
+construct_update_group!(Interchain24hGroup {
+    charts: [NewMessagesInterchain24h, NewTransfersInterchain24h],
+});

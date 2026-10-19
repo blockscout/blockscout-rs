@@ -129,8 +129,6 @@ impl From<GeasPredeployDetails> for MatchContract {
             compilation_artifacts: Some("{}".to_string()),
             creation_input_artifacts: Some("{}".to_string()),
             deployed_bytecode_artifacts: Some("{}".to_string()),
-            raw_creation_input: value.creation_code,
-            raw_deployed_bytecode: value.runtime_code,
             is_blueprint: false,
             libraries: BTreeMap::new(),
         }

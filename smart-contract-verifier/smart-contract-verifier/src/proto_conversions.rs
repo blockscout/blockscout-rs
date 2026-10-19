@@ -6,7 +6,7 @@ use crate::{
     vyper, OnChainCode, OnChainContract, RequestParseError,
 };
 use anyhow::Context;
-use foundry_compilers::artifacts::EvmVersion;
+use foundry_compilers_artifacts::EvmVersion;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     BatchVerifySolidityMultiPartRequest, BatchVerifySolidityStandardJsonRequest, BytecodeType,
     Contract, VerificationMetadata, VerifySolidityMultiPartRequest,

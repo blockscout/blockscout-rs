@@ -3,12 +3,15 @@ use std::{sync::Arc, time::Duration};
 use alloy::{
     network::Ethereum,
     providers::{DynProvider, Provider},
-    rpc::types::{Filter, Log},
+    rpc::types::Filter,
 };
 use anyhow::{Context, Result};
 use futures::{StreamExt, stream::BoxStream};
 
-use crate::{InterchainDatabase, log_stream::LogStream};
+use crate::{
+    InterchainDatabase,
+    log_stream::{LogBatch, LogStream},
+};
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn build_log_stream_for_chain(
@@ -20,7 +23,7 @@ pub(crate) async fn build_log_stream_for_chain(
     db: &InterchainDatabase,
     poll_interval: Duration,
     batch_size: u64,
-) -> Result<BoxStream<'static, (i64, DynProvider<Ethereum>, Vec<Log>)>> {
+) -> Result<BoxStream<'static, (i64, LogBatch)>> {
     let checkpoint = db.get_checkpoint(bridge_id as u64, chain_id as u64).await?;
 
     let (realtime_cursor, catchup_cursor) = if let Some(cp) = checkpoint {
@@ -44,9 +47,32 @@ pub(crate) async fn build_log_stream_for_chain(
         (latest_block, latest_block.saturating_sub(1))
     };
 
+    // Seed / heal the durable scan floor for this pair. A failed write is a
+    // `warn`, never a startup blocker: the read-side guard in
+    // `CatchupProgress::compute` makes the stored floor cosmetic for the
+    // correctness of the reported numbers, and progress reporting must not
+    // be able to break ingestion.
+    if let Err(err) = db
+        .seed_catchup_floor(
+            bridge_id,
+            chain_id,
+            start_block,
+            catchup_cursor,
+            realtime_cursor,
+        )
+        .await
+    {
+        tracing::warn!(
+            err = ?err,
+            bridge_id,
+            chain_id,
+            start_block,
+            "failed to seed catchup floor; progress reporting may understate this pair"
+        );
+    }
+
     tracing::info!(bridge_id, chain_id, "configured EVM log stream");
 
-    let stream_provider = provider.clone();
     Ok(LogStream::builder(provider)
         .filter(filter)
         .poll_interval(poll_interval)
@@ -60,6 +86,6 @@ pub(crate) async fn build_log_stream_for_chain(
         .catchup()
         .realtime()
         .build()?
-        .map(move |logs| (chain_id, stream_provider.clone(), logs))
+        .map(move |batch| (chain_id, batch))
         .boxed())
 }

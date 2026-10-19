@@ -1,19 +1,49 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use crate::compiler::{FileValidator, Version};
+use crate::compiler::{
+    CommandArgument, CompilerExecutor, CompilerInvocation, FileValidator, JobFile, Version,
+};
 use anyhow::{Context, Error};
 use async_trait::async_trait;
-use foundry_compilers::solc::Solc;
-use std::path::Path;
+use std::{path::Path, str::FromStr, sync::Arc};
 
-#[derive(Default, Copy, Clone)]
-pub struct SolcValidator {}
+#[derive(Clone)]
+pub struct SolcValidator {
+    executor: Arc<dyn CompilerExecutor>,
+}
+
+impl SolcValidator {
+    pub fn new(executor: Arc<dyn CompilerExecutor>) -> Self {
+        Self { executor }
+    }
+}
 
 #[async_trait]
 impl<Ver: Version> FileValidator<Ver> for SolcValidator {
     async fn validate(&self, ver: &Ver, path: &Path) -> Result<(), Error> {
-        let solc = Solc::new(path).context("could not get compiler version")?;
-        let solc_ver = solc.version;
+        let invocation = CompilerInvocation::new(
+            JobFile::executable("compiler", "bin/solc", path)
+                .context("building solc version invocation")?,
+            vec![CommandArgument::literal("--version")],
+            Vec::new(),
+        );
+        let output = self
+            .executor
+            .execute(invocation)
+            .await
+            .context("executing solc version probe")?;
+        output
+            .ensure_success("solc --version")
+            .context("could not get compiler version")?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let version = stdout
+            .lines()
+            .rfind(|line| !line.trim().is_empty())
+            .context("version not found in solc output")?
+            .trim_start_matches("Version: ")
+            .replace(".g++", ".gcc");
+        let solc_ver =
+            semver::Version::from_str(&version).context("parsing version from solc output")?;
         // ignore build and pre metadata
         let solc_ver = semver::Version::new(solc_ver.major, solc_ver.minor, solc_ver.patch);
 
@@ -33,7 +63,7 @@ impl<Ver: Version> FileValidator<Ver> for SolcValidator {
 mod tests {
     use super::*;
     use crate::{
-        compiler::{DetailedVersion, Fetcher, ListFetcher},
+        compiler::{DetailedVersion, Fetcher, ListFetcher, NativeCompilerExecutor},
         consts::DEFAULT_SOLIDITY_COMPILER_LIST,
     };
     use std::{
@@ -43,6 +73,10 @@ mod tests {
 
     fn default_version() -> DetailedVersion {
         DetailedVersion::from_str("v0.8.9+commit.e5eed63a").unwrap()
+    }
+
+    fn native_validator() -> SolcValidator {
+        SolcValidator::new(Arc::new(NativeCompilerExecutor::default()))
     }
 
     async fn fetch_compiler() -> PathBuf {
@@ -63,7 +97,7 @@ mod tests {
     #[tokio::test]
     async fn success() {
         let compiler = fetch_compiler().await;
-        let validator = SolcValidator::default();
+        let validator = native_validator();
         validator
             .validate(&default_version(), compiler.as_path())
             .await
@@ -73,7 +107,7 @@ mod tests {
     #[tokio::test]
     async fn wrong_version() {
         let compiler = fetch_compiler().await;
-        let validator = SolcValidator::default();
+        let validator = native_validator();
         let other_ver = DetailedVersion::from_str("v0.8.10+commit.e5eed63a").unwrap();
         validator
             .validate(&other_ver, compiler.as_path())
@@ -95,7 +129,7 @@ mod tests {
             .unwrap();
         file.write_all(b"This isn't a compiler").unwrap();
 
-        let validator = SolcValidator::default();
+        let validator = native_validator();
         validator
             .validate(&default_version(), compiler.as_path())
             .await

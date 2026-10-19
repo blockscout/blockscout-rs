@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 
 use blockscout_service_launcher::{
     database::{DatabaseConnectSettings, DatabaseSettings},
@@ -10,7 +10,7 @@ use blockscout_service_launcher::{
 use interchain_indexer_logic::{
     ChainInfoServiceSettings, TokenInfoServiceSettings, amb::settings::AmbIndexerSettings,
     avalanche::settings::AvalancheIndexerSettings, example::settings::ExampleIndexerSettings,
-    settings::MessageBufferSettings,
+    settings::MessageBufferSettings, xdai::settings::XDaiIndexerSettings,
 };
 use serde::{Deserialize, Serialize};
 
@@ -39,6 +39,9 @@ pub struct Settings {
     pub amb_indexer: AmbIndexerSettings,
 
     #[serde(default)]
+    pub xdai_indexer: XDaiIndexerSettings,
+
+    #[serde(default)]
     pub server: ServerSettings,
     #[serde(default)]
     pub metrics: MetricsSettings,
@@ -56,6 +59,9 @@ pub struct Settings {
 
     #[serde(default)]
     pub stats: StatsSettings,
+
+    #[serde(default)]
+    pub write_api: WriteApiSettings,
 }
 
 impl ConfigSettings for Settings {
@@ -94,7 +100,10 @@ pub struct StatsSettings {
     /// Env: `INTERCHAIN_INDEXER__STATS__BACKFILL_ON_START`.
     pub backfill_on_start: bool,
 
-    /// Interval between full `stats_chains` recomputations (distinct message/transfer users per chain).
+    /// Interval between full recomputations of the distinct message/transfer
+    /// user counters, both the global `stats_chains` snapshot and the
+    /// bridge-qualified `stats_chains_by_bridge` snapshot — one worker
+    /// rebuilds both, atomically, in the same transaction.
     /// Set to `0` to disable the background task. Unit: seconds.
     /// Env: `INTERCHAIN_INDEXER__STATS__CHAINS_RECALCULATION_PERIOD_SECS`.
     pub chains_recalculation_period_secs: u64,
@@ -115,6 +124,25 @@ impl Default for StatsSettings {
     }
 }
 
+#[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct WriteApiSettings {
+    /// Write API key catalogue: key name -> hex SHA-256 digest of the key.
+    /// The name (lowercased by the env loader) is the actor recorded in the
+    /// audit log. Env: `INTERCHAIN_INDEXER__WRITE_API__KEYS_SHA256__<KEY_NAME>`.
+    pub keys_sha256: BTreeMap<String, String>,
+}
+
+// Names only: a digest is derived from a credential, and a mistyped value may be
+// the credential itself.
+impl std::fmt::Debug for WriteApiSettings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WriteApiSettings")
+            .field("key_names", &self.keys_sha256.keys().collect::<Vec<_>>())
+            .finish()
+    }
+}
+
 impl Settings {
     pub fn default(database_url: String) -> Self {
         Self {
@@ -125,6 +153,7 @@ impl Settings {
             example_indexer: Default::default(),
             avalanche_indexer: Default::default(),
             amb_indexer: Default::default(),
+            xdai_indexer: Default::default(),
             server: Default::default(),
             metrics: Default::default(),
             tracing: Default::default(),
@@ -139,6 +168,7 @@ impl Settings {
             api: Default::default(),
             buffer_settings: Default::default(),
             stats: StatsSettings::default(),
+            write_api: Default::default(),
         }
     }
 }
@@ -190,6 +220,39 @@ mod tests {
                 include_zero_chains: false,
             }
         );
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct WriteApiSettingsWrapper {
+        #[serde(default)]
+        write_api: WriteApiSettings,
+    }
+
+    #[test]
+    fn write_api_settings_deserializes_named_digests() {
+        let digest = "ab".repeat(32);
+        let cfg = Config::builder()
+            .set_override("write_api.keys_sha256.alice", digest.clone())
+            .expect("set_override")
+            .build()
+            .expect("config");
+
+        let v: WriteApiSettingsWrapper = cfg.try_deserialize().expect("deserialize");
+        assert_eq!(
+            v.write_api.keys_sha256,
+            BTreeMap::from([("alice".to_string(), digest.clone())])
+        );
+        assert!(
+            !format!("{:?}", v.write_api).contains(&digest),
+            "Debug must not print digests"
+        );
+    }
+
+    #[test]
+    fn write_api_settings_default_is_empty() {
+        let s = Settings::default("postgres://localhost/db".into());
+        assert_eq!(s.write_api, WriteApiSettings::default());
+        assert!(s.write_api.keys_sha256.is_empty());
     }
 }
 

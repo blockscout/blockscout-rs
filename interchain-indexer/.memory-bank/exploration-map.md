@@ -32,6 +32,25 @@
 - `interchain-indexer-logic/src/log_stream.rs`
   - reusable catchup/real-time log streaming primitive that indexers can build on
 
+## If You Need to Understand Indexing Concurrency, Throughput Or Why One Chain Is Slow
+
+- `.memory-bank/research/indexing-concurrency-model.md`
+  - start here: how concurrent the pipeline is at every level, the invariants
+    that constrain any change, measured throughput, and how to reproduce the
+    measurements
+- `.memory-bank/adr/008-per-chain-concurrency-within-a-bridge.md`
+  - why it is cooperative and single-task, and why per-chain drivers and
+    `tokio::spawn` were both rejected
+- `interchain-indexer-logic/src/indexer/range_driver.rs`
+  - `RangeDriver::run`: one sequential handler future per chain joined with
+    `try_join_all`, raced against the retry future
+- `interchain-indexer-logic/src/provider_layers.rs`
+  - per-node `max_rps` limiter (`until_ready()` is the yield point a throttled
+    chain parks on), `RPC_HTTP_TIMEOUT`, `mark_error` cooldown
+- `scripts/indexing_throughput.py`, `scripts/indexing_coupling.py`
+  - the log analysers; the coupling one is the decisive check for "is a slow
+    chain dragging its siblings down"
+
 ## If You Need to Understand Avalanche Indexing
 
 - `interchain-indexer-logic/src/indexer/avalanche/mod.rs`
@@ -45,6 +64,29 @@
 - then continue to:
   - `interchain-indexer-logic/src/indexer/avalanche/blockchain_id_resolver.rs`
   - `interchain-indexer-logic/src/message_buffer/maintenance.rs`
+
+## If You Need to Understand xDai Indexing
+
+- `interchain-indexer-logic/src/indexer/xdai/indexer.rs`
+  - stream orchestration per chain, counterpart resolution, failure ledger
+- `interchain-indexer-logic/src/indexer/xdai/events.rs`
+  - event handlers, source-receipt reconstruction (`decode_source_evidence`),
+    canonical-vs-observed identity selection for hash-keyed completions
+- `interchain-indexer-logic/src/indexer/xdai/version.rs`
+  - deployment constants, grammar windows, epoch floors (ADR-013)
+- `interchain-indexer-logic/src/indexer/xdai/consolidation.rs`
+  - message assembly, finality, transfer building
+- then continue to:
+  - `interchain-indexer-logic/src/indexer/xdai/abi.rs`
+    (registry, startup floor checks, window resolution by block)
+  - `interchain-indexer-logic/src/message_buffer/persistence.rs`
+    (`reconcile_destination_executions` — multiple-execution handling, ADR-014;
+    `attach_detached_confirmations` — late confirmations of stored messages,
+    ADR-015)
+  - `interchain-indexer-logic/src/indexer/xdai/events.rs`
+    (`pair_colocated_hash_signatures` — a hash-keyed signature sharing its
+    transaction with a hash-keyed completion follows the completion's canonical
+    key, ADR-015)
 
 ## If You Need to Understand Incoming ICTT Reconstruction / ICM Payload Decoding
 
@@ -160,16 +202,19 @@
   - **start here** — copy-paste-runnable, read-only SQL checklist for
     confirming stats-projection and observability-horizon behavior against a
     live database: canaries to run routinely, diagnostics to reach for once
-    a canary fires, and how to read `stats_asset_id` / `bridge_contracts` /
-    the merge metrics
+    a canary fires, and how to read `src_stats_asset_id` / `dst_stats_asset_id`
+    / `asset_linkage` / `bridge_contracts` / the merge metrics
 - `.memory-bank/adr/004-stats-observability-horizon-and-asset-union-find.md`
   - the design the runbook's queries verify
+- `.memory-bank/adr/011-cross-asset-edges-and-per-transfer-linkage.md`
+  - the binary-edge / per-transfer-linkage model layered on top of ADR-004
 - then continue to:
   - `.memory-bank/gotchas.md` — "`bridge_contracts` Is Only A Diagnostic
     Proxy For Runtime Membership", "Stats Asset Mapping Conflicts Merge; Only
-    Same-Chain Collisions Skip", "Stats Eligibility Is About Observability,
-    Not Protocol Terminality", "`pending_messages` Retention for
-    Unconfigured Counterparts Is Load-Bearing, Not a Leak"
+    Same-Chain Collisions Skip", "A `conversion` Transfer's Two Endpoints Are
+    Never Merged, Even When They Look Mergeable", "Stats Eligibility Is About
+    Observability, Not Protocol Terminality", "`pending_messages` Retention
+    for Unconfigured Counterparts Is Load-Bearing, Not a Leak"
 
 ## If You Need to Understand Service-Wide Metadata Services
 
@@ -192,12 +237,31 @@
   - interchain message/transfer queries
 - `interchain-indexer-server/src/services/stats.rs`
   - statistics endpoints
+- `interchain-indexer-server/src/services/admin/`, `interchain-indexer-server/src/auth.rs`
+  and `interchain-indexer-logic/src/write_api.rs`
+  - Write API (admin service): key authentication (`WriteApiAuth` → `Actor`),
+    validation, the audited transaction (`AuditedTx`) and the database
+    operations behind each method; decisions in ADR-016, operation in
+    `runbooks/write-api.md`
 - `interchain-indexer-server/src/services/status.rs`
-  - indexer status reporting
+  - indexer status reporting, and historical catch-up progress per
+    `(bridge, chain)` (`GET /api/v1/status/indexing`)
+- `interchain-indexer-logic/src/indexer/progress.rs`
+  - the pure cursor arithmetic behind that endpoint — scanned share, blocks
+    remaining, completion. Start here rather than in the service: every clamp
+    has a reason, and the guard `lo = max(catchup_min_cursor, start_block)` is
+    load-bearing. `catchup_complete` lives here too, as the one predicate that
+    also takes the failure ledger's `failed_blocks` (passed in, so the module
+    stays DB-free)
+- `interchain-indexer-server/src/indexers.rs`
+  - config-driven `(bridge, chain)` enumeration for that endpoint, and the
+    startup reconciliation of a lowered `started_at_block`
 - `interchain-indexer-proto/proto/v1/interchain_indexer.proto`
   - core API contract definitions
 - `interchain-indexer-proto/proto/v1/stats.proto`
   - stats API contract definitions
+- `interchain-indexer-proto/proto/v1/status.proto`
+  - status and indexing-progress API contract definitions
 - then continue to:
   - `interchain-indexer-logic/src/database.rs`
 

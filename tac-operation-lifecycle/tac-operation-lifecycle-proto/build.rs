@@ -14,12 +14,27 @@ fn compile(
     config
         .service_generator(generator)
         .compile_well_known_types()
-        .protoc_arg("--openapiv2_out=swagger/v1")
+        .protoc_arg("--openapiv2_out=swagger")
         .protoc_arg("--openapiv2_opt")
-        .protoc_arg("grpc_api_configuration=proto/v1/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=tac-operation-lifecycle,json_names_for_fields=false")
+        .protoc_arg("grpc_api_configuration=proto/api_config_http.yaml,output_format=yaml,allow_merge=true,merge_file_name=tac-operation-lifecycle,json_names_for_fields=false")
         .bytes(["."])
         .btree_map(["."])
         .type_attribute(".", "#[actix_prost_macros::serde(rename_all=\"snake_case\")]")
+        // actix-prost serializes protobuf enums as SCREAMING_SNAKE_CASE by
+        // default. These explicit variant names keep the v2 status JSON in
+        // sync with its lower-case public API and generated Swagger contract.
+        .field_attribute(
+            ".blockscout.tacOperationLifecycle.v2.V2OperationStatus.pending",
+            "#[serde(rename = \"pending\")]",
+        )
+        .field_attribute(
+            ".blockscout.tacOperationLifecycle.v2.V2OperationStatus.success",
+            "#[serde(rename = \"success\")]",
+        )
+        .field_attribute(
+            ".blockscout.tacOperationLifecycle.v2.V2OperationStatus.failed",
+            "#[serde(rename = \"failed\")]",
+        )
         // .field_attribute(
         //     ".blockscout.tacOperationLifecycle.v1.<MessageName>.<DefaultFieldName>",
         //     "#[serde(default)]"
@@ -34,16 +49,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // (or corresponding http mapping) has been changed.
     println!("cargo:rerun-if-changed=proto/");
 
-    std::fs::create_dir_all("./swagger/v1").unwrap();
+    std::fs::create_dir_all("./swagger").unwrap();
     let gens = Box::new(GeneratorList::new(vec![
         tonic_build::configure().service_generator(),
-        Box::new(ActixGenerator::new("proto/v1/api_config_http.yaml").unwrap()),
+        Box::new(ActixGenerator::new("proto/api_config_http.yaml").unwrap()),
     ]));
     compile(
         &[
             "proto/v1/tac-operation-lifecycle.proto",
             "proto/v1/statistic.proto",
             "proto/v1/health.proto",
+            "proto/v2/tac-operation-lifecycle.proto",
         ],
         &["proto"],
         gens,

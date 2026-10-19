@@ -1,6 +1,11 @@
-*.env
+*.env*
 database
 .claude/settings.local.json
 CLAUDE.local.md
 tmp
 __pycache__
+# Fully local, regenerable knowledge-graph artifacts (graph.json/graph.html and
+# friends). Committing them produced multi-MB diffs on every code change and
+# near-guaranteed merge conflicts; see .memory-bank/rules/graphify.mdc for the
+# bootstrap/regeneration workflow instead.
+/graphify-out/

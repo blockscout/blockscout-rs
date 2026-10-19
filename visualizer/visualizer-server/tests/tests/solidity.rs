@@ -44,6 +44,27 @@ struct Response {
     svg: Bytes,
 }
 
+/// Compares a rendered SVG against its golden sample.
+///
+/// sol2uml output changes with the pinned sol2uml version, so the samples have
+/// to be regenerated whenever that pin moves. With `UPDATE_EXPECTED` set, the
+/// samples are rewritten from the current output instead of asserted against:
+///
+///     UPDATE_EXPECTED=1 cargo test --test '*'
+///
+/// Review the resulting diff before committing it.
+fn assert_svg_matches(result_svg: &str, expected_svg_path: &str) {
+    if std::env::var_os("UPDATE_EXPECTED").is_some() {
+        fs::write(expected_svg_path, result_svg)
+            .unwrap_or_else(|err| panic!("failed to update {expected_svg_path}: {err}"));
+        return;
+    }
+
+    let expected_svg = fs::read_to_string(expected_svg_path)
+        .unwrap_or_else(|_| panic!("Error while reading {expected_svg_path}"));
+    assert_str_eq!(result_svg, expected_svg);
+}
+
 async fn test_setup(request: serde_json::Value, route: &str) -> reqwest::Response {
     let mut url = super::init_server().await;
     url.set_path(route);
@@ -56,7 +77,7 @@ async fn test_setup(request: serde_json::Value, route: &str) -> reqwest::Respons
         .expect("failed to send request")
 }
 
-async fn visualize_contract_success(request: serde_json::Value, expected_svg: String) {
+async fn visualize_contract_success(request: serde_json::Value, expected_svg_path: String) {
     let response = test_setup(request, "/api/v1/solidity:visualize-contracts").await;
     assert!(
         response.status().is_success(),
@@ -70,7 +91,7 @@ async fn visualize_contract_success(request: serde_json::Value, expected_svg: St
 
     let result_svg = from_utf8(&result.svg).expect("failed to convert result svg to string");
 
-    assert_str_eq!(result_svg, expected_svg);
+    assert_svg_matches(result_svg, &expected_svg_path);
 }
 
 async fn visualize_contracts_success_from_dir(project_name: &str, sample_name: &str) {
@@ -80,12 +101,10 @@ async fn visualize_contracts_success_from_dir(project_name: &str, sample_name: &
         "sources": get_dir_files(&project_path),
     });
     let svg_path = format!("{SAMPLES_DIR}/uml/{sample_name}.svg");
-    let expected_svg = fs::read_to_string(&svg_path)
-        .unwrap_or_else(|_| panic!("Error while reading {sample_name}.svg",));
-    visualize_contract_success(request, expected_svg).await;
+    visualize_contract_success(request, svg_path).await;
 }
 
-async fn visualize_storage_success(request: serde_json::Value, expected_svg: String) {
+async fn visualize_storage_success(request: serde_json::Value, expected_svg_path: String) {
     let response = test_setup(request, "/api/v1/solidity:visualize-storage").await;
 
     assert!(
@@ -99,7 +118,7 @@ async fn visualize_storage_success(request: serde_json::Value, expected_svg: Str
         .expect("could not deserialize response");
     let result_svg = from_utf8(&result.svg).expect("failed to convert result svg to string");
 
-    assert_str_eq!(result_svg, expected_svg);
+    assert_svg_matches(result_svg, &expected_svg_path);
 }
 
 async fn visualize_storage_success_from_dir(
@@ -117,10 +136,7 @@ async fn visualize_storage_success_from_dir(
     });
 
     let svg_path = format!("{SAMPLES_DIR}/storage/{sample_name}.svg");
-    let expected_svg = fs::read_to_string(&svg_path)
-        .unwrap_or_else(|_| panic!("Error while reading {sample_name}.svg",));
-
-    visualize_storage_success(request, expected_svg).await;
+    visualize_storage_success(request, svg_path).await;
 }
 
 mod success_simple_tests {
@@ -148,8 +164,6 @@ mod success_simple_tests {
         let storage_path = format!("{SAMPLES_DIR}/storage/simple_contract.svg",);
         let contract =
             fs::read_to_string(&contract_path).expect("Error while reading SimpleContract.sol");
-        let storage =
-            fs::read_to_string(&storage_path).expect("Error while reading simple_contract.svg");
 
         let request = json!({
             "sources": {"c/d/SimpleContract.sol": contract},
@@ -157,7 +171,7 @@ mod success_simple_tests {
             "file_name": "c/d/SimpleContract.sol",
         });
 
-        visualize_storage_success(request, storage).await;
+        visualize_storage_success(request, storage_path).await;
     }
 }
 
@@ -222,14 +236,12 @@ mod success_advanced_tests {
         let contract =
             fs::read_to_string(&contract_path).expect("Error while reading SimpleContract.sol");
         let svg_path = format!("{SAMPLES_DIR}/uml/simple_contract.svg",);
-        let expected_svg = fs::read_to_string(&svg_path)
-            .unwrap_or_else(|_| panic!("Error while reading simple_contract.svg",));
         let request = json!({
             "sources": {
                 "/usr/SimpleContract.sol": contract,
             }
         });
-        visualize_contract_success(request, expected_svg).await;
+        visualize_contract_success(request, svg_path).await;
     }
 
     #[actix_web::test]
@@ -238,14 +250,12 @@ mod success_advanced_tests {
         let contract =
             fs::read_to_string(&contract_path).expect("Error while reading SimpleContract.sol");
         let svg_path = format!("{SAMPLES_DIR}/uml/simple_contract.svg",);
-        let expected_svg = fs::read_to_string(&svg_path)
-            .unwrap_or_else(|_| panic!("Error while reading simple_contract.svg",));
         let request = json!({
             "sources": {
                 ".sol": contract,
             }
         });
-        visualize_contract_success(request, expected_svg).await;
+        visualize_contract_success(request, svg_path).await;
     }
 
     // filename that starts with @

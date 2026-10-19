@@ -7,6 +7,7 @@ mod sourcify_verifier;
 mod vyper_verifier;
 pub mod zksync_solidity_verifier;
 
+pub(crate) use health::route_health;
 pub use health::HealthService;
 pub use solidity_verifier::SolidityVerifierService;
 pub use sourcify_verifier::SourcifyVerifierService;

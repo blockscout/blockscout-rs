@@ -52,8 +52,11 @@ pub struct Settings {
     pub detect_missing_libraries: Option<bool>,
     /// The optimizer settings.
     pub optimizer: Optimizer,
-    /// The extra LLVM options.
-    #[serde(rename = "LLVMOptions", skip_serializing_if = "Option::is_none")]
+    /// Unsupported extra LLVM options retained only for source compatibility.
+    ///
+    /// This field is never serialized into compiler input. Use [`Self::validate`] before accepting
+    /// or compiling an input so callers receive an explicit error instead of silently losing it.
+    #[serde(rename = "LLVMOptions", default, skip_serializing)]
     pub llvm_options: Option<Vec<String>>,
     /// The metadata settings.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -61,6 +64,16 @@ pub struct Settings {
 }
 
 impl Settings {
+    /// Rejects settings that the verification service cannot safely pass to zksolc.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        // An empty list carries no options, so it is as safe as an absent one.
+        anyhow::ensure!(
+            self.llvm_options.as_ref().is_none_or(Vec::is_empty),
+            "settings.LLVMOptions is not supported by the verification service"
+        );
+        Ok(())
+    }
+
     ///
     /// Sets the necessary defaults.
     ///

@@ -15,13 +15,12 @@ use crate::{
 };
 use anyhow::Context;
 use smart_contract_verifier::{
-    find_methods, solidity, EvmCompilersPool, SolcCompiler, SolcValidator,
+    find_methods, solidity, CompilerExecutor, EvmCompilersPool, SolcCompiler, SolcValidator,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     LookupMethodsRequest, LookupMethodsResponse,
 };
 use std::sync::Arc;
-use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
 
 pub struct SolidityVerifierService {
@@ -29,11 +28,13 @@ pub struct SolidityVerifierService {
 }
 
 impl SolidityVerifierService {
-    pub async fn new(
+    /// `executor` must already enforce the shared compiler limit, e.g. a
+    /// `ConcurrencyLimitedCompilerExecutor`.
+    pub async fn new_with_admitted_executor(
         settings: SoliditySettings,
-        compilers_threads_semaphore: Arc<Semaphore>,
+        executor: Arc<dyn CompilerExecutor>,
     ) -> anyhow::Result<Self> {
-        let solc_validator = Arc::new(SolcValidator::default());
+        let solc_validator = Arc::new(SolcValidator::new(executor.clone()));
         let fetcher = common::initialize_fetcher(
             settings.fetcher,
             settings.compilers_dir.clone(),
@@ -44,7 +45,7 @@ impl SolidityVerifierService {
         .context("solidity fetcher initialization")?;
 
         let compilers: EvmCompilersPool<SolcCompiler> =
-            EvmCompilersPool::new(fetcher, compilers_threads_semaphore);
+            EvmCompilersPool::new_with_admitted_executor(fetcher, executor);
         compilers.load_from_dir(&settings.compilers_dir).await;
 
         Ok(Self {

@@ -8,7 +8,10 @@ use std::{
 use crate::{InterchainDatabase, TokenInfoServiceSettings};
 use alloy::{network::Ethereum, providers::DynProvider};
 use chrono::{DateTime, Utc};
-use interchain_indexer_entity::tokens::{self, Model as TokenInfoModel};
+use interchain_indexer_entity::{
+    sea_orm_active_enums::TokenType,
+    tokens::{self, Model as TokenInfoModel},
+};
 use parking_lot::RwLock;
 use sea_orm::ActiveValue::Set;
 use tokio::sync::Mutex;
@@ -81,9 +84,14 @@ impl TokenInfoService {
 
         let key = (chain_id, address.clone());
 
-        // Fast path: try to read from cache
-        if let Some(model) = self.read_cache(&key) {
-            return Ok(self.fetch_icon_if_needed(model).await);
+        // Fast path only for entries that need no icon refill. Everything else goes
+        // through the per-key mutex below, so the request-time icon refill (W3) is
+        // serialized with background upserts (W1) and admin invalidation.
+        if let Some(model) = self.read_cache(&key)
+            && (model.r#type == TokenType::Native
+                || model.token_icon.as_ref().is_some_and(|s| !s.is_empty()))
+        {
+            return Ok(model);
         }
 
         // Acquire the lock for this key and wait it
@@ -127,6 +135,12 @@ impl TokenInfoService {
                 return Ok(model);
             }
 
+            // The native storage key is complete identity even if its metadata
+            // seed failed. Never try ERC-20 calls against the sentinel.
+            if TokenType::from_address(&address) == TokenType::Native {
+                return Ok(bare_token_info(chain_id, address.clone()));
+            }
+
             // Not in DB: spawn background fetch and return bare model immediately.
             // Use in_flight_fetches to prevent duplicate spawns (we can't reuse per_key_locks:
             // MutexGuard borrows from the Mutex, so we cannot move it into a spawned task).
@@ -153,16 +167,7 @@ impl TokenInfoService {
             }
 
             // Return bare model immediately without waiting
-            Ok(TokenInfoModel {
-                chain_id,
-                address: key.1.clone(),
-                name: None,
-                symbol: None,
-                token_icon: None,
-                decimals: None,
-                created_at: None,
-                updated_at: None,
-            })
+            Ok(bare_token_info(chain_id, key.1.clone()))
         }
         .await;
 
@@ -205,52 +210,18 @@ impl TokenInfoService {
             Ok(token_info) => {
                 let icon_url = icon_result.ok().flatten();
 
-                let model = TokenInfoModel {
-                    chain_id,
-                    address,
-                    name: Some(token_info.name),
-                    symbol: Some(token_info.symbol),
-                    token_icon: icon_url,
-                    decimals: Some(token_info.decimals as i16),
-                    created_at: None,
-                    updated_at: None,
-                };
-
                 let active_model = tokens::ActiveModel {
                     chain_id: Set(chain_id),
-                    address: Set(model.address.clone()),
-                    symbol: Set(model.symbol.clone()),
-                    name: Set(model.name.clone()),
-                    token_icon: Set(model.token_icon.clone()),
-                    decimals: Set(model.decimals),
+                    address: Set(address),
+                    r#type: Set(TokenType::Erc20),
+                    symbol: Set(Some(token_info.symbol)),
+                    name: Set(Some(token_info.name)),
+                    token_icon: Set(icon_url),
+                    decimals: Set(Some(token_info.decimals as i16)),
                     ..Default::default()
                 };
 
-                if let Err(e) = self.db.upsert_token_info(active_model).await {
-                    tracing::warn!(
-                        chain_id = chain_id,
-                        address = hex::encode(&model.address),
-                        error = ?e,
-                        "Failed to upsert token info in background"
-                    );
-                } else {
-                    {
-                        let mut cache = self.token_info_cache.write();
-                        cache.insert(key.clone(), model.clone());
-                    }
-                    if let Err(e) = self
-                        .db
-                        .propagate_token_info_to_stats_tables(chain_id, &model.address, &model)
-                        .await
-                    {
-                        tracing::warn!(
-                            chain_id = chain_id,
-                            address = hex::encode(&model.address),
-                            error = ?e,
-                            "Failed to propagate token info into stats tables"
-                        );
-                    }
-                }
+                self.persist_fetched_token(&key, active_model).await;
 
                 let mut error_cache = self.error_cache.write();
                 error_cache.remove(&key);
@@ -269,6 +240,63 @@ impl TokenInfoService {
         self.remove_from_in_flight(&key);
     }
 
+    /// Persists fetched metadata and publishes the persisted row (not the locally
+    /// built one) to the cache, under the per-key mutex shared with W3 and
+    /// `invalidate_cached`. Returns the persisted row on success.
+    async fn persist_fetched_token(
+        &self,
+        key: &TokenKey,
+        active_model: tokens::ActiveModel,
+    ) -> Option<TokenInfoModel> {
+        let (chain_id, address) = key;
+
+        let key_lock = self.get_lock_for_key(key);
+        let guard = key_lock.lock().await;
+
+        let persisted = match self.db.upsert_token_info(active_model).await {
+            Ok(persisted) => {
+                // The `parking_lot` guard is a temporary of this statement and is
+                // never held across an `.await`.
+                self.token_info_cache
+                    .write()
+                    .insert(key.clone(), persisted.clone());
+                Some(persisted)
+            }
+            Err(e) => {
+                tracing::warn!(
+                    chain_id = chain_id,
+                    address = hex::encode(address),
+                    error = ?e,
+                    "Failed to upsert token info in background"
+                );
+                None
+            }
+        };
+
+        // Release the mutex and the local Arc so strong_count can reach 1.
+        drop(guard);
+        drop(key_lock);
+        self.remove_lock_for_key(key);
+
+        let persisted = persisted?;
+        // After the mutex is released: propagation may wait on `stats_assets` row
+        // locks. It gets the persisted row, so the fill-if-empty derivation sees
+        // the icon stored in the database, including a manual one.
+        if let Err(e) = self
+            .db
+            .propagate_token_info_to_stats_tables(*chain_id, &persisted.address, &persisted)
+            .await
+        {
+            tracing::warn!(
+                chain_id = chain_id,
+                address = hex::encode(address),
+                error = ?e,
+                "Failed to propagate token info into stats tables"
+            );
+        }
+        Some(persisted)
+    }
+
     /// Non-blocking: schedule on-chain token fetches for keys that still lack usable metadata.
     /// Called after stats projection commits so indexing never waits on RPC.
     pub fn kickoff_token_fetch_for_stats_enrichment(self: Arc<Self>, keys: Vec<TokenKey>) {
@@ -279,7 +307,9 @@ impl TokenInfoService {
         tokio::spawn(async move {
             let uniq: HashSet<TokenKey> = keys.into_iter().collect();
             for (chain_id, address) in uniq {
-                if !svc.providers.contains_key(&chain_id) {
+                if TokenType::from_address(&address) == TokenType::Native
+                    || !svc.providers.contains_key(&chain_id)
+                {
                     continue;
                 }
                 let need = match svc
@@ -289,9 +319,10 @@ impl TokenInfoService {
                 {
                     Ok(None) => true,
                     Ok(Some(m)) => {
-                        m.decimals.is_none()
-                            || (m.name.as_ref().is_none_or(|s| s.is_empty())
-                                && m.symbol.as_ref().is_none_or(|s| s.is_empty()))
+                        m.r#type == TokenType::Erc20
+                            && (m.decimals.is_none()
+                                || (m.name.as_ref().is_none_or(|s| s.is_empty())
+                                    && m.symbol.as_ref().is_none_or(|s| s.is_empty())))
                     }
                     Err(_) => false,
                 };
@@ -317,6 +348,10 @@ impl TokenInfoService {
     /// Checks if an existing token (from cache or DB) needs an icon update.
     /// Returns the model with the icon if successfully fetched, otherwise returns the original model.
     async fn fetch_icon_if_needed(&self, mut model: TokenInfoModel) -> TokenInfoModel {
+        // Native metadata comes from the chain/indexer seed, never a contract API.
+        if model.r#type == TokenType::Native {
+            return model;
+        }
         // Only process tokens without icons
         if model.token_icon.as_ref().is_some_and(|s| !s.is_empty()) {
             return model;
@@ -346,6 +381,20 @@ impl TokenInfoService {
         }
 
         model
+    }
+
+    /// Drops the cached entry for `(chain_id, address)` under the per-key mutex.
+    /// Call strictly AFTER the writing transaction has committed: the mutex holders
+    /// (W1/W3) may wait on the `tokens` row lock of an open transaction.
+    pub async fn invalidate_cached(&self, chain_id: i64, address: &[u8]) {
+        let key = (chain_id, address.to_vec());
+        let key_lock = self.get_lock_for_key(&key);
+        {
+            let _guard = key_lock.lock().await;
+            self.token_info_cache.write().remove(&key);
+        }
+        drop(key_lock);
+        self.remove_lock_for_key(&key);
     }
 
     fn read_cache(&self, key: &TokenKey) -> Option<TokenInfoModel> {
@@ -451,5 +500,484 @@ impl TokenInfoService {
             .get_token_icon(chain_id, &address)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to fetch token icon: {}", e))
+    }
+}
+
+fn bare_token_info(chain_id: i64, address: Vec<u8>) -> TokenInfoModel {
+    TokenInfoModel {
+        r#type: TokenType::from_address(&address),
+        chain_id,
+        address,
+        name: None,
+        symbol: None,
+        token_icon: None,
+        decimals: None,
+        created_at: None,
+        updated_at: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        test_utils::init_db, token_info::settings::BlockscoutTokenInfoClientSettings, write_api,
+    };
+    use blockscout_service_launcher::test_database::TestDbGuard;
+    use interchain_indexer_entity::{chains, stats_asset_tokens, stats_assets};
+    use sea_orm::{DatabaseConnection, EntityTrait, QuerySelect, TransactionTrait};
+    use std::time::Duration;
+
+    const ERC20: [u8; 20] = [0xab; 20];
+    const ICON_X: &str = "https://icons.example/x.png";
+    const ICON_ADMIN: &str = "https://icons.example/admin.png";
+    const ICON_BLOCKSCOUT: &str = "https://icons.example/blockscout.png";
+
+    fn service_for(
+        conn: &Arc<DatabaseConnection>,
+        settings: TokenInfoServiceSettings,
+    ) -> Arc<TokenInfoService> {
+        Arc::new(TokenInfoService::new(
+            Arc::new(InterchainDatabase::new(conn.clone())),
+            HashMap::new(),
+            settings,
+        ))
+    }
+
+    /// Settings with a Blockscout URL nobody listens on: a test that reaches the
+    /// network by accident fails instead of silently passing. Icons come from
+    /// `seed_icon_cache_for_tests`.
+    fn unreachable_blockscout_settings() -> TokenInfoServiceSettings {
+        TokenInfoServiceSettings {
+            blockscout_token_info: BlockscoutTokenInfoClientSettings {
+                url: Some("http://127.0.0.1:1".to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    async fn seed_chain(guard: &TestDbGuard, chain_id: i64) {
+        chains::Entity::insert(chains::ActiveModel {
+            id: Set(chain_id),
+            name: Set(format!("chain{chain_id}")),
+            ..Default::default()
+        })
+        .exec(guard.client().as_ref())
+        .await
+        .unwrap();
+    }
+
+    async fn seed_token(
+        guard: &TestDbGuard,
+        chain_id: i64,
+        address: &[u8],
+        token_type: TokenType,
+        icon: Option<&str>,
+    ) -> TokenInfoModel {
+        tokens::Entity::insert(tokens::ActiveModel {
+            chain_id: Set(chain_id),
+            address: Set(address.to_vec()),
+            r#type: Set(token_type),
+            name: Set(Some("Token".to_string())),
+            symbol: Set(Some("TOK".to_string())),
+            decimals: Set(Some(18)),
+            token_icon: Set(icon.map(str::to_string)),
+            ..Default::default()
+        })
+        .exec_with_returning(guard.client().as_ref())
+        .await
+        .unwrap()
+    }
+
+    async fn stored_icon(guard: &TestDbGuard, chain_id: i64, address: &[u8]) -> Option<String> {
+        tokens::Entity::find_by_id((chain_id, address.to_vec()))
+            .one(guard.client().as_ref())
+            .await
+            .unwrap()
+            .expect("token row exists")
+            .token_icon
+    }
+
+    /// Runs the admin write path (`set_token_icon_tx` + commit) without the
+    /// handler, so the cache is left exactly as the writer found it.
+    async fn admin_set_icon(guard: &TestDbGuard, chain_id: i64, address: &[u8], icon: &str) {
+        let tx = guard.client().begin().await.unwrap();
+        write_api::set_token_icon_tx(&tx, chain_id, address, Some(icon))
+            .await
+            .unwrap()
+            .expect("the token row exists");
+        tx.commit().await.unwrap();
+    }
+
+    /// Polls until `condition` holds, failing the test after `timeout`.
+    async fn wait_until<F, Fut>(what: &str, timeout: Duration, mut condition: F)
+    where
+        F: FnMut() -> Fut,
+        Fut: std::future::Future<Output = bool>,
+    {
+        let deadline = tokio::time::Instant::now() + timeout;
+        while !condition().await {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "timed out waiting for: {what}"
+            );
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn native_without_seed_or_provider_returns_typed_metadata() {
+        let db = init_db("native_without_seed").await;
+        let service = Arc::new(TokenInfoService::new(
+            Arc::new(InterchainDatabase::new(db.client().clone())),
+            HashMap::new(),
+            TokenInfoServiceSettings::default(),
+        ));
+        let model = service.get_token_info(100, vec![0; 20]).await.unwrap();
+        assert_eq!(model.r#type, TokenType::Native);
+        assert_eq!(model.address, vec![0; 20]);
+        assert_eq!(model.decimals, None);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn token_cache_db_persist_fetched_token_caches_the_persisted_row() {
+        let guard = init_db("token_cache_db_persist_fetched").await;
+        seed_chain(&guard, 1).await;
+        // The row carries an icon that the fetched metadata does not know about.
+        seed_token(&guard, 1, &ERC20, TokenType::Erc20, Some(ICON_X)).await;
+        let service = service_for(&guard.client(), TokenInfoServiceSettings::default());
+        let key = (1, ERC20.to_vec());
+
+        let fetched = tokens::ActiveModel {
+            chain_id: Set(1),
+            address: Set(ERC20.to_vec()),
+            r#type: Set(TokenType::Erc20),
+            name: Set(Some("Fetched".to_string())),
+            symbol: Set(Some("FTC".to_string())),
+            decimals: Set(Some(6)),
+            token_icon: Set(None),
+            ..Default::default()
+        };
+        let persisted = service
+            .persist_fetched_token(&key, fetched)
+            .await
+            .expect("the upsert succeeds");
+
+        assert_eq!(persisted.token_icon.as_deref(), Some(ICON_X));
+        assert_eq!(persisted.name.as_deref(), Some("Fetched"));
+        assert_eq!(
+            service.read_cache(&key),
+            Some(persisted.clone()),
+            "the cache holds the persisted row, not the locally built one"
+        );
+        assert_eq!(
+            stored_icon(&guard, 1, &ERC20).await.as_deref(),
+            Some(ICON_X)
+        );
+        assert!(
+            service.per_key_locks.read().is_empty(),
+            "the per-key lock must not leak"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn token_cache_db_invalidate_then_read_returns_the_new_icon() {
+        let guard = init_db("token_cache_db_invalidate_then_read").await;
+        seed_chain(&guard, 1).await;
+        seed_token(&guard, 1, &ERC20, TokenType::Erc20, Some(ICON_X)).await;
+        let service = service_for(&guard.client(), TokenInfoServiceSettings::default());
+        let key = (1, ERC20.to_vec());
+
+        // Warm the cache.
+        let warmed = service
+            .clone()
+            .get_token_info(1, ERC20.to_vec())
+            .await
+            .unwrap();
+        assert_eq!(warmed.token_icon.as_deref(), Some(ICON_X));
+        assert!(service.read_cache(&key).is_some());
+
+        admin_set_icon(&guard, 1, &ERC20, ICON_ADMIN).await;
+        let stale = service
+            .clone()
+            .get_token_info(1, ERC20.to_vec())
+            .await
+            .unwrap();
+        assert_eq!(
+            stale.token_icon.as_deref(),
+            Some(ICON_X),
+            "without invalidation the cache keeps serving the old value"
+        );
+
+        service.invalidate_cached(1, &ERC20).await;
+        assert_eq!(service.read_cache(&key), None);
+        let fresh = service
+            .clone()
+            .get_token_info(1, ERC20.to_vec())
+            .await
+            .unwrap();
+        assert_eq!(fresh.token_icon.as_deref(), Some(ICON_ADMIN));
+        assert!(service.per_key_locks.read().is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn token_cache_db_fast_path_returns_native_and_iconed_entries_directly() {
+        let guard = init_db("token_cache_db_fast_path_direct").await;
+        seed_chain(&guard, 1).await;
+        let native = vec![0u8; 20];
+        let iconed = ERC20.to_vec();
+        seed_token(&guard, 1, &native, TokenType::Native, None).await;
+        seed_token(&guard, 1, &iconed, TokenType::Erc20, Some(ICON_X)).await;
+        let service = service_for(&guard.client(), TokenInfoServiceSettings::default());
+
+        for address in [&native, &iconed] {
+            // Fill the cache, then hold the per-key mutex: a fast-path hit does
+            // not need it.
+            let first = service
+                .clone()
+                .get_token_info(1, address.clone())
+                .await
+                .unwrap();
+            let key = (1, address.clone());
+            let key_lock = service.get_lock_for_key(&key);
+            let _held = key_lock.lock().await;
+
+            let second = tokio::time::timeout(
+                Duration::from_secs(5),
+                service.clone().get_token_info(1, address.clone()),
+            )
+            .await
+            .expect("a native or iconed cache hit must not wait for the per-key mutex")
+            .unwrap();
+            assert_eq!(second, first);
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn token_cache_db_iconless_erc20_goes_through_the_mutex() {
+        let guard = init_db("token_cache_db_iconless_mutex").await;
+        seed_chain(&guard, 1).await;
+        seed_token(&guard, 1, &ERC20, TokenType::Erc20, None).await;
+        let service = service_for(&guard.client(), TokenInfoServiceSettings::default());
+        let key = (1, ERC20.to_vec());
+
+        // Warm the cache with an icon-less ERC-20.
+        service
+            .clone()
+            .get_token_info(1, ERC20.to_vec())
+            .await
+            .unwrap();
+        assert!(service.read_cache(&key).is_some());
+
+        let key_lock = service.get_lock_for_key(&key);
+        let held = key_lock.lock().await;
+        let mut read = tokio::spawn({
+            let service = service.clone();
+            async move { service.get_token_info(1, ERC20.to_vec()).await }
+        });
+        assert!(
+            tokio::time::timeout(Duration::from_millis(300), &mut read)
+                .await
+                .is_err(),
+            "a cached ERC-20 without an icon may need the icon refill, so the read must wait for the per-key mutex"
+        );
+
+        drop(held);
+        let model = tokio::time::timeout(Duration::from_secs(5), read)
+            .await
+            .expect("the read finishes once the mutex is released")
+            .unwrap()
+            .unwrap();
+        assert_eq!(model.token_icon, None);
+    }
+
+    /// The background upsert (W1) writes the database and publishes the cache
+    /// entry under the per-key mutex. Without it, a W1 that read a row before an
+    /// admin commit could publish that old row after the admin's invalidation.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn token_cache_db_background_upsert_publishes_under_the_mutex() {
+        let guard = init_db("token_cache_db_w1_under_mutex").await;
+        seed_chain(&guard, 1).await;
+        seed_token(&guard, 1, &ERC20, TokenType::Erc20, Some(ICON_X)).await;
+        let service = service_for(&guard.client(), TokenInfoServiceSettings::default());
+        let key = (1, ERC20.to_vec());
+        let fetched = tokens::ActiveModel {
+            chain_id: Set(1),
+            address: Set(ERC20.to_vec()),
+            r#type: Set(TokenType::Erc20),
+            name: Set(Some("Fetched".to_string())),
+            symbol: Set(Some("FTC".to_string())),
+            decimals: Set(Some(6)),
+            token_icon: Set(None),
+            ..Default::default()
+        };
+
+        let key_lock = service.get_lock_for_key(&key);
+        let held = key_lock.lock().await;
+        let mut upsert = tokio::spawn({
+            let service = service.clone();
+            let key = key.clone();
+            async move { service.persist_fetched_token(&key, fetched).await }
+        });
+        assert!(
+            tokio::time::timeout(Duration::from_millis(300), &mut upsert)
+                .await
+                .is_err(),
+            "the background upsert must wait for the per-key mutex"
+        );
+        assert_eq!(
+            service.read_cache(&key),
+            None,
+            "nothing is published while the mutex is held elsewhere"
+        );
+        let untouched = tokens::Entity::find_by_id((1, ERC20.to_vec()))
+            .one(guard.client().as_ref())
+            .await
+            .unwrap()
+            .expect("token row exists");
+        assert_eq!(
+            untouched.name.as_deref(),
+            Some("Token"),
+            "nothing is written while the mutex is held elsewhere"
+        );
+
+        drop(held);
+        let persisted = tokio::time::timeout(Duration::from_secs(5), upsert)
+            .await
+            .expect("the upsert finishes once the mutex is released")
+            .unwrap()
+            .expect("the upsert succeeds");
+        assert_eq!(persisted.name.as_deref(), Some("Fetched"));
+        assert_eq!(service.read_cache(&key), Some(persisted));
+    }
+
+    /// The interleaving that cache invalidation alone cannot fence: a
+    /// request-time icon refill (W3) has written its value to the database and
+    /// is still busy, an admin write commits, and the cache is invalidated.
+    /// The refill must finish before the invalidation takes effect, so that its
+    /// late cache patch cannot overwrite what the invalidation made room for.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn token_cache_db_delayed_icon_refill_cannot_overwrite_an_admin_write() {
+        let guard = init_db("token_cache_db_delayed_refill").await;
+        let conn = guard.client();
+        seed_chain(&guard, 1).await;
+        seed_token(&guard, 1, &ERC20, TokenType::Erc20, None).await;
+        // An asset with empty metadata, linked to the token with the same type:
+        // propagation after the refill must `UPDATE` it (and nothing else).
+        let asset_id = stats_assets::Entity::insert(stats_assets::ActiveModel {
+            name: Set(None),
+            symbol: Set(None),
+            icon_url: Set(None),
+            ..Default::default()
+        })
+        .exec_with_returning(conn.as_ref())
+        .await
+        .unwrap()
+        .id;
+        stats_asset_tokens::Entity::insert(stats_asset_tokens::ActiveModel {
+            stats_asset_id: Set(asset_id),
+            chain_id: Set(1),
+            token_address: Set(ERC20.to_vec()),
+            r#type: Set(TokenType::Erc20),
+            ..Default::default()
+        })
+        .exec(conn.as_ref())
+        .await
+        .unwrap();
+
+        let service = service_for(&conn, unreachable_blockscout_settings());
+        let key = (1, ERC20.to_vec());
+        let blockscout = &service.token_info_client;
+
+        // Warm the cache with an icon-less entry; Blockscout "knows no icon" yet.
+        blockscout.seed_icon_cache_for_tests(1, &ERC20, None);
+        let warmed = service
+            .clone()
+            .get_token_info(1, ERC20.to_vec())
+            .await
+            .unwrap();
+        assert_eq!(warmed.token_icon, None);
+        assert!(service.read_cache(&key).is_some());
+        // Now it does: the next refill writes this icon.
+        blockscout.seed_icon_cache_for_tests(1, &ERC20, Some(ICON_BLOCKSCOUT.to_string()));
+
+        // A second connection holds the asset row, so the refill's propagation
+        // blocks after the refill has written the icon to `tokens`.
+        let blocker = conn.begin().await.unwrap();
+        stats_assets::Entity::find_by_id(asset_id)
+            .lock_exclusive()
+            .one(&blocker)
+            .await
+            .unwrap()
+            .expect("asset exists");
+        let mut reader = tokio::spawn({
+            let service = service.clone();
+            async move { service.get_token_info(1, ERC20.to_vec()).await }
+        });
+        wait_until(
+            "the refill to write its icon to the database",
+            Duration::from_secs(10),
+            || async { stored_icon(&guard, 1, &ERC20).await.as_deref() == Some(ICON_BLOCKSCOUT) },
+        )
+        .await;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), &mut reader)
+                .await
+                .is_err(),
+            "the refill is still blocked in propagation"
+        );
+
+        // The admin write commits while the refill is stuck, then the cache is
+        // invalidated.
+        admin_set_icon(&guard, 1, &ERC20, ICON_ADMIN).await;
+        let mut invalidation = tokio::spawn({
+            let service = service.clone();
+            async move { service.invalidate_cached(1, &ERC20).await }
+        });
+        assert!(
+            tokio::time::timeout(Duration::from_millis(200), &mut invalidation)
+                .await
+                .is_err(),
+            "the invalidation must wait for the refill, which holds the per-key mutex"
+        );
+
+        blocker.rollback().await.unwrap();
+        tokio::time::timeout(Duration::from_secs(10), reader)
+            .await
+            .expect("the refill finishes once the asset row is released")
+            .unwrap()
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(10), invalidation)
+            .await
+            .expect("the invalidation finishes once the refill releases the mutex")
+            .unwrap();
+
+        // The next read sees the admin value, equal to the database.
+        let model = service
+            .clone()
+            .get_token_info(1, ERC20.to_vec())
+            .await
+            .unwrap();
+        assert_eq!(model.token_icon.as_deref(), Some(ICON_ADMIN));
+        assert_eq!(
+            stored_icon(&guard, 1, &ERC20).await.as_deref(),
+            Some(ICON_ADMIN)
+        );
+        assert_eq!(
+            service
+                .read_cache(&key)
+                .and_then(|m| m.token_icon)
+                .as_deref(),
+            Some(ICON_ADMIN),
+            "the cache agrees with the database"
+        );
     }
 }

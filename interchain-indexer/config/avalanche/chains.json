@@ -26,9 +26,25 @@
         },
         "rpcs": [
             {
-                "avalanche": {
-                    "url": "https://subnets.avax.network/numi/mainnet/rpc",
+                "glacier": {
+                    "url": "https://glacier-api.avax.network/v1/ext/bc/8021/rpc",
+                    "max_rps": 1,
                     "multicall_batching_us": 0
+                }
+            }
+        ]
+    },
+    {
+        "chain_id": 68414,
+        "name": "Henesys",
+        "icon": "https://cdn.routescan.io/cdn/chains/henesys/logo.png",
+        "explorer": {
+            "url": "https://68414.snowtrace.io/"
+        },
+        "rpcs": [
+            {
+                "msu": {
+                    "url": "https://henesys-rpc.msu.io"
                 }
             }
         ]

@@ -6,6 +6,10 @@ mod m20251030_000001_initial;
 mod m20260312_175120_add_stats_tables;
 mod m20260508_082944_add_amb_indexer;
 mod m20260720_120000_add_read_filters_and_bridge_stats;
+mod m20260824_120000_add_stats_chains_by_bridge;
+mod m20260910_132423_add_protocol_metadata;
+mod m20260915_120000_add_xdai_and_cross_asset_stats;
+mod m20261002_115013_add_write_api_audit_log;
 
 pub struct Migrator;
 
@@ -17,6 +21,10 @@ impl MigratorTrait for Migrator {
             Box::new(m20260312_175120_add_stats_tables::Migration),
             Box::new(m20260508_082944_add_amb_indexer::Migration),
             Box::new(m20260720_120000_add_read_filters_and_bridge_stats::Migration),
+            Box::new(m20260824_120000_add_stats_chains_by_bridge::Migration),
+            Box::new(m20260910_132423_add_protocol_metadata::Migration),
+            Box::new(m20260915_120000_add_xdai_and_cross_asset_stats::Migration),
+            Box::new(m20261002_115013_add_write_api_audit_log::Migration),
         ]
     }
 }

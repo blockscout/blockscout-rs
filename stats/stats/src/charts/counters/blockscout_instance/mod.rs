@@ -8,6 +8,7 @@ mod arbitrum_total_operational_txns;
 mod arbitrum_yesterday_operational_txns;
 mod average_block_time;
 mod completed_txns;
+mod filecoin_chain_fees_24h;
 mod last_new_contracts;
 mod last_new_verified_contracts;
 mod new_contracts_24h;
@@ -37,6 +38,7 @@ pub use arbitrum_total_operational_txns::ArbitrumTotalOperationalTxns;
 pub use arbitrum_yesterday_operational_txns::ArbitrumYesterdayOperationalTxns;
 pub use average_block_time::AverageBlockTime;
 pub use completed_txns::CompletedTxns;
+pub use filecoin_chain_fees_24h::FilecoinChainFees24h;
 pub use last_new_contracts::LastNewContracts;
 pub use last_new_verified_contracts::LastNewVerifiedContracts;
 pub use new_cc_txns_24h::NewZetachainCrossChainTxns24h;
@@ -67,6 +69,10 @@ pub use yesterday_txns::{
 };
 
 pub(crate) use arbitrum_total_operational_txns::CalculateOperationalTxns;
+pub(crate) use filecoin_chain_fees_24h::FilecoinChainFees24hValue;
+// consumed by the test module of `tests::mock_blockscout_filecoin`
+#[cfg(test)]
+pub(crate) use filecoin_chain_fees_24h::bound_subquery_sql;
 pub(crate) use total_blocks::TotalBlocksInt;
 pub(crate) use total_txns::TotalTxnsInt;
 pub(crate) use txns_stats_24h::{TxnsStatsValue, new_txns_24h::NewTxns24hInt};

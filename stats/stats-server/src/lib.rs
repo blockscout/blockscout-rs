@@ -4,6 +4,8 @@ pub mod auth;
 pub mod blockscout_waiter;
 mod config;
 mod health;
+mod interchain_filter;
+mod interchain_indexer_api;
 mod linked_stats;
 mod linked_stats_merge;
 mod read_service;

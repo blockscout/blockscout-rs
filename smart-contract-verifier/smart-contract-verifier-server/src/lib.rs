@@ -11,4 +11,4 @@ pub use run::run;
 pub use services::{
     HealthService, SolidityVerifierService, SourcifyVerifierService, VyperVerifierService,
 };
-pub use settings::Settings;
+pub use settings::{CompilerExecutionSettings, Settings};

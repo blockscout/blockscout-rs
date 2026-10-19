@@ -53,6 +53,10 @@ pub async fn insert_verification_result(
         raw_creation_input: Set(raw_creation_input),
         raw_deployed_bytecode: Set(raw_deployed_bytecode),
         abi: Set(Some(abi)),
+        // "sources"."file_ids_hash" is NOT NULL without a default. Production derives it
+        // from the ids of the files the source is made of, which are only inserted below,
+        // so a fresh value per contract stands in for it here.
+        file_ids_hash: Set(Uuid::new_v4()),
         ..Default::default()
     }
     .insert(&txn)

@@ -15,7 +15,7 @@ COPY --from=proto . /proto
 COPY . .
 COPY --from=cache /app/target target
 COPY --from=cache $CARGO_HOME $CARGO_HOME
-RUN cargo build --release
+RUN cargo build --release --bin stats-server
 
 FROM ubuntu:25.04 AS run
 RUN apt-get update && apt-get install -y libssl3 libssl-dev ca-certificates

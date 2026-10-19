@@ -7,9 +7,7 @@ license = "LicenseRef-Blockscout"
 [dependencies]
 anyhow = { workspace = true }
 blockscout-display-bytes = { workspace = true }
-keccak-hash = { workspace = true }
 sea-orm = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 sha3 = { workspace = true }
@@ -20,8 +18,6 @@ verifier-alliance-entity = { workspace = true }
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true, features = ["test-database"] }
 pretty_assertions = { workspace = true }
-serde_json = { workspace = true }
-serde_with = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 verifier-alliance-database-tests = { workspace = true }
 verifier-alliance-migration = { workspace = true }

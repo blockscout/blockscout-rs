@@ -135,6 +135,6 @@ jobs:
     uses: ./.github/workflows/_push_swagger.yml
     with:
       service_name: 'tac-operation-lifecycle'
-      swagger_path: 'tac-operation-lifecycle/tac-operation-lifecycle-proto/swagger/v1/tac-operation-lifecycle.swagger.yaml'
+      swagger_path: 'tac-operation-lifecycle/tac-operation-lifecycle-proto/swagger/tac-operation-lifecycle.swagger.yaml'
     secrets:
       api_token_github: ${{ secrets.BLOCKSCOUT_BOT_TOKEN }}

@@ -1,1 +1,13 @@
 data/
+
+## Local scratch space for AI workflow artifacts (tasks, notes, drafts)
+tmp
+
+## AI assistant local overrides
+CLAUDE.local.md
+.claude/settings.local.json
+__pycache__
+
+## graphify knowledge graph — rebuilt locally, never committed
+## (keeps the graph fresh without dragging a large diff into every commit)
+/graphify-out/

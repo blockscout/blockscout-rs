@@ -13,6 +13,19 @@ members = [
 blockscout-client = { git = "https://github.com/blockscout/blockscout-rs/", rev = "d02877c" }
 blockscout-service-launcher = { version = "0.19.0" }
 hex = "0.4.3"
+# interchain-indexer: `entity` for the columns, `filters` for the read predicate
+# shared verbatim with the indexer's read API, `migration` for the test schema.
+# All three MUST carry the identical rev: cargo keys a git source by
+# `(url, rev)`, so two revs of one URL give two checkouts and two distinct
+# copies of `interchain-indexer-entity` — `ChainBridgeFilter`'s column
+# identifiers would then be a different type from the ones stats builds with,
+# and it will not compile.
+# Pinned to the squash-merge commit of #1727 on `main`, which is where
+# `interchain-indexer-filters` was introduced. The feature branch it came from
+# has been deleted, so any earlier rev of these crates is unreachable.
+interchain-indexer-entity = { git = "https://github.com/blockscout/blockscout-rs/", rev = "58d861876900a900d64d7337d9f9ba095e5f6e11", package = "interchain-indexer-entity" }
+interchain-indexer-filters = { git = "https://github.com/blockscout/blockscout-rs/", rev = "58d861876900a900d64d7337d9f9ba095e5f6e11", package = "interchain-indexer-filters" }
+interchain-indexer-migration = { git = "https://github.com/blockscout/blockscout-rs/", rev = "58d861876900a900d64d7337d9f9ba095e5f6e11", package = "interchain-indexer-migration" }
 # todo: update to tag >1.6.0 once released (can't compile for some reason)
 multichain-aggregator-entity = { git = "https://github.com/blockscout/blockscout-rs/", rev = "096c4c140375e5a1802413e9a037c35f84aeaa42", package = "multichain-aggregator-entity" }
 multichain-aggregator-migration = { git = "https://github.com/blockscout/blockscout-rs/", rev = "096c4c140375e5a1802413e9a037c35f84aeaa42", package = "multichain-aggregator-migration" }

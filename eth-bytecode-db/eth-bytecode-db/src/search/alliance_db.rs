@@ -68,8 +68,6 @@ fn match_from_verified_contract(
         compilation_artifacts: Some(compilation_artifacts.to_string()),
         creation_input_artifacts: Some(creation_code_artifacts.to_string()),
         deployed_bytecode_artifacts: Some(runtime_code_artifacts.to_string()),
-        raw_creation_input: compiled_contract.creation_code,
-        raw_deployed_bytecode: compiled_contract.runtime_code,
         is_blueprint: false,
         libraries,
     };

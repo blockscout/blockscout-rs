@@ -102,8 +102,17 @@ ChainConfig           (deny_unknown_fields)
   ├─ explorer: ExplorerConfig                 (deny_unknown_fields)
   ├─ pool_config: PoolConfig                  (deny_unknown_fields)
   └─ rpcs: Vec<HashMap<String, RpcProviderConfig>>  (deny_unknown_fields)
+       ├─ order: Option<u32>                  (pool position; ascending, unset last)
        └─ api_key: ApiKeyConfig               (deny_unknown_fields)
 ```
+
+Because loading routes every file through `serde_json::Value` (a `BTreeMap`
+without `preserve_order`) and then into `HashMap`, the key order of an `rpcs`
+object is not observable by the time config becomes typed.
+`RpcProviderConfig::order` is the only way to express pool preference;
+`ranked_rpc_providers` sorts on `(order, rpcs array index, provider name)` so
+the pool — and hence the primary node — is identical across restarts and
+replicas. See the "RPC Pool Order Comes From `order`" gotcha.
 
 A repo-level test (`test_all_repo_config_files_parse_through_strict_structs`)
 deserializes every `config/**/*.json` and `docker/config/*.json` through the

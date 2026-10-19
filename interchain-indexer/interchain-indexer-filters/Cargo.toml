@@ -1,0 +1,13 @@
+[package]
+name = "interchain-indexer-filters"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "LicenseRef-Blockscout"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+interchain-indexer-entity = { workspace = true }
+sea-orm = { workspace = true }

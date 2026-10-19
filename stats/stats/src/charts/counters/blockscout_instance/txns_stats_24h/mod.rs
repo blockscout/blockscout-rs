@@ -19,9 +19,17 @@ impl StatementFromRange for TxnsStatsStatement {
     fn get_statement(
         range: Option<Range<DateTime<Utc>>>,
         completed_migrations: &IndexerMigrations,
-        _enabled_update_charts_recursive: &HashSet<ChartKey>,
+        enabled_update_charts_recursive: &HashSet<ChartKey>,
     ) -> Statement {
         use sea_orm::prelude::*;
+
+        // `count_op_stack_operational` has exactly one consumer
+        // (`OpStackNewOperationalTxns24h`), so on every chain where that counter
+        // is off, its per-row `FILTER` runs over a full day of transactions and
+        // the result is discarded. Gated the same way as in
+        // `NewTxnsCombinedStatement`.
+        let count_op_stack_transactions = enabled_update_charts_recursive
+            .contains(&op_stack_new_operational_txns_24h::Properties::key());
 
         // see `statement_is_correct` for resulting SQL statement
         let fee_query = Expr::cust_with_exprs(
@@ -38,10 +46,16 @@ impl StatementFromRange for TxnsStatsStatement {
         .mul(transactions::Column::GasUsed.into_simple_expr());
 
         let count_query = Func::count(transactions::Column::Hash.into_simple_expr());
-        let count_op_stack_query = Expr::cust(format!(
-            r#"COUNT("transactions"."hash") FILTER (WHERE {})"#,
-            op_stack_operational_transactions_filter("transactions")
-        ));
+        let count_op_stack_query = if count_op_stack_transactions {
+            Expr::cust(format!(
+                r#"COUNT("transactions"."hash") FILTER (WHERE {})"#,
+                op_stack_operational_transactions_filter("transactions")
+            ))
+        } else {
+            // `TxnsStatsValue::count_op_stack_operational` is an `i64`, so the
+            // placeholder has to come back as `bigint`, not `integer`.
+            Expr::cust("CAST(0 AS bigint)")
+        };
         let sum_query = Expr::expr(Func::sum(fee_query.clone()))
             .div(ETHER)
             .cast_as(Alias::new("FLOAT"));
@@ -86,11 +100,37 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
+        ChartProperties,
         data_source::{kinds::remote_db::StatementFromRange, types::IndexerMigrations},
         tests::{normalize_sql, point_construction::dt},
     };
 
-    use super::TxnsStatsStatement;
+    use super::{TxnsStatsStatement, op_stack_new_operational_txns_24h};
+
+    /// Without `opStackNewOperationalTxns24h` enabled, the operational count is
+    /// a constant rather than a per-row `FILTER` over a day of transactions.
+    #[test]
+    fn statement_skips_op_stack_count_when_disabled() {
+        let actual = TxnsStatsStatement::get_statement(
+            Some(dt("2025-01-01T00:00:00").and_utc()..dt("2025-01-02T00:00:00").and_utc()),
+            &IndexerMigrations::latest(),
+            &HashSet::new(),
+        );
+
+        let expected = r#"
+            SELECT COUNT("transactions"."hash") AS "count",
+                CAST(0 AS bigint) AS "count_op_stack_operational",
+                CAST((SUM((COALESCE("transactions"."gas_price", "blocks"."base_fee_per_gas" + LEAST("transactions"."max_priority_fee_per_gas", "transactions"."max_fee_per_gas" - "blocks"."base_fee_per_gas"))) * "transactions"."gas_used") / 1000000000000000000) AS FLOAT) AS "fee_sum",
+                CAST((AVG((COALESCE("transactions"."gas_price", "blocks"."base_fee_per_gas" + LEAST("transactions"."max_priority_fee_per_gas", "transactions"."max_fee_per_gas" - "blocks"."base_fee_per_gas"))) * "transactions"."gas_used") / 1000000000000000000) AS FLOAT) AS "fee_average"
+            FROM "blocks"
+            INNER JOIN "transactions" ON "blocks"."hash" = "transactions"."block_hash"
+            WHERE "transactions"."block_timestamp" < '2025-01-02 00:00:00.000000 +00:00'
+                AND "transactions"."block_timestamp" >= '2025-01-01 00:00:00.000000 +00:00'
+                AND "blocks"."timestamp" < '2025-01-02 00:00:00.000000 +00:00'
+                AND "blocks"."timestamp" >= '2025-01-01 00:00:00.000000 +00:00'
+        "#;
+        assert_eq!(normalize_sql(expected), normalize_sql(&actual.to_string()))
+    }
 
     #[test]
     fn statement_is_correct() {
@@ -98,7 +138,7 @@ mod tests {
         let actual = TxnsStatsStatement::get_statement(
             Some(dt("2025-01-01T00:00:00").and_utc()..dt("2025-01-02T00:00:00").and_utc()),
             &IndexerMigrations::latest(),
-            &HashSet::new(),
+            &HashSet::from([op_stack_new_operational_txns_24h::Properties::key()]),
         );
 
         let expected = r#"

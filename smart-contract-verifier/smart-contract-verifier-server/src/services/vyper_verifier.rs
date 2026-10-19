@@ -12,9 +12,8 @@ use crate::{
     types,
 };
 use anyhow::Context;
-use smart_contract_verifier::{vyper, EvmCompilersPool, VyperCompiler};
+use smart_contract_verifier::{vyper, CompilerExecutor, EvmCompilersPool, VyperCompiler};
 use std::sync::Arc;
-use tokio::sync::Semaphore;
 use tonic::{Request, Response, Status};
 
 pub struct VyperVerifierService {
@@ -22,9 +21,11 @@ pub struct VyperVerifierService {
 }
 
 impl VyperVerifierService {
-    pub async fn new(
+    /// `executor` must already enforce the shared compiler limit, e.g. a
+    /// `ConcurrencyLimitedCompilerExecutor`.
+    pub async fn new_with_admitted_executor(
         settings: VyperSettings,
-        compilers_threads_semaphore: Arc<Semaphore>,
+        executor: Arc<dyn CompilerExecutor>,
     ) -> anyhow::Result<Self> {
         let fetcher = common::initialize_fetcher(
             settings.fetcher,
@@ -35,7 +36,7 @@ impl VyperVerifierService {
         .await
         .context("vyper fetcher initialization")?;
         let compilers: EvmCompilersPool<VyperCompiler> =
-            EvmCompilersPool::new(fetcher, compilers_threads_semaphore);
+            EvmCompilersPool::new_with_admitted_executor(fetcher, executor);
         compilers.load_from_dir(&settings.compilers_dir).await;
 
         Ok(Self {

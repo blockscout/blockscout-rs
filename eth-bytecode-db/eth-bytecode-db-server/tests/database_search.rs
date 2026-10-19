@@ -454,6 +454,133 @@ async fn search_blueprint_contracts() {
 #[tokio::test]
 #[timeout(std::time::Duration::from_secs(60))]
 #[ignore = "Needs database to run"]
+async fn search_contract_deployed_from_vyper_blueprint() {
+    const ROUTE: &str = "/api/v2/bytecodes/sources:search";
+
+    let db = init_db(
+        TEST_SUITE_NAME,
+        "search_contract_deployed_from_vyper_blueprint",
+    )
+    .await;
+
+    // Vyper >=0.4.0 appends a cbor auxdata array to the creation code (and nothing to the
+    // runtime code), so its sources are stored as a "main" part plus a "meta" part.
+    // The auxdata is `[integrity hash, runtime code length, data section lengths,
+    // immutables length, {"vyper": [0, 4, 3]}]` - a cbor array, not the cbor map solidity
+    // emits.
+    let creation_code_main = "0x365f5f375f5f365f34f05f5260205ff3";
+    let stored_auxdata = "0x855820aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1900118000a1657679706572830004030035";
+    let runtime_code = "0x5f3560e01c63158ef93e8118600e57005b";
+    // The integrity hash covers the sources, so a second verification of otherwise identical
+    // code carries a different one. This is what an on-chain blueprint holds when the source
+    // in the database came from a different verification of the same contract.
+    let on_chain_auxdata = "0x855820bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb1900118000a1657679706572830004030035";
+
+    // A factory deploying via `create_from_blueprint` CREATEs the child with
+    // `<blueprint initcode><constructor args>`, and that initcode is exactly the compiled
+    // creation code of the contract being deployed.
+    let constructor_args = "0000000000000000000000000000000000000000000000000000000000000045";
+
+    /********** Setup **********/
+
+    let mut test_data = test_input_data::basic(verification::SourceType::Vyper, MatchType::Partial);
+    test_data.set_bytecode(smart_contract_verifier_v2::verify_response::ExtraData {
+        local_creation_input_parts: vec![
+            smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
+                r#type: "main".to_string(),
+                data: creation_code_main.to_string(),
+            },
+            smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
+                r#type: "meta".to_string(),
+                data: stored_auxdata.to_string(),
+            },
+        ],
+        local_deployed_bytecode_parts: vec![
+            smart_contract_verifier_v2::verify_response::extra_data::BytecodePart {
+                r#type: "main".to_string(),
+                data: runtime_code.to_string(),
+            },
+        ],
+    });
+    test_data.set_abi("[{\"inputs\":[{\"name\":\"_value\",\"type\":\"uint256\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"}]".to_string());
+
+    let db_url = db.db_url();
+    let verifier_addr = init_verifier_server::<
+        _,
+        eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
+        _,
+    >(service(), test_data.verifier_response.clone())
+    .await;
+
+    let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+
+    // Fill the database with existing value
+    {
+        let dummy_request = default_verify_request();
+        let _verification_response: eth_bytecode_db_v2::VerifyResponse =
+            test_server::send_post_request(&eth_bytecode_db_base, VERIFY_ROUTE, &dummy_request)
+                .await;
+    }
+
+    let expected_source = |match_type: eth_bytecode_db_v2::source::MatchType| {
+        let mut source = test_data.eth_bytecode_db_response.source.clone().unwrap();
+        source.constructor_arguments = Some(constructor_args.to_string());
+        source.match_type = match_type.into();
+        // The deployed contract is not itself a blueprint, only the contract it was
+        // deployed from is.
+        source.is_blueprint = false;
+        source
+    };
+
+    /********** Creation code of a contract deployed from the verified blueprint **********/
+
+    let request = SearchSourcesRequest {
+        bytecode: format!(
+            "{creation_code_main}{}{constructor_args}",
+            &stored_auxdata[2..]
+        ),
+        bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
+    };
+
+    let verification_response: SearchSourcesResponse =
+        test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
+
+    assert_eq!(
+        SearchSourcesResponse {
+            sources: vec![expected_source(eth_bytecode_db_v2::source::MatchType::Full)]
+        },
+        verification_response,
+        "Invalid response returned for a child of the verified blueprint"
+    );
+
+    /********** The same, but the blueprint on chain carries a different integrity hash **********/
+
+    let request = SearchSourcesRequest {
+        bytecode: format!(
+            "{creation_code_main}{}{constructor_args}",
+            &on_chain_auxdata[2..]
+        ),
+        bytecode_type: eth_bytecode_db_v2::BytecodeType::CreationInput.into(),
+    };
+
+    let verification_response: SearchSourcesResponse =
+        test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
+
+    assert_eq!(
+        SearchSourcesResponse {
+            sources: vec![expected_source(
+                eth_bytecode_db_v2::source::MatchType::Partial
+            )]
+        },
+        verification_response,
+        "Invalid response returned for a child of a differently verified blueprint"
+    );
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
 async fn search_event_descriptions() {
     const ROUTE: &str = "/api/v2/event-descriptions:search";
 

@@ -151,6 +151,13 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
         Ok(())
     }
 
+    /// Test-only: whether `key` currently has a hot-tier entry. Lets tests outside
+    /// `message_buffer` assert eviction/absence without widening `inner`.
+    #[cfg(test)]
+    pub(crate) fn contains_hot(&self, key: &Key) -> bool {
+        self.inner.contains_key(key)
+    }
+
     /// Start the background maintenance loop.
     pub async fn start(self: Arc<Self>) -> Result<JoinHandle<()>> {
         let buffer = Arc::clone(&self);

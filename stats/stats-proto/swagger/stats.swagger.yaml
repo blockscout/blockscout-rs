@@ -531,7 +531,15 @@ definitions:
     properties:
       all_status:
         $ref: '#/definitions/v1ChartSubsetUpdateStatus'
-        title: Status of all enabled charts
+        description: |-
+          Status of all enabled charts.
+
+          In `Interchain` mode this is the field to read, and it is unambiguous
+          there: that mode force-disables every other start check, so the
+          interchain catch-up gate is the only condition that can hold it at
+          `WAITING_FOR_STARTING_CONDITION`. The five fields below describe
+          Blockscout's database, which `Interchain` mode never reads, so their
+          values there are not meaningful.
       independent_status:
         $ref: '#/definitions/v1ChartSubsetUpdateStatus'
         title: Status of all enabled charts that are independent from any indexing

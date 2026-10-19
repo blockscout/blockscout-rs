@@ -18,6 +18,18 @@ An ADR captures the context, decision, and consequences of an architectural choi
 | [002](./002-primary-chain-filtering.md) | Primary Chain Filtering for Unknown Chains | Proposed | 2026-02 |
 | [003](./003-amb-event-based-transfers.md) | AMB Transfers Reconstructed From Events; Nullable Transfer Sides | Accepted | 2026-06 |
 | [004](./004-stats-observability-horizon-and-asset-union-find.md) | Stats Eligibility From An Observability Horizon; Asset Identity As Union-Find | Accepted | 2026-07 |
+| [005](./005-failed-range-ledger-and-checkpoint-independence.md) | Failed-Range Ledger, Independent of Checkpoints | Accepted | 2026-08 |
+| [006](./006-contract-versioning-by-block.md) | Contract Versioning Resolved By Block, At Decode Time | Accepted | 2026-08 |
+| [007](./007-scan-floor-reconciled-against-the-checkpoint.md) | The Scan Floor Is Reconciled Against The Checkpoint, Not `bridge_contracts` | Accepted (expires with bidirectional catch-up) | 2026-08 |
+| [008](./008-per-chain-concurrency-within-a-bridge.md) | Per-Chain Concurrency Within A Bridge, Cooperative And Single-Task | Accepted | 2026-08 |
+| [009](./009-stats-chains-global-and-per-bridge-snapshots.md) | Stats Chains Global-Plus-Per-Bridge Snapshots | Accepted | 2026-08 |
+| [010](./010-unresolved-avalanche-destinations-and-protocol-metadata.md) | Unresolved Avalanche Destinations And Reusable Protocol Metadata | Accepted (implementation pending) | 2026-09-10 |
+| [011](./011-cross-asset-edges-and-per-transfer-linkage.md) | Cross-Asset Stats Edges And Per-Transfer Asset Linkage | Accepted | 2026-09-15 |
+| [012](./012-chain-local-token-types.md) | Token Type Belongs To The Chain-Local Token | Accepted | 2026-09-16 |
+| [013](./013-xdai-multi-deployment-grammar.md) | xDai Deployment Constants Stay In Code, Keyed By Chain Id | Accepted | 2026-09-18 |
+| [014](./014-first-seen-destination-execution-wins.md) | The First-Seen Destination Execution Is Canonical; Later Ones Are Recorded, Not Merged | Accepted | 2026-09-22 |
+| [015](./015-message-level-confirmations-attach-to-stored-row.md) | Validator Confirmations Are Message-Level; Late Ones Attach To The Stored Row | Accepted | 2026-09-29 |
+| [016](./016-operator-write-api-v1.md) | Operator Write API v1 | Accepted | 2026-10-02 |
 
 ## Creating a New ADR
 

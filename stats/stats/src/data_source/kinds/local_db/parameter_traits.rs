@@ -54,6 +54,30 @@ where
                 .map_err(ChartError::StatsDB)
         }
     }
+
+    /// Probes whether `MainDep` has at least one point of data in `range`,
+    /// without updating anything. Used only by the interchain trigger-2 gap
+    /// probe (`local_db::interchain_history_gap_has_data`), which is gated to
+    /// day-resolution line charts — i.e. this is only ever actually reached
+    /// where `Self = BatchUpdate<...>`, which overrides it with a real probe
+    /// (`MainDep::query_data` over `range`, checked for emptiness — exactly
+    /// what a real batch step fetches).
+    ///
+    /// The default here (used by `PassPoint`, i.e. counters) is never
+    /// actually reached in practice, since counters are never day-resolution
+    /// *line* charts. `Ok(true)` ("has data", i.e. never suppress a rebuild
+    /// on this account) is the safe choice should that assumption ever stop
+    /// holding — it fails toward an extra rebuild, not a missed one.
+    fn probe_gap_has_data(
+        cx: &UpdateContext<'_>,
+        range: UniversalRange<DateTime<Utc>>,
+        dependency_data_fetch_timer: &mut AggregateTimer,
+    ) -> impl Future<Output = Result<bool, ChartError>> + Send {
+        async move {
+            let _ = (cx, range, dependency_data_fetch_timer);
+            Ok(true)
+        }
+    }
 }
 
 /// In most cases, [`super::DefaultQueryVec`] is enough.

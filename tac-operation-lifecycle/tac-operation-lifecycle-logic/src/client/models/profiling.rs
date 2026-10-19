@@ -5,22 +5,67 @@ use serde_json::Value;
 use std::{collections::HashMap, str::FromStr};
 
 #[derive(Debug, Deserialize)]
-pub struct StageProfilingApiResponse {
-    pub response: HashMap<String, OperationData>,
+pub struct StageProfilingV1ApiResponse {
+    pub response: HashMap<String, V1OperationData>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StageProfilingV2ApiResponse {
+    pub response: HashMap<String, V2OperationData>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OperationData {
-    pub operation_type: OperationType,
+pub struct V1OperationData {
+    pub operation_type: LegacyOperationType,
     pub meta_info: Option<OperationMetaInfo>,
     #[serde(flatten)]
     pub stages: HashMap<StageType, Stage>,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct V2OperationData {
+    pub operation_type: OperationRoute,
+    pub status: Option<OperationStatus>,
+    pub finalized: bool,
+    pub rollback: bool,
+    pub meta_info: Option<OperationMetaInfo>,
+    #[serde(flatten)]
+    pub stages: HashMap<StageType, Stage>,
+}
+
+#[derive(Clone, Debug)]
+pub enum ProfilingResponse {
+    V1(HashMap<String, V1OperationData>),
+    V2(HashMap<String, V2OperationData>),
+}
+
+#[derive(Clone, Debug)]
+pub enum SourceOperationData {
+    V1(V1OperationData),
+    V2(V2OperationData),
+}
+
+impl SourceOperationData {
+    pub fn meta_info(&self) -> Option<&OperationMetaInfo> {
+        match self {
+            Self::V1(data) => data.meta_info.as_ref(),
+            Self::V2(data) => data.meta_info.as_ref(),
+        }
+    }
+
+    pub fn stages(&self) -> &HashMap<StageType, Stage> {
+        match self {
+            Self::V1(data) => &data.stages,
+            Self::V2(data) => &data.stages,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum OperationType {
+pub enum LegacyOperationType {
     Pending,
     #[serde(rename = "TON-TAC-TON")]
     TonTacTon,
@@ -37,6 +82,72 @@ pub enum OperationType {
     Unknown,
     #[serde(other)]
     ErrorType,
+}
+
+/// Upstream v2 route. Deliberately not `Serialize`: the value reaches the
+/// database and the v1 projection through [`Display`], and a derived
+/// `Serialize` would emit a different, externally-tagged shape than
+/// [`Deserialize`] accepts.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum OperationRoute {
+    TonTacTon,
+    TacTon,
+    TonTac,
+    Unknown,
+    Unrecognized(String),
+}
+
+impl<'de> Deserialize<'de> for OperationRoute {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        // Infallible: unknown routes are preserved as `Unrecognized`.
+        Ok(Self::from_str(&value).unwrap_or(Self::Unknown))
+    }
+}
+
+impl std::fmt::Display for OperationRoute {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::TonTacTon => "TON-TAC-TON",
+            Self::TacTon => "TAC-TON",
+            Self::TonTac => "TON-TAC",
+            Self::Unknown => "UNKNOWN",
+            Self::Unrecognized(value) => value,
+        })
+    }
+}
+
+impl FromStr for OperationRoute {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(match value {
+            "TON-TAC-TON" => Self::TonTacTon,
+            "TAC-TON" => Self::TacTon,
+            "TON-TAC" => Self::TonTac,
+            "UNKNOWN" => Self::Unknown,
+            value => Self::Unrecognized(value.to_string()),
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum OperationStatus {
+    Success,
+    Failed,
+}
+
+impl std::fmt::Display for OperationStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Success => "success",
+            Self::Failed => "failed",
+        })
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -177,4 +288,49 @@ where
             Some((key, val))
         })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deserializes_v2_lifecycle_independently() {
+        let response: StageProfilingV2ApiResponse = serde_json::from_value(serde_json::json!({
+            "response": {
+                "op": {
+                    "operationType": "TON-TAC",
+                    "status": "failed",
+                    "finalized": false,
+                    "rollback": true,
+                    "metaInfo": null
+                }
+            }
+        }))
+        .unwrap();
+        let op = &response.response["op"];
+        assert_eq!(op.operation_type, OperationRoute::TonTac);
+        assert_eq!(op.status, Some(OperationStatus::Failed));
+        assert!(!op.finalized);
+        assert!(op.rollback);
+    }
+
+    #[test]
+    fn unknown_v2_route_is_preserved() {
+        let response: StageProfilingV2ApiResponse = serde_json::from_value(serde_json::json!({
+            "response": {
+                "op": {
+                    "operationType": "NEW-ROUTE",
+                    "finalized": true,
+                    "rollback": false,
+                    "metaInfo": null
+                }
+            }
+        }))
+        .unwrap();
+        assert_eq!(
+            response.response["op"].operation_type,
+            OperationRoute::Unrecognized("NEW-ROUTE".to_string())
+        );
+    }
 }

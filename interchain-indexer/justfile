@@ -1,3 +1,11 @@
+# Secrets and deployment-local overrides live in `.env`, which is gitignored —
+# see `.env.example`. Use `just run-dev` to run with it; `just run` ignores it.
+#
+# Do not add `set dotenv-load := true` here. That setting is global — just has no
+# per-recipe scope for it — so `.env` would also reach `just test`, where an
+# `INTERCHAIN_INDEXER_CHAINS__*` override lands on the offline fixture and fails
+# the typed load (see `.memory-bank/gotchas.md`).
+
 default:
     just --list --unsorted
 
@@ -8,10 +16,11 @@ db-password := env_var_or_default('DB_PASSWORD', "admin")
 db-name := env_var_or_default('DB_NAME', "interchain_indexer")
 export DATABASE_URL := "postgres://" + db-user + ":" + db-password + "@" + db-host + ":" + db-port + "/" + db-name
 #export RUST_LOG := env_var_or_default('RUST_LOG', "info,sea_orm=debug,sqlx=debug,alloy_transport_http=warn")
-export RUST_LOG := env_var_or_default('RUST_LOG', "info,alloy_transport_http=warn")
+export RUST_LOG := env_var_or_default('RUST_LOG', "info")
 
 docker-name := env_var_or_default('DOCKER_NAME', "interchain-indexer-postgres-dev")
 test-db-port := env_var_or_default('TEST_DB_PORT', "9433")
+snapshot-dir := env_var_or_default('SNAPSHOT_DIR', "tmp/db-snapshots")
 
 
 start-postgres:
@@ -24,8 +33,18 @@ start-postgres:
 stop-postgres:
     docker kill {{docker-name}}
 
+# The `ulimit` is not incidental. Every server test boots the whole service
+# through `run()` — an actix HttpServer with one worker per CPU core, plus a
+# Postgres pool and the RPC provider pools — and `test_server::init_server`
+# never shuts one down, so descriptors accumulate across the tests of a binary.
+# macOS defaults the soft limit to 256 (`launchctl limit maxfiles`), which
+# EMFILEs around the fourth server and fails every test in the binary with
+# `Os { code: 24, "Too many open files" }` raised from an actix worker.
+# Best effort: `|| true` keeps a host with a lower hard limit from failing the
+# recipe outright. Comments live outside the body because `just` echoes body
+# lines on every run.
 test *args:
-    cargo test {{args}} -- --include-ignored
+    ulimit -n 8192 2>/dev/null || true; cargo test {{args}} -- --include-ignored
 
 test-with-db *args:
     -just db-port="{{test-db-port}}" db-name="" docker-name="{{docker-name}}-test" start-postgres
@@ -37,15 +56,28 @@ stop-test-postgres:
 run:
     INTERCHAIN_INDEXER__DATABASE__CONNECT__URL={{DATABASE_URL}} \
     INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS=true \
-    INTERCHAIN_INDEXER__CHAINS_CONFIG=config/omnibridge/chains-testnet.json \
-    INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/omnibridge/bridges-testnet.json \
-    INTERCHAIN_INDEXER__API__USE_PAGINATION_TOKEN=true \
-    INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL=https://contracts-info-test.k8s-dev.blockscout.com \
+    INTERCHAIN_INDEXER__CHAINS_CONFIG=config/full-mainnet/chains.json \
+    INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/full-mainnet/bridges.json \
+    INTERCHAIN_INDEXER__AMB_INDEXER__BATCH_SIZE=500 \
+    INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL=https://contracts-info.services.blockscout.com \
     INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS=8021 \
     cargo run --bin interchain-indexer-server
 
+run-testnet:
+    INTERCHAIN_INDEXER__DATABASE__CONNECT__URL={{DATABASE_URL}} \
+    INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS=true \
+    INTERCHAIN_INDEXER__CHAINS_CONFIG=config/xdai/chains-testnet.json \
+    INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/xdai/bridges-testnet.json \
+    INTERCHAIN_INDEXER__XDAI_INDEXER__BATCH_SIZE=2000 \
+    INTERCHAIN_INDEXER__XDAI_INDEXER__PULL_INTERVAL_MS=50 \
+    INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL=https://contracts-info-test.k8s-dev.blockscout.com \
+    cargo run --bin interchain-indexer-server
+
 run-dev:
-    dotenv -f .env run just run
+    dotenv -e .env -- just run
+
+run-dev-testnet:
+    dotenv -e .env-testnet -- just run-testnet
 
 generate-entities *args:
     sea-orm-cli generate entity -o interchain-indexer-entity/src/codegen
@@ -80,6 +112,30 @@ psql:
 flush-database:
     sea-orm-cli migrate -d interchain-indexer-migration reset
 
+# `start-postgres` runs the container with `--rm` and no volume, so the dev data
+# is gone on `stop-postgres`. A dump is the way to keep a state worth returning
+# to — a finished xDAI backfill, a testnet run — and to hop between them without
+# reindexing. Snapshots land in `tmp/`, which is gitignored.
+
+# snapshot the dev database into `<snapshot-dir>/<name>.dump`
+dump-db name="dev":
+    mkdir -p {{snapshot-dir}}
+    docker exec {{docker-name}} pg_dump -U {{db-user}} -d {{db-name}} -Fc > {{snapshot-dir}}/{{name}}.dump
+    ls -lh {{snapshot-dir}}/{{name}}.dump
+
+# `--clean --if-exists` drops the existing objects first, so the restore works
+# against a populated database without recreating the container.
+# `seaql_migrations` travels with the dump, so `RUN_MIGRATIONS=true` is a no-op
+# on the next `just run`.
+
+# restore a snapshot over the current dev database
+restore-db name="dev":
+    docker exec -i {{docker-name}} pg_restore -U {{db-user}} -d {{db-name}} --clean --if-exists --no-owner < {{snapshot-dir}}/{{name}}.dump
+
+# list available snapshots
+list-snapshots:
+    @ls -lh {{snapshot-dir}} 2>/dev/null || echo "no snapshots in {{snapshot-dir}}"
+
 # apply the basic formatting 
 format:
     # `cargo sort` requires `cargo-sort`; skip when it's not installed.
@@ -104,6 +160,30 @@ check-envs:
 
 generate-envs:
     cargo run --bin check-envs
+
+# The service stores only the SHA-256 digest of a write API key. These recipes
+# print the ready env variable, so nobody hashes a key by hand. Procedure:
+# .memory-bank/runbooks/write-api.md, section "Keys".
+
+# generate a write API key and print it with the env variable that configures it
+write-api-key name:
+    @./scripts/write_api_key.sh new {{name}}
+
+# print the env variable for an existing key, read from stdin (hidden on a terminal)
+write-api-key-digest name:
+    @./scripts/write_api_key.sh digest {{name}}
+
+# graphify-out/ is gitignored (per-clone, local-only). Rebuild it after cloning or
+# whenever graphify-out/graph.json is missing - see .memory-bank/rules/graphify.mdc.
+# --code-only needs no LLM API key; it indexes Rust/code files via AST only.
+graphify-init:
+    graphify extract . --code-only
+
+# Install local git hooks (post-commit/post-checkout) that keep graphify-out/
+# current automatically as code changes and branches switch. `.git/hooks` isn't
+# versioned, so this is a one-time step per clone.
+graphify-hooks:
+    graphify hook install
 
 start-db-migrate-up-generate-entities *args:
     -just stop-postgres

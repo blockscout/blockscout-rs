@@ -3,8 +3,8 @@
 use alloy::primitives::address;
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 use interchain_indexer_entity::{
-    bridge_contracts, bridges, chains, crosschain_messages, crosschain_transfers,
-    sea_orm_active_enums::{MessageStatus, TransferType},
+    bridge_contracts, bridges, chains, crosschain_messages, crosschain_transfers, new_transfer,
+    sea_orm_active_enums::{MessageStatus, TransferAssetLinkage},
 };
 use sea_orm::{
     ActiveValue::Set,
@@ -298,7 +298,6 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             message_id: Set(1001),
             bridge_id: Set(1),
             index: Set(0),
-            r#type: Set(Some(TransferType::Erc20)),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
             src_amount: Set(Some(BigDecimal::from(1_000_000_000_000_000_000u64))), // 1 token with 18 decimals
@@ -324,14 +323,13 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
                     .to_vec(),
             )),
             token_ids: Set(None),
-            ..Default::default()
+            ..new_transfer(TransferAssetLinkage::Mirror)
         },
         crosschain_transfers::ActiveModel {
             id: Set(2),
             message_id: Set(1002),
             bridge_id: Set(1),
             index: Set(0),
-            r#type: Set(Some(TransferType::Erc20)),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
 
@@ -358,14 +356,13 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
                     .to_vec(),
             )),
             token_ids: Set(None),
-            ..Default::default()
+            ..new_transfer(TransferAssetLinkage::Mirror)
         },
         crosschain_transfers::ActiveModel {
             id: Set(3),
             message_id: Set(1003),
             bridge_id: Set(1),
             index: Set(0),
-            r#type: Set(Some(TransferType::Native)),
             token_src_chain_id: Set(100),
             token_dst_chain_id: Set(1),
 
@@ -384,14 +381,13 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
                     .to_vec(),
             )),
             token_ids: Set(None),
-            ..Default::default()
+            ..new_transfer(TransferAssetLinkage::Mirror)
         },
         crosschain_transfers::ActiveModel {
             id: Set(4),
             message_id: Set(1004),
             bridge_id: Set(1),
             index: Set(0),
-            r#type: Set(Some(TransferType::Erc721)),
             token_src_chain_id: Set(100),
             token_dst_chain_id: Set(1),
             src_amount: Set(Some(BigDecimal::from(1))), // 1 NFT
@@ -417,14 +413,13 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
                     .to_vec(),
             )),
             token_ids: Set(Some(vec![Decimal::new(12345, 0)])), // NFT token ID
-            ..Default::default()
+            ..new_transfer(TransferAssetLinkage::Mirror)
         },
         crosschain_transfers::ActiveModel {
             id: Set(5),
             message_id: Set(1002),
             bridge_id: Set(1),
             index: Set(1),
-            r#type: Set(Some(TransferType::Erc1155)),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(100),
             src_amount: Set(Some(BigDecimal::from(10u32))), // 10 tokens
@@ -454,7 +449,7 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
                 Decimal::new(2, 0),
                 Decimal::new(3, 0),
             ])), // Multiple token IDs
-            ..Default::default()
+            ..new_transfer(TransferAssetLinkage::Mirror)
         },
         // Mirrors message 1005: bridge 2, token 1 → 250
         crosschain_transfers::ActiveModel {
@@ -462,7 +457,6 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             message_id: Set(1005),
             bridge_id: Set(2),
             index: Set(0),
-            r#type: Set(Some(TransferType::Erc20)),
             token_src_chain_id: Set(1),
             token_dst_chain_id: Set(250),
             src_amount: Set(Some(BigDecimal::from(42u32))),
@@ -488,7 +482,7 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
                     .to_vec(),
             )),
             token_ids: Set(None),
-            ..Default::default()
+            ..new_transfer(TransferAssetLinkage::Mirror)
         },
         // Mirrors message 1007: loopback token 100 → 100
         crosschain_transfers::ActiveModel {
@@ -496,7 +490,6 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
             message_id: Set(1007),
             bridge_id: Set(1),
             index: Set(0),
-            r#type: Set(Some(TransferType::Erc20)),
             token_src_chain_id: Set(100),
             token_dst_chain_id: Set(100),
             src_amount: Set(Some(BigDecimal::from(7u32))),
@@ -522,7 +515,7 @@ pub async fn fill_mock_interchain_database(db: &DatabaseConnection) {
                     .to_vec(),
             )),
             token_ids: Set(None),
-            ..Default::default()
+            ..new_transfer(TransferAssetLinkage::Mirror)
         },
     ])
     .exec(db)

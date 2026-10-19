@@ -29,9 +29,13 @@ prost-wkt-types = { workspace = true }
 sea-orm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tonic = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
 blockscout-service-launcher = { workspace = true, features = [
@@ -41,7 +45,6 @@ blockscout-service-launcher = { workspace = true, features = [
 pretty_assertions = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 tempfile = { workspace = true }
-tracing-subscriber = { workspace = true }
 # # Uncomment if needed
 # mockall = { workspace = true }
 # bytes = { workspace = true }

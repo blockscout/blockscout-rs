@@ -125,15 +125,18 @@ impl StatsService {
         // a flushed key must still reach `project_transfers_batch`, which
         // itself decides identity-maintenance-only (repair) vs. counting.
         //
-        // Chunked at two bind params per key: `flushed` is the whole
-        // consolidatable cohort of one maintenance cycle, which during catch-up
-        // can exceed the PostgreSQL bind-param limit on its own. Read loops that
-        // accumulate results chunk by hand rather than through
+        // This is a row-valued `IN`, so it is chunked at `bulk::ROW_IN_KEY_CHUNK`,
+        // not by bind-count arithmetic: `flushed` is the whole consolidatable
+        // cohort of one maintenance cycle, which during catch-up can exceed not
+        // just the PostgreSQL bind-param limit but also the planner's stack
+        // depth for a row-valued `IN`'s `OR`-tree — see
+        // `.memory-bank/rules/database.md` §Batching and
+        // `.memory-bank/research/stats-projection-unbatched-pks-lookup-crash.md`.
+        // Read loops that accumulate results chunk by hand rather than through
         // `bulk::run_in_batches`, whose closure cannot lend out a mutable
         // accumulator — see `projection.rs`'s `load_*_map` helpers.
-        let batch_size = (crate::bulk::PG_BIND_PARAM_LIMIT / 2).max(1);
         let mut transfer_ids: Vec<i64> = Vec::with_capacity(msg_pks.len());
-        for batch in msg_pks.chunks(batch_size) {
+        for batch in msg_pks.chunks(crate::bulk::ROW_IN_KEY_CHUNK) {
             let found = crosschain_transfers::Entity::find()
                 .filter(
                     Expr::tuple([
@@ -151,8 +154,29 @@ impl StatsService {
         Ok(())
     }
 
-    pub async fn recompute_stats_chains(&self) -> anyhow::Result<()> {
-        self.db.recompute_stats_chains().await
+    /// Refreshes both `stats_chains` and `stats_chains_by_bridge` in one
+    /// transaction and publishes the bridge-sum overcount gauges from the
+    /// resulting report only after that commit succeeds — see
+    /// `stats/metrics.rs` and `.memory-bank/rules/testing.md`'s ban on
+    /// asserting process-wide metric deltas (the report/database state is
+    /// what tests should assert instead).
+    pub async fn recompute_stats_chains(
+        &self,
+    ) -> anyhow::Result<crate::database::StatsChainsRecomputeReport> {
+        let report = self.db.recompute_stats_chains().await?;
+        super::metrics::STATS_CHAINS_BRIDGE_SUM_OVERCOUNT_USERS
+            .with_label_values(&["transfer"])
+            .set(report.transfer_overcount_users as f64);
+        super::metrics::STATS_CHAINS_BRIDGE_SUM_OVERCOUNT_USERS
+            .with_label_values(&["message"])
+            .set(report.message_overcount_users as f64);
+        super::metrics::STATS_CHAINS_BRIDGE_SUM_AFFECTED_CHAINS
+            .with_label_values(&["transfer"])
+            .set(report.transfer_affected_chains as f64);
+        super::metrics::STATS_CHAINS_BRIDGE_SUM_AFFECTED_CHAINS
+            .with_label_values(&["message"])
+            .set(report.message_affected_chains as f64);
+        Ok(report)
     }
 
     pub async fn backfill_stats_until_idle(&self) -> anyhow::Result<()> {
@@ -183,9 +207,7 @@ impl StatsService {
     /// Kicks off token metadata fetch for every consolidated entry in the
     /// batch, not only finalized ones — a transfer to an unindexed chain is
     /// never `is_final` but is now countable and asset-linked, so it must
-    /// still be eligible for enrichment (task.md Success Criteria: "assets
-    /// created from unindexed-counterpart transfers are eligible for token
-    /// metadata enrichment").
+    /// still be eligible for token metadata enrichment.
     pub fn kickoff_token_enrichment_for_flushed(&self, flushed: &[ConsolidatedMessage]) {
         let keys = token_keys_from_flushed_for_enrichment(flushed);
         self.kickoff_token_enrichment_for_keys(keys);
@@ -245,12 +267,16 @@ impl StatsService {
         Ok((out, pagination))
     }
 
-    /// Known chains with `unique_transfer_users_count` from `stats_chains` (0 when missing).
+    /// Known chains with `unique_transfer_users_count`, from the exact global
+    /// `stats_chains` snapshot (`scope = Global`) or summed from the selected
+    /// bridges' `stats_chains_by_bridge` cells (`scope = Bridges`); 0 when
+    /// missing.
     ///
     /// `indexed_chain_ids` is a per-request parameter, not read off
     /// `self.indexed_chains()` — see [`Self::get_bridged_tokens_for_chain`].
     pub async fn get_stats_chains(
         &self,
+        scope: crate::stats_chains_query::StatsChainsScope<'_>,
         chain_ids: Vec<i64>,
         indexed_chain_ids: Option<&[i64]>,
         params: StatsListQuery<'_, StatsChainsSortField, StatsChainsPaginationLogic>,
@@ -260,6 +286,7 @@ impl StatsService {
     )> {
         self.db
             .list_stats_chains(
+                scope,
                 chain_ids.as_slice(),
                 self.read_settings.include_zero_chains,
                 indexed_chain_ids,

@@ -22,9 +22,15 @@ pub mod tests;
 pub use charts::{
     ChartError, ChartKey, ChartObject, ChartProperties, ChartPropertiesObject, MissingDatePolicy,
     Named, ResolutionKind, counters,
-    db_interaction::read::{
-        ApproxUnsignedDiff, QueryFullIndexerTimestampRange, ReadError, RequestedPointsLimit,
-        zetachain_cctx::query_zetachain_cctx_indexed_until,
+    db_interaction::{
+        filters::interchain::{
+            InterchainFilter, InterchainFilterConfig, InterchainFilterTarget, InterchainFiltered,
+        },
+        read::{
+            ApproxUnsignedDiff, QueryFullIndexerTimestampRange, ReadError, RequestedPointsLimit,
+            interchain::resolve_only_indexed_by_bridge,
+            zetachain_cctx::query_zetachain_cctx_indexed_until,
+        },
     },
     indexing_status,
     indexing_status::IndexingStatus,

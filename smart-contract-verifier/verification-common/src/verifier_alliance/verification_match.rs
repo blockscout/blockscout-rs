@@ -102,7 +102,8 @@ impl<'a> MatchBuilder<'a> {
         self,
         runtime_code_artifacts: &RuntimeCodeArtifacts,
     ) -> Result<Self, anyhow::Error> {
-        self.apply_cbor_auxdata_transformations(runtime_code_artifacts.cbor_auxdata.as_ref())?
+        self.apply_call_protection_transformation()
+            .apply_cbor_auxdata_transformations(runtime_code_artifacts.cbor_auxdata.as_ref())?
             .apply_library_transformations(runtime_code_artifacts.link_references.as_ref())?
             .apply_immutable_transformations(runtime_code_artifacts.immutable_references.as_ref())
     }
@@ -137,6 +138,35 @@ impl<'a> MatchBuilder<'a> {
         }
 
         None
+    }
+
+    /// Runtime code of Solidity libraries starts with a `PUSH20 <address>` call protection.
+    /// The address is zeroed in the compiled code and replaced with the library address
+    /// during deployment.
+    /// https://docs.soliditylang.org/en/latest/contracts/libraries.html#call-protection-for-libraries
+    fn apply_call_protection_transformation(mut self) -> Self {
+        const PUSH20_OPCODE: u8 = 0x73;
+        let range = 1..21;
+
+        let has_call_protection = self.compiled_code.len() >= range.end
+            && self.compiled_code[0] == PUSH20_OPCODE
+            && self.compiled_code[range.clone()]
+                .iter()
+                .all(|byte| *byte == 0);
+        if !has_call_protection {
+            return self;
+        }
+
+        // Only the address is replaced, so the opcode still has to match the on-chain one.
+        // `MatchBuilder::new` guarantees that the on-chain code is not shorter than the compiled one.
+        let on_chain_value = &self.deployed_code[range.clone()];
+        self.compiled_code.as_mut_slice()[range].copy_from_slice(on_chain_value);
+
+        self.transformations
+            .push(MatchTransformation::call_protection());
+        self.values.add_call_protection(on_chain_value.to_vec());
+
+        self
     }
 
     fn apply_cbor_auxdata_transformations(

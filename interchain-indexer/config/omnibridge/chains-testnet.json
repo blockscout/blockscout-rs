@@ -11,8 +11,8 @@
                 "tenderly": {
                     "url": "https://sepolia.gateway.tenderly.co"
                 },
-                "drpc": {
-                    "url": "https://sepolia.drpc.org"
+                "ethpandaops": {
+                    "url": "https://rpc.sepolia.ethpandaops.io"
                 }
             }
         ]

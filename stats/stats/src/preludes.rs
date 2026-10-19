@@ -70,8 +70,8 @@ pub mod chart_prelude {
         },
         define_and_impl_resolution_properties, gettable_const,
         indexing_status::{
-            BlockscoutIndexingStatus, IndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus,
-            ZetachainCctxIndexingStatus,
+            BlockscoutIndexingStatus, IndexingStatus, IndexingStatusTrait,
+            InterchainIndexingStatus, UserOpsIndexingStatus, ZetachainCctxIndexingStatus,
         },
         missing_date::trim_out_of_range_sorted,
         range::{UniversalRange, data_source_query_range_to_db_statement_range},

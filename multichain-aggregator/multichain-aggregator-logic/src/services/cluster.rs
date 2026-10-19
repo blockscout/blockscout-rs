@@ -724,7 +724,7 @@ impl Cluster {
         self.search_tokens_cached(
             query,
             chain_ids,
-            vec![TokenType::Erc20, TokenType::Erc7984],
+            vec![TokenType::Erc20, TokenType::Erc7984, TokenType::Erc8056],
             page_size,
             page_token,
         )

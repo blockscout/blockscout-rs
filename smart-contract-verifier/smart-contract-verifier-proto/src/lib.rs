@@ -2,6 +2,8 @@
 
 #![allow(clippy::derive_partial_eq_without_eq)]
 #![allow(clippy::large_enum_variant)]
+// `tonic::Status` is ~176 bytes, which trips the lint in generated and http-client code.
+#![allow(clippy::result_large_err)]
 
 pub use tonic;
 

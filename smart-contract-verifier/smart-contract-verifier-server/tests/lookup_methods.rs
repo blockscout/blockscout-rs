@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use blockscout_service_launcher::{
-    launcher::ConfigSettings,
-    test_server::{get_test_server_settings, init_server, send_post_request},
+use blockscout_service_launcher::test_server::{
+    get_test_server_settings, init_server, send_post_request,
 };
 use foundry_compilers::{
     artifacts::{CompilerOutput, EvmVersion, Severity, SolcInput, Source},
@@ -14,7 +13,7 @@ use serde::Deserialize;
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     LookupMethodsRequest, LookupMethodsResponse,
 };
-use smart_contract_verifier_server::Settings;
+use smart_contract_verifier_server::{CompilerExecutionSettings, Settings};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
@@ -81,7 +80,11 @@ struct TestCase {
 #[rstest]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_lookup_methods(#[files("tests/test_cases_lookup_methods/*")] test_dir: PathBuf) {
-    let mut settings = Settings::build().expect("Failed to build settings");
+    let mut settings = Settings::default();
+    settings.compilers.execution = CompilerExecutionSettings::Native {
+        execution_timeout_seconds: 120,
+        max_output_bytes: 32 * 1024 * 1024,
+    };
     let (server_settings, base) = get_test_server_settings();
     settings.server = server_settings;
     settings.vyper.enabled = false;

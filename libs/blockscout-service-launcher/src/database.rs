@@ -135,16 +135,24 @@ async fn connect_replica_repo(settings: &ReplicaDatabaseSettings) -> anyhow::Res
     Ok(replica_db)
 }
 
+/// Connect to the read replica, if one is configured.
+///
+/// The replica is optional: a replica that cannot be connected to never prevents the service from
+/// starting, reads are served by the main database instead.
 async fn maybe_connect_replica_repo(
     settings: Option<&ReplicaDatabaseSettings>,
-) -> anyhow::Result<Option<ReplicaRepo>> {
-    let Some(settings) = settings else {
-        return Ok(None);
-    };
-    let repo = connect_replica_repo(settings)
-        .await
-        .context("failed to connect to read replica")?;
-    Ok(Some(repo))
+) -> Option<ReplicaRepo> {
+    let settings = settings?;
+    match connect_replica_repo(settings).await {
+        Ok(repo) => Some(repo),
+        Err(err) => {
+            tracing::warn!(
+                error = ?err,
+                "failed to connect to read replica, falling back to the main db"
+            );
+            None
+        }
+    }
 }
 
 impl ReadWriteRepo {
@@ -153,7 +161,7 @@ impl ReadWriteRepo {
         replica_db_settings: Option<&ReplicaDatabaseSettings>,
     ) -> anyhow::Result<Self> {
         let main_db = initialize_postgres::<Migrator>(main_db_settings).await?;
-        let replica_db = maybe_connect_replica_repo(replica_db_settings).await?;
+        let replica_db = maybe_connect_replica_repo(replica_db_settings).await;
         Ok(Self {
             main_db,
             replica_db,
@@ -168,7 +176,7 @@ impl ReadWriteRepo {
         replica_db_settings: Option<&ReplicaDatabaseSettings>,
     ) -> anyhow::Result<Self> {
         let main_db = connect_postgres(main_db_settings).await?;
-        let replica_db = maybe_connect_replica_repo(replica_db_settings).await?;
+        let replica_db = maybe_connect_replica_repo(replica_db_settings).await;
         Ok(Self {
             main_db,
             replica_db,
@@ -488,6 +496,48 @@ where
     S: Serializer,
 {
     s.serialize_str(x.as_str().to_lowercase().as_str())
+}
+
+#[cfg(all(test, feature = "database-1"))]
+mod replica_startup_tests {
+    use super::{
+        DatabaseConnectOptionsSettings, DatabaseConnectSettings, DatabaseSettings, ReadWriteRepo,
+        ReplicaDatabaseSettings,
+    };
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn unreachable_replica_does_not_prevent_startup() {
+        let main_settings = DatabaseSettings {
+            connect: DatabaseConnectSettings::Url(
+                "postgres://user:password@127.0.0.1:1/main".into(),
+            ),
+            // lazy connect, so the test does not need a running main db
+            connect_options: DatabaseConnectOptionsSettings {
+                connect_lazy: true,
+                ..Default::default()
+            },
+            create_database: false,
+            run_migrations: false,
+        };
+        let replica_settings = ReplicaDatabaseSettings {
+            connect: DatabaseConnectSettings::Url(
+                "postgres://user:password@127.0.0.1:1/replica".into(),
+            ),
+            connect_options: DatabaseConnectOptionsSettings {
+                connect_timeout: Some(Duration::from_secs(1)),
+                ..Default::default()
+            },
+            max_lag: Duration::from_secs(60),
+            health_check_interval: Duration::from_secs(60),
+        };
+
+        let repo = ReadWriteRepo::new_no_migrations(&main_settings, Some(&replica_settings))
+            .await
+            .expect("unreachable replica must not prevent startup");
+
+        assert!(std::ptr::eq(repo.read_db(), repo.main_db()));
+    }
 }
 
 #[cfg(all(test, feature = "database-1"))]

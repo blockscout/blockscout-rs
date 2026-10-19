@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "interchain-indexer-entity",
+    "interchain-indexer-filters",
     "interchain-indexer-logic",
     "interchain-indexer-migration",
     "interchain-indexer-proto",
@@ -36,6 +37,7 @@ governor = { version = "0.10.0" }
 hex = { version = "0.4" }
 hex-literal = { version = "0.4" }
 interchain-indexer-entity = { path = "./interchain-indexer-entity" }
+interchain-indexer-filters = { path = "./interchain-indexer-filters" }
 interchain-indexer-logic = { path = "./interchain-indexer-logic" }
 interchain-indexer-migration = { path = "./interchain-indexer-migration" }
 interchain-indexer-proto = { path = "./interchain-indexer-proto" }
@@ -71,6 +73,7 @@ sea-orm-migration = { version = "1.1.14", features = [
 serde = { version = "1.0" }
 serde_json = { version = "1.0.96" }
 serde_with = { version = "3.6.1" }
+sha2 = { version = "0.10" }
 strum = { version = "0.27" }
 strum_macros = { version = "0.27" }
 tempfile = { version = "3" }

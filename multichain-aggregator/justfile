@@ -28,6 +28,12 @@ stop-test-postgres:
 run:
     cargo run --bin multichain-aggregator-server
 
+check-envs *args:
+    cargo run --bin env-docs-generation -- --validate-only {{args}}
+
+generate-envs *args:
+    cargo run --bin env-docs-generation -- {{args}}
+
 generate-entities:
     sea-orm-cli generate entity --lib -o multichain-aggregator-entity/src
 

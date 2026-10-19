@@ -17,7 +17,7 @@ addr = "0.0.0.0:8051"
 
 [sources]
 fourbyte = "https://www.4byte.directory/"
-sigeth = "https://sig.eth.samczsun.com/"
+sigeth = "https://api.4byte.sourcify.dev/"
 
 [sources.eth_bytecode_db]
 enabled = true

@@ -108,6 +108,8 @@ Operationally, this affects:
 - `interchain-indexer-logic/src/stats/indexed_chains.rs` — `IndexedChains`,
   the shared eligibility/read-filter predicate
 - `interchain-indexer-logic/src/stats/metrics.rs`
+- `interchain-indexer-logic/src/stats/overlap_warning.rs` — pure
+  `overlap_transition` warning-policy decision (ADR-009)
 - `interchain-indexer-logic/src/filters.rs` — `ChainBridgeFilter`, the
   read-side SeaORM condition builder consuming `IndexedChains`
 - `interchain-indexer-logic/src/database.rs`
@@ -116,6 +118,8 @@ Operationally, this affects:
 - `interchain-indexer-logic/src/message_buffer/maintenance.rs`
 - `interchain-indexer-logic/src/settings.rs`
 - `interchain-indexer-migration/src/migrations_up/m20260312_175120_add_stats_tables_up.sql`
+- `interchain-indexer-migration/src/migrations_up/m20260824_120000_add_stats_chains_by_bridge_up.sql`
+  (ADR-009: `stats_chains_by_bridge` table + rebuilt canonical partial indexes)
 
 ## Key Types / Tables / Contracts
 
@@ -135,14 +139,28 @@ Operationally, this affects:
 - `StatsService` — now also holds an `IndexedChains`
 - `BridgedTokenListRow`
 - `StatsChainListRow`
-- `IndexedChains` — `AllIndexed` | `PerBridge(HashMap<bridge_id, HashSet<chain_id>>)`
+- `StatsChainsScope` — `Global` | `Bridges { bridge_ids, configured_chain_ids }`,
+  the explicit `/stats/chains` read-scope (`stats_chains_query.rs`); replaces
+  overloading `Option<&[i32]>` so a bridge-filtered request can never be
+  confused with an unfiltered one
+- `StatsChainsRecomputeReport` / `StatsChainsOverlapSample` — returned by
+  `recompute_stats_chains`; carries row counts and the actual cross-bridge
+  overcount (`database.rs`)
+- `OverlapTransition` / `overlap_transition` — pure warning-policy decision for
+  the recomputation-time overlap signal (`stats/overlap_warning.rs`)
+- `IndexedChains` — `AllIndexed` | `PerBridge(HashMap<bridge_id, HashSet<chain_id>>)`;
+  gained `selected_configured_union(bridge_ids)` and `configured_overlaps()`
+  for the bridge filter (see "Read-Time Filterability Constraints" below)
 
 ### Stats tables
 
 - `stats_assets`
 - `stats_asset_tokens`
 - `stats_asset_edges`
-- `stats_chains`
+- `stats_chains` — global, exact, bridge-unaware
+- `stats_chains_by_bridge` — `PRIMARY KEY (bridge_id, chain_id)`; per-bridge
+  counterpart rebuilt in the same transaction as `stats_chains`, backing the
+  `bridge_ids` filter on `/stats/chains` (ADR-009)
 - `stats_messages`
 - `stats_messages_days`
 
@@ -150,7 +168,13 @@ Operationally, this affects:
 
 - `crosschain_messages.stats_processed`
 - `crosschain_transfers.stats_processed`
-- `crosschain_transfers.stats_asset_id`
+- `crosschain_transfers.src_stats_asset_id` / `dst_stats_asset_id` (split from
+  a single `stats_asset_id` column by
+  [ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md); equal
+  for a `mirror` transfer, independent for a `conversion` one)
+- `crosschain_transfers.asset_linkage` (`mirror` / `conversion`, nullable,
+  write-once; `NULL` defers the transfer from projection unconditionally —
+  ADR-011)
 
 ## Subsystem Boundary
 
@@ -172,10 +196,20 @@ aggregation rules.
 
 ## Supported API Endpoints
 
+**Status update, 2026-09-09.** `/api/v1/stats/common` and `/api/v1/stats/daily`
+are **deprecated and no longer query anything**. Their handlers still parse and
+validate the request and echo back `timestamp` / `date`, but the count fields
+are hard-zeroed, so every description of them below as a "request-time live DB
+read" is historical: it explains the queries that were removed and that the
+stats service in interchain mode now precomputes. `InterchainDatabase::
+get_total_counters` / `get_daily_counters` still exist, exercised only by the
+parity tests, and are to be deleted together with the two endpoints. Everything
+else in this note is current.
+
 Defined in `stats.proto` and HTTP-mapped in `api_config_http.yaml`:
 
-- `/api/v1/stats/common`
-- `/api/v1/stats/daily`
+- `/api/v1/stats/common` (deprecated, returns zero counters)
+- `/api/v1/stats/daily` (deprecated, returns zero counters)
 - `/api/v1/stats/chain/{chain_id}/bridged-tokens`
 - `/api/v1/stats/chains`
 - `/api/v1/stats/chain/{chain_id}/messages-paths/sent`
@@ -220,11 +254,13 @@ separately, once they are countable:
 - `stats_asset_tokens`
 - `stats_asset_edges`
 
-### 4. Periodic snapshot table
+### 4. Periodic snapshot tables
 
-Rebuilt from canonical tables:
+Rebuilt from canonical tables, in the same transaction by the same worker:
 
-- `stats_chains`
+- `stats_chains` — global, exact
+- `stats_chains_by_bridge` — per-bridge, backing `bridge_ids` on `/stats/chains`
+  (ADR-009)
 
 ## Observability Horizon: The Eligibility Rule (ADR-004)
 
@@ -339,25 +375,30 @@ existing edge already recorded. This transfer's amount is skipped from
 
 - the transaction still commits — a decimals conflict is not an abort
 - `stats_processed` still increments for the transfer
-- `stats_asset_id` is still **set** to the resolved asset (not left `NULL`)
+- both `src_stats_asset_id` / `dst_stats_asset_id` are still **set** to the
+  resolved pair (not left `NULL`)
 
-Read `crosschain_transfers.stats_asset_id` accordingly: `NULL` means identity
-is genuinely unknown or ambiguous (the chain-collision merge refusal is the
-only remaining case); a set `stats_asset_id` with no corresponding edge
+Read `crosschain_transfers.src_stats_asset_id` / `dst_stats_asset_id`
+accordingly (post-[ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md),
+which split the single `stats_asset_id` column into these two): both `NULL`
+means identity is genuinely unknown or ambiguous (a refused merge is the only
+remaining case for a `mirror` transfer); both set with no corresponding edge
 contribution means identity is known but this transfer's amount specifically
-was not counted (the decimals-conflict case). See `gotchas.md` for the full
-read.
+was not counted (the decimals-conflict case, or a `conversion` transfer's
+`amount_side_missing` deferral, which additionally leaves `stats_processed`
+at `0`). Both set but *unequal* is the expected shape for a `conversion`
+transfer, not a conflict. See `gotchas.md` for the full read.
 
 ## Endpoint Matrix
 
 | Endpoint | Data source | Freshness model | Refresh trigger | Configurable period |
 | --- | --- | --- | --- | --- |
-| `/api/v1/stats/common` | Direct query over `crosschain_messages` + `crosschain_transfers` | Request-time live DB read | Every request | No |
-| `/api/v1/stats/daily` | Direct query over `crosschain_messages` + `crosschain_transfers` | Request-time live DB read | Every request | No |
+| `/api/v1/stats/common` | None — deprecated, counters hard-zeroed (was: direct query over `crosschain_messages` + `crosschain_transfers`) | No data | Never | No |
+| `/api/v1/stats/daily` | None — deprecated, counters hard-zeroed (was: direct query over `crosschain_messages` + `crosschain_transfers`) | No data | Never | No |
 | `/api/v1/stats/chain/{chain_id}/bridged-tokens` | `stats_asset_edges` + `stats_assets` + `stats_asset_tokens` + `tokens` | Pre-calculated, near-realtime | Projection during flushed batch (final or `Partial`) | Indirectly via buffer maintenance interval |
 | `/api/v1/stats/chain/{chain_id}/messages-paths/sent` | `stats_messages` or `stats_messages_days` | Pre-calculated, near-realtime | Projection during flushed batch | Indirectly via buffer maintenance interval |
 | `/api/v1/stats/chain/{chain_id}/messages-paths/received` | `stats_messages` or `stats_messages_days` | Pre-calculated, near-realtime | Projection during flushed batch | Indirectly via buffer maintenance interval |
-| `/api/v1/stats/chains` | `chains LEFT JOIN stats_chains` | Pre-calculated periodic snapshot | Background full recomputation worker | Yes |
+| `/api/v1/stats/chains` | `chains LEFT JOIN stats_chains` (no/blank `bridge_ids`) or `chains LEFT JOIN` a `stats_chains_by_bridge` aggregate (`bridge_ids` present) | Pre-calculated periodic snapshot(s) | Background full recomputation worker (rebuilds both tables atomically) | Yes |
 
 ## Step-by-Step Flow
 
@@ -415,69 +456,83 @@ logic.
 For the detailed relationship between startup backfill and projection
 eligibility rules, see `stats-projection.md`.
 
-### 4. `stats_chains` is refreshed separately
+### 4. `stats_chains` and `stats_chains_by_bridge` are refreshed together, separately from projection
 
-`stats_chains` does not use the incremental finalized-batch projection path.
-Instead, a background worker periodically runs `recompute_stats_chains()`, which
-rebuilds the table from canonical messages and transfers. It has no bridge
-dimension and is not affected by `IndexedChains` — see "Read-Time
-Filterability Constraints" below.
+Neither snapshot uses the incremental finalized-batch projection path.
+Instead, a background worker periodically calls `recompute_stats_chains()`,
+which rebuilds **both** tables from canonical messages and transfers in one
+transaction (ADR-009): a bridge-qualified, `MATERIALIZED` CTE per domain feeds
+both a global-distinct arm (unchanged `stats_chains` semantics) and a
+per-bridge-distinct arm (`stats_chains_by_bridge`). Neither table has a
+projection eligibility rule — all statuses count, there is no
+transfer-to-message finality join — and neither is affected by
+`IndexedChains::may_observe`; `IndexedChains` only supplies read-side
+candidate/visibility sets (`selected_configured_union`, `configured_union`),
+never a write-side filter here. See "Read-Time Filterability Constraints"
+below for the read path, and ADR-009 for why a second table exists instead of
+adding a bridge dimension to `stats_chains` directly.
 
-### 5. Some endpoints bypass derived stats tables entirely
+`recompute_stats_chains` returns a `StatsChainsRecomputeReport`: row counts
+plus the actual cross-bridge duplicate-user impact of this run (SUM over
+chains of `SUM(per_bridge_count) - global_distinct_count`, per domain).
+`StatsService::recompute_stats_chains` publishes that as two gauges
+(`interchain_indexer_stats_chains_bridge_sum_overcount_users` /
+`..._affected_chains`, labeled only by `kind`) after the commit, and feeds a
+pure `overlap_transition` decision that warns once when overlap appears and
+logs once when it recovers — see "Gauges / Metrics" below.
 
-`/stats/common` and `/stats/daily` query canonical tables directly on every
-request.
+### 5. Two endpoints used to bypass derived stats tables entirely
+
+`/stats/common` and `/stats/daily` queried canonical tables directly on every
+request. As of 2026-09-09 they are deprecated and query nothing at all.
 
 Code-derived fact:
 
-- they do not read `stats_*` aggregate tables
+- they never read `stats_*` aggregate tables; they now read no table
 
 User/product context:
 
-- these are early POC-style endpoints and are considered inefficient on large
-  datasets
+- these were early POC-style endpoints, inefficient on large datasets, which is
+  why they were retired in favour of the stats service in interchain mode
 
 ## Endpoint-by-Endpoint Calculation Rules
 
-### `/stats/common`
+### `/stats/common` (deprecated)
 
-Source:
+Current behavior:
 
-- `crosschain_messages`
-- `crosschain_transfers` joined through messages
+- parse and validate the request, including the chain/bridge filters, so a
+  malformed query still fails with `400`
+- echo `timestamp` back
+- answer `total_messages = 0`, `total_transfers = 0`
+- issue no query
 
-Calculation:
+Historical calculation, still implemented in
+`InterchainDatabase::get_total_counters` and covered by the parity tests until
+that method is deleted with the endpoint:
 
+- source `crosschain_messages` and `crosschain_transfers` joined through messages
 - build a message filter using `init_timestamp < timestamp`
 - optionally apply source and destination chain filters at DB-layer helpers
-- count matching message rows
-- count matching transfer rows through the message join
+- count matching message rows, then matching transfer rows through the join
 
-Properties:
+### `/stats/daily` (deprecated)
 
-- request-time query
-- no precomputation
-- no recalculation period
+Current behavior:
 
-### `/stats/daily`
+- parse and validate the request as `/stats/common` does
+- answer `date` = the UTC day of the request timestamp, computed in the handler
+- answer `daily_messages = 0`, `daily_transfers = 0`
+- issue no query
 
-Source:
+Historical calculation, still implemented in
+`InterchainDatabase::get_daily_counters` and covered by the parity tests until
+that method is deleted with the endpoint:
 
-- `crosschain_messages`
-- `crosschain_transfers`
-
-Calculation:
-
+- source `crosschain_messages` and `crosschain_transfers`
 - derive the UTC day from the request timestamp
 - filter messages where `init_timestamp` falls within `[day_start, next_day_start)`
-- count distinct message primary keys
-- count total joined transfers
-
-Properties:
-
-- request-time query
-- no precomputation
-- no recalculation period
+- count distinct message primary keys, then total joined transfers
 
 ### `/stats/chain/{chain_id}/messages-paths/sent`
 
@@ -545,22 +600,32 @@ Projection eligibility (`transfer_identity_ready_condition` for identity;
 separate concerns" above):
 
 - identity maintenance runs whenever both known token endpoints are ready
-  (address known, or its chain is unindexed for this bridge) and at least one
-  endpoint is known — regardless of `stats_processed`
+  (address known, or its chain is unindexed for this bridge), at least one
+  endpoint is known, and `asset_linkage IS NOT NULL`
+  ([ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md)) —
+  regardless of `stats_processed`
 - counting (edge accumulation + `stats_processed` increment) additionally
   requires `stats_processed = 0` and the parent message to satisfy
   `message_countable_condition`
 
-Projection behavior:
+Projection behavior, branching on `asset_linkage`:
 
-- resolve or create a logical `stats_asset`, merging two existing components
-  if the transfer bridges them (union-find; see above)
-- link src/dst tokens into `stats_asset_tokens`
-- increment one `stats_asset_edges` row per
-  `(stats_asset_id, bridge_id, src_chain_id, dst_chain_id)`, unless a decimals
-  conflict skips the edge contribution specifically (see above)
-- set `stats_asset_id` on transfers (survives even a decimals-conflict skip)
-- increment `crosschain_transfers.stats_processed`
+- `mirror` — resolve or create one logical `stats_asset` for both endpoints,
+  merging two existing components if the transfer bridges them (union-find;
+  see above); `src_stats_asset_id = dst_stats_asset_id` always.
+- `conversion` — resolve (or create) each endpoint's `stats_asset`
+  **independently**, never merged; a transfer with only one endpoint known
+  defers (`conversion_endpoint_unresolved`) rather than guessing the other
+  side.
+- either way: link src/dst tokens into `stats_asset_tokens`; increment one
+  `stats_asset_edges` row per
+  `(src_stats_asset_id, dst_stats_asset_id, bridge_id, src_chain_id,
+  dst_chain_id)`, unless a decimals conflict (or, for `conversion`, an
+  `amount_side_missing` deferral) skips the edge contribution specifically
+  (see above); set both `src_stats_asset_id` / `dst_stats_asset_id` on the
+  transfer (survives even a decimals-conflict skip; not touched by an
+  `amount_side_missing` deferral); increment
+  `crosschain_transfers.stats_processed` (not for a deferral).
 
 Amount semantics:
 
@@ -586,39 +651,59 @@ Metadata semantics:
 
 ### `/stats/chains`
 
-Source:
+Source (`StatsChainsScope`, `stats_chains_query.rs`; ADR-009):
 
-- `chains LEFT JOIN stats_chains`
+- no/blank `bridge_ids` -> `StatsChainsScope::Global`:
+  `chains LEFT JOIN stats_chains`, byte-for-byte the pre-ADR-009 query
+- non-empty `bridge_ids` -> `StatsChainsScope::Bridges`: `chains LEFT JOIN`
+  an aggregate `SUM(...) GROUP BY chain_id FROM stats_chains_by_bridge WHERE
+  bridge_id IN (...)`, with an added candidate predicate
+  `agg.chain_id IS NOT NULL OR c.id IN (<selected bridges' current configured
+  chains>)`
 
 Returned value:
 
 - currently exposes `unique_transfer_users_count`
 
-Stored snapshot values in `stats_chains`:
+Stored snapshot values, in both `stats_chains` and `stats_chains_by_bridge`:
 
 - `unique_transfer_users_count`
 - `unique_message_users_count`
 
-Recompute logic:
+Recompute logic (one bridge-qualified, `MATERIALIZED` CTE per domain, shared by
+both arms — see `database.rs`'s `STATS_CHAINS_MESSAGE_USER_COUNTS_SQL` /
+`STATS_CHAINS_TRANSFER_USER_COUNTS_SQL`):
 
 - messages:
-  - distinct `(src_chain_id, sender_address)`
-  - union distinct `(dst_chain_id, recipient_address)`
+  - distinct `(bridge_id, src_chain_id, sender_address)`
+  - union distinct `(bridge_id, dst_chain_id, recipient_address)`
 - transfers:
-  - distinct `(token_src_chain_id, sender_address)`
-  - union distinct `(token_dst_chain_id, recipient_address)`
+  - distinct `(bridge_id, token_src_chain_id, sender_address)`
+  - union distinct `(bridge_id, token_dst_chain_id, recipient_address)`
 
-Then:
+Then, per domain: `COUNT(DISTINCT addr) GROUP BY chain_id` is the global arm
+(`stats_chains`, unchanged semantics — `UNION` already dedupes `(bridge_id,
+chain_id, addr)`, so this is the same value as before); `COUNT(*) GROUP BY
+(bridge_id, chain_id)` is the per-bridge arm (`stats_chains_by_bridge`), exact
+per bridge because those rows are already distinct within it.
 
-- group by `chain_id`
-- rebuild `stats_chains`
-- left join from `chains` ensures known chains without a stats row can still be
-  returned as `0`
+- both tables are deleted and rebuilt in the same transaction, then committed
+  once (`InterchainDatabase::recompute_stats_chains` returns a
+  `StatsChainsRecomputeReport` only after that commit)
+- left join from `chains` (in both scopes) ensures known chains without a
+  stats row can still be returned as `0`, and keeps `StatsChainListRow.name`
+  non-nullable — driving from a candidate set left-joined to `chains` instead
+  would not have that guarantee
 
-Chain visibility uses `IndexedChains::configured_union()` — the union across
-every configured bridge, not a per-bridge set, since `/stats/chains` and
-`GetChains` are chain directories with no bridge dimension of their own; the
-same accessor backs both, so they cannot disagree.
+Chain visibility for `include_unindexed_chains = false` still uses
+`IndexedChains::configured_union()` — the union across every configured
+bridge, unchanged, and never narrowed to the selected `bridge_ids`. A separate
+accessor, `IndexedChains::selected_configured_union(bridge_ids)`, supplies
+*additional* zero-row candidates for `Bridges` scope only (current configured
+chains of the selected bridges); an empty result there means "no candidates,"
+never "no restriction" — the opposite of `configured_union()`'s convention.
+`/stats/chains` and `GetChains` still agree on the *default* (unfiltered) chain
+set through the shared `configured_union()` accessor.
 
 Zero-chain visibility is service-wide and configurable:
 
@@ -626,7 +711,8 @@ Zero-chain visibility is service-wide and configurable:
   `INTERCHAIN_INDEXER__STATS__INCLUDE_ZERO_CHAINS`), default `true`
 - when `true`: `/stats/chains` and message-path endpoints include known chains
   from `chains` even when the aggregated stats row is missing or zero
-  - `/stats/chains` keeps its `chains LEFT JOIN stats_chains` shape
+  - `/stats/chains` keeps its `chains LEFT JOIN stats_chains` shape in `Global`
+    scope, or `chains LEFT JOIN <bridge_ids aggregate>` in `Bridges` scope
   - message-path endpoints drive the query from `chains` (excluding the
     selected chain) and left-join `stats_messages` / aggregated
     `stats_messages_days`
@@ -637,7 +723,9 @@ Zero-chain visibility is service-wide and configurable:
 - when `false`: both families return only rows with positive aggregated stats
   - `/stats/chains` filters
     `COALESCE(sc.unique_transfer_users_count, 0) > 0 OR COALESCE(sc.unique_message_users_count, 0) > 0)`
-    inside the ranked SQL, preserving keyset pagination
+    (`Global`) or the same guard over `COALESCE(agg.transfer_cnt, 0)` /
+    `COALESCE(agg.message_cnt, 0)` (`Bridges`) inside the ranked SQL,
+    preserving keyset pagination in both scopes
   - message-path endpoints keep their current stats-table-driven behavior
 
 ## Refresh and Recalculation Model
@@ -646,13 +734,14 @@ Zero-chain visibility is service-wide and configurable:
 
 Endpoints:
 
-- `/stats/common`
-- `/stats/daily`
+- `/stats/common` (deprecated)
+- `/stats/daily` (deprecated)
 
 Behavior:
 
-- execute direct DB queries every request
-- no separate recalculation schedule
+- used to execute direct DB queries every request, with no separate
+  recalculation schedule
+- since deprecation they execute no query and answer zero counters
 
 ### Incremental near-realtime projection
 
@@ -765,8 +854,12 @@ Different source of candidate rows:
   re-run for an already-counted transfer
 - `stats_processed` prevents normal double counting and is never reset once
   set
-- `stats_chains` is a snapshot table, not an append-only aggregate, and has no
-  bridge dimension — visibility is a cross-bridge union, not per-bridge
+- `stats_chains` / `stats_chains_by_bridge` are snapshot tables, not
+  append-only aggregates. `stats_chains` visibility uses the global
+  cross-bridge configured union; `stats_chains_by_bridge` additionally
+  supports per-bridge attribution (ADR-009), but the visibility gate
+  (`include_unindexed_chains`) stays the cross-bridge union in both scopes —
+  attribution and visibility are separate parameters, never merged
 - bridged-token counts can be ahead of token metadata enrichment
 - message-path counts are directional; `A -> B` and `B -> A` are different rows
 - `IndexedChains` is built once from in-memory config, never from
@@ -777,9 +870,12 @@ Different source of candidate rows:
 
 - projected stats can lag if flushed rows have not yet gone through buffer
   maintenance
-- `/stats/chains` can lag until the next recomputation cycle
-- `/stats/common` and `/stats/daily` can be slow on large canonical tables
-  because they issue request-time scans / counts
+- `/stats/chains` (both scopes) can lag until the next recomputation cycle;
+  both `stats_chains` and `stats_chains_by_bridge` always lag by the same
+  amount, since one worker rebuilds both in one transaction
+- `/stats/common` and `/stats/daily` used to be slow on large canonical tables
+  because they issued request-time scans / counts; deprecated and hard-zeroed,
+  they can no longer be a source of load — or of numbers
 - enabling startup backfill on a large database can noticeably increase startup
   time
 - token metadata for bridged tokens can remain partially blank until async
@@ -795,11 +891,22 @@ Different source of candidate rows:
 - `STATS_EDGE_MIXED_AMOUNT_SIDE_TOTAL`, `STATS_EDGE_RESCALED_FOLD_TOTAL{mode}`,
   `STATS_EDGE_DECIMALS_CONFLICT_TOTAL` — edge-fold and counting-path decimals
   diagnostics (`stats/metrics.rs`)
+- `interchain_indexer_stats_chains_bridge_sum_overcount_users{kind}` /
+  `..._affected_chains{kind}` (gauges, `kind = transfer|message`) — the actual
+  cross-bridge duplicate-user impact found by the latest `stats_chains`
+  recomputation; an all-bridge upper bound, not a per-request figure.
+  Published only after a successful commit (ADR-009)
 
 Useful operational signals:
 
 - startup logs for stats backfill progress and per-bridge indexed-chain counts
 - startup logs for `stats_chains` recomputation success / failure
+- startup warning per chain configured by two or more distinct bridge ids
+  (`IndexedChains::configured_overlaps()`) — structural risk, checked once at
+  boot, independent of the recomputation-time overcount gauges above
+- one-shot warn-on-appearance / info-on-recovery log from
+  `overlap_transition`, driven by each recomputation's actual overcount
+  (`server.rs`'s `spawn_stats_chains_recalculation_worker`)
 - buffer maintenance logs and metrics, because those gate projected stats
 - `.memory-bank/runbooks/runtime-verification.md` — read-only SQL canaries
   and diagnostics for confirming eligibility and asset-merge behavior
@@ -809,8 +916,14 @@ Useful operational signals:
 
 - `/stats/common` and `/stats/daily` belong to the same API service, but unlike
   the richer stats endpoints they are not backed by derived stats tables
-- `unique_message_users_count` exists in `stats_chains` but is not exposed by
-  the current `/stats/chains` API
+- `unique_message_users_count` exists in both `stats_chains` and
+  `stats_chains_by_bridge` but is not exposed by the current `/stats/chains`
+  API response; it still participates in the `include_zero_chains = false`
+  guard in both scopes, so a message-only chain/bridge cell must survive that
+  guard even though its count is never returned
+- a multi-bridge `bridge_ids` selection sums per-bridge distinct counts, which
+  overcounts an address present on the *same chain* through more than one
+  selected bridge — a documented, accepted approximation (ADR-009), not a bug
 - projected stats are near-realtime, not instant: they depend on finality (or
   the observability-horizon exception) and maintenance timing
 - backfill should be treated as a catch-up tool, not a permanent operational
@@ -824,7 +937,10 @@ Useful operational signals:
   Decision 5); only a bridge *present* with zero contracts is restrictive
 - a decimals conflict on the counting path is not the same failure as a
   union-find merge refusal — see "Decimals conflict on the counting path"
-  above for how to read `stats_asset_id` in each case
+  above for how to read `src_stats_asset_id` / `dst_stats_asset_id` in each
+  case
+- a `conversion` transfer's two asset columns are expected to differ — see
+  [ADR-011](../adr/011-cross-asset-edges-and-per-transfer-linkage.md)
 
 ## Read-Time Filterability Constraints (verified 2026-07-20; extended by ADR-004)
 
@@ -843,7 +959,8 @@ filter):
 | `GetMessages*`, `GetTransfers*` (canonical list endpoints) | yes | yes | **yes** (`include_unindexed_chains`, `ChainBridgeFilter.only_indexed_by_bridge`) | rows also carry `has_unindexed_chain` |
 | message-paths (sent/received) | yes | yes | **yes** (`push_indexed_pairs_predicate`) | bridge filter + collapse over `stats_messages` / `stats_messages_days` |
 | bridged-tokens | yes | yes | **yes** | bridge filter inside the `stats_asset_edges` aggregate, collapsed per asset |
-| `/stats/chains`, `GetChains` | subject-row `chain_ids` only | no | implicit — union of every configured bridge's set (`configured_union()`) | global unique-user snapshots; no counterparty/bridge filter |
+| `/stats/chains` | subject-row `chain_ids` | **yes** (`bridge_ids`, ADR-009) | implicit — union of every configured bridge's set (`configured_union()`), unchanged by `bridge_ids` | no/blank `bridge_ids` -> exact global snapshot; one bridge -> exact; several -> additive overcount on same-chain overlap |
+| `GetChains` | subject-row `chain_ids` | **yes** (`bridge_ids`) | implicit — union of every configured bridge's set (`configured_union()`), unchanged by `bridge_ids` | chain directory only, no user counts. `bridge_ids` is derived purely from the in-memory bridges config (`IndexedChains::selected_configured_union`), mirroring `Bridge.indexed_chain_ids`, so for a bridge removed from configuration this endpoint lists no chains while `/stats/chains` can still list its retained per-bridge history |
 | `GetBridges` | n/a | n/a | n/a | reports each bridge's own `indexed_chain_ids`, not a filter |
 
 - **The three additive aggregates carry `bridge_id`.** `stats_messages
@@ -854,7 +971,11 @@ filter):
   reproduces the prior bridge-collapsed response. `stats_assets` /
   `stats_asset_tokens` remain global (asset identity is not bridge-specific);
   only the movement/count edges are bridge-qualified. `stats_chains
-  (chain_id)` still has no bridge dimension.
+  (chain_id)` itself still has no bridge dimension — the bridge dimension for
+  `/stats/chains` lives in the companion `stats_chains_by_bridge` table
+  instead (ADR-009), specifically because a bridge column on `stats_chains`
+  itself would make the *unfiltered* answer a sum, which would regress its
+  exactness once bridges overlap.
 - **Chain/counterparty filters are cheap exactly where aggregation happens
   at query time**: `/stats/common` and `/stats/daily` count canonical tables
   per request (WHERE-clause change); bridged-tokens aggregates
@@ -867,15 +988,22 @@ filter):
   `ChainBridgeFilter.only_indexed_by_bridge` for canonical list reads,
   `push_indexed_pairs_predicate` for the raw-SQL stats endpoints) — no new
   table, no precomputed flag column.
-- **Unique-user counts are non-additive.** `stats_chains` values cannot be
-  re-aggregated for bridge or counterparty subsets from any exact
-  pre-aggregation — the same address would fall into many cells. Exact
-  filtered uniques require raw `COUNT(DISTINCT ...)` at read time;
-  mergeable HyperLogLog sketches per `(chain, role, bridge, counterparty)`
-  cell are the standard approximate alternative; keying `stats_chains` by
-  `(chain_id, bridge_id)` is exact for single-bridge filters only. This is why
-  `/stats/chains` remains bridge-unaware, and why it uses the cross-bridge
-  union rather than any per-bridge restriction for chain visibility.
+- **Unique-user counts are non-additive — resolved for `/stats/chains` by
+  ADR-009, still true everywhere else.** `stats_chains` values cannot be
+  re-aggregated for arbitrary bridge or counterparty subsets from any exact
+  pre-aggregation — the same address would fall into many cells. `/stats/chains`
+  now ships the specific case the product needed: a companion
+  `stats_chains_by_bridge (bridge_id, chain_id)` snapshot makes a
+  **single**-bridge filter exact, and a multi-bridge filter an accepted
+  additive-overcount approximation (documented in the API contract). Exact
+  arbitrary-subset uniques would still require raw `COUNT(DISTINCT ...)` at
+  read time (rejected: full canonical scan per request) or a persisted
+  per-address identity table (rejected: storage/maintenance cost disproportionate
+  to the accepted need); mergeable HyperLogLog sketches were also rejected
+  specifically because they would break the single-bridge exactness guarantee.
+  See ADR-009 for the full alternatives analysis. Chain *visibility*
+  (`include_unindexed_chains`) is unaffected by any of this and still uses the
+  cross-bridge union.
 
 Candidate designs and the phased delivery decision were recorded during the
 per-frontend chain-filtering follow-up scoping. The bridge dimension on
@@ -898,17 +1026,27 @@ Update this note when:
 - `IndexedChains::may_observe` semantics, or its callers, change
 - asset union-find merge or decimals-conflict handling changes
 - startup backfill or periodic recompute behavior changes
-- `/stats/common` or `/stats/daily` are replaced by projected or externalized
-  implementations
+- `/stats/common` or `/stats/daily` are finally removed (they are already
+  deprecated and answer zeros; see the status note above)
 - the product boundary between embedded interchain stats and the standalone
   stats service changes
 
 ## Open Questions
 
-- Should `/stats/common` and `/stats/daily` remain request-time canonical-table
-  queries, or be replaced by projected / externalized implementations?
+- **Resolved by the 2026-09-09 deprecation:** `/stats/common` and `/stats/daily`
+  are neither. They stopped being request-time canonical-table queries and were
+  not reprojected here either — the counts are hard-zeroed in the handlers, no
+  query is issued, and the stats service in interchain mode owns the real
+  numbers. What remains is a removal, not a design question: delete both
+  endpoints, their RPCs and messages, and
+  `InterchainDatabase::get_total_counters` / `get_daily_counters` in the next
+  API iteration.
 - Should `unique_message_users_count` be exposed through the public API?
 - If projection logic changes materially, what is the canonical full
   reprojection playbook beyond the current `stats_processed = 0` catch-up path?
-- Should `stats_chains` ever gain a bridge dimension via approximate sketches,
-  or does the exact-uniques requirement keep it bridge-unaware indefinitely?
+- **Resolved by ADR-009 (2026-08):** `stats_chains` itself stays bridge-unaware
+  and exact; `/stats/chains` gained a bridge dimension through a companion
+  `stats_chains_by_bridge` snapshot instead, exact for one bridge and an
+  accepted additive-overcount approximation for several. Approximate sketches
+  were rejected specifically because they would break single-bridge
+  exactness — see ADR-009's alternatives section.

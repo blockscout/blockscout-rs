@@ -1,6 +1,6 @@
 [
   {
-    "bridge_id": 1,
+    "bridge_id": 1001,
     "name": "AMB/Omnibridge",
     "type": "amb",
     "indexer_type": "amb",

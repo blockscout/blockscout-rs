@@ -106,6 +106,9 @@ Small topics may keep some sections brief.
 - `avalanche-blockchain-id-resolution.md` - Avalanche-native blockchain ID to
   EVM chain ID resolution, runtime call sites, cache/persistence behavior, and
   current mismatches with intended semantics
+- `avalanche-unresolved-blockchain-ids.md` — production evidence and intended
+  handling for permanent unknown-direction outcomes, including adaptive retry
+  narrowing to singleton poison blocks
 - `message-lifecycle.md` — end-to-end message lifecycle: generic pipeline
   (LogStream, buffer, maintenance, checkpoints, persistence) + Avalanche as
   reference realization. Two-layer structure; future indexers get separate notes
@@ -123,7 +126,72 @@ Small topics may keep some sections brief.
   `TokensBridged` events (not calldata), the native/bridged token model and
   `handleBridgedTokens` vs `handleNativeTokens` directional semantics, and the
   nullable transfer-side columns
+- `indexing-concurrency-model.md` — how concurrent indexing actually is at
+  every level (bridges, chains of one bridge, scan directions, within a
+  batch), the head-of-line blocking one `RangeDriver` per bridge produces,
+  the invariants that constrain a fix, and measured throughput before/after
+  configuration tuning
+- `indexing-gaps-retries-and-checkpoint-safety.md` — failure and retry
+  semantics for Avalanche and AMB indexing, the missing post-`getLogs`
+  acknowledgement boundary, durable-gap scenarios, and the actual guarantees
+  of `indexer_checkpoints` and `indexer_failures`
+- `xdai-bridge-protocol-and-indexing-fit.md` — the xDai bridge (DAI/USDS ↔
+  native xDAI) as an indexing target: why it is a standalone ERC20-to-Native
+  TokenBridge rather than an AMB application, the shared-event-name /
+  different-signature collision with AMB, nonce-based identity (per-direction
+  counters, the `chain_id ‖ nonce` `native_id` encoding the official explorer
+  uses, and the silent 2025-04-15 switch from source tx hash under an unchanged
+  `topic0`), the DAI→USDS reserve flip that changes the source asset without
+  touching any event, the `BridgeRouter`/`XDaiBridgePeripheral` entry points
+  shared with Omnibridge, the one-message-one-transfer structural guarantee, why
+  `AmountLimitExceeded` and `outOfLimitAmount()` must not be read as stuck
+  funds, the full implementation upgrade history of both proxies, and what would
+  have to be new versus reused. Pre-implementation: no xDai indexer exists yet
+- `xdai-bridge-sepolia-chiado-upgrade-history.md` — independent on-chain
+  reconstruction of every Sepolia/Chiado proxy implementation and upgrade,
+  the exact v1→v2 and Chiado-only v2→v3 contract-surface changes, their
+  correspondence to mainnet Foreign v7/v8/v9/v10 and Home v5/v6/v7, and the
+  separate oracle-controlled mixing of nonce and transaction-hash identity.
+  Establishes that the May 2025 pair was coordinated within 44 seconds, while
+  the current asymmetry began with Chiado v3 on 2026-04-02; records that v3 is
+  an unverified, reduced Home-v7-style implementation rather than a full USDS
+  migration
+- `xdai-bridge-testnet-deployment-fit.md` — the Sepolia (11155111) ↔ Chiado
+  (10200) classic xDai erc-to-native deployment: it exists
+  (`0x180Ff98e…D0A2` / `0xccA0Dc2A…06f0`), its full proxy upgrade history with
+  per-window event signatures, the fact that every current-window `topic0`
+  matches `version.rs`'s grammar table exactly while the v1 windows emit
+  identity-less two-argument source events, the mock-DAI single-asset model
+  (no USDS flip), the oracle-controlled Home-side `bytes32` that interleaves
+  nonce and transaction-hash identity with no block boundary. **Implemented**:
+  the bridge is `bridge_id` `1003` in `config/full-testnet`, and the epoch
+  floors and asset tables became per-deployment constants in `version.rs`
+  rather than config (ADR-013). Read it for the evidence behind the two floors
+  — in particular why the Chiado floor is 20553827 and what duplicates appear
+  if it is lowered. No new protocol grammar unless pre-2025-05 history is
+  wanted. Companion to `xdai-bridge-protocol-and-indexing-fit.md`. For proxy
+  upgrade history and independently rechecked on-chain evidence, prefer
+  `xdai-bridge-sepolia-chiado-upgrade-history.md`
+- `stats-projection-unbatched-pks-lookup-crash.md` — production incident:
+  `project_messages_batch`'s unchunked composite-key `IN` lookup crashes
+  buffer maintenance two ways (`stack depth limit exceeded` and `too many
+  arguments for query`) depending on flushed-cohort size, why it differs from
+  the documented bind-limit gotcha, and the intended fix
 - Follow-up: migrate Avalanche's inline cleanup guard / EVM log orchestration
   onto `interchain-indexer-logic/src/indexer/cleanup_guard.rs` and
   `interchain-indexer-logic/src/indexer/evm/`.
   cross-reference
+- `service-write-api.md` — catalogue of options and trade-offs for a write API
+  on this service (operator-first, extensible to automation): reachability,
+  authentication, key management, authorization by caller class, contract
+  shape, applying changes through the owning process, and audit layers; plus
+  the monorepo and Blockscout-backend precedents (`x-api-key` convention and
+  its gaps) and the interchain-indexer properties that constrain the choice.
+  v1 choices recorded in ADR-016
+- `amb-destination-only-missing-source-gap.md` — why some AMB/Omnibridge
+  (`bridge_id = 1`) messages permanently keep `src_tx_hash = NULL`:
+  `build_destination_only` finalizes and evicts the buffer entry before a
+  late-arriving source event can be merged in; contrasts with Avalanche's
+  wait-then-give-up model; includes production evidence (Gnosis↔Ethereum,
+  `home_chain_id = 100`) and the `stats`-service counter symptom this
+  produces

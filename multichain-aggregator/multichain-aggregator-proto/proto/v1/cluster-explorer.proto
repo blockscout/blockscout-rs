@@ -200,6 +200,14 @@ message AggregatedTokenInfo {
   optional string exchange_rate = 10;
   // Map of chain id to chain-specific information.
   map<string, ChainInfo> chain_infos = 11;
+  // ERC-8056 display multiplier, a uint256 where 1e18 means 1.0.
+  // Independent of `decimals`. Null for tokens that don't declare one.
+  optional string ui_multiplier = 12;
+  // ERC-8056 multiplier scheduled to replace `ui_multiplier`, in the same
+  // units. Meaningful together with `ui_multiplier_effective_at`.
+  optional string new_ui_multiplier = 13;
+  // RFC 3339 timestamp at which `new_ui_multiplier` takes over.
+  optional string ui_multiplier_effective_at = 14;
 }
 
 message GetAddressRequest {

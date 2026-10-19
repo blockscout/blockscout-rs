@@ -9,7 +9,13 @@ use bytes::Bytes;
 use cron::Schedule;
 use primitive_types::H256;
 use s3::{request_trait::ResponseData, Bucket};
-use std::{collections::HashSet, marker::PhantomData, path::PathBuf, str::FromStr, sync::Arc};
+use std::{
+    collections::HashSet,
+    marker::PhantomData,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
+};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::{debug, instrument};
@@ -112,33 +118,43 @@ impl<Ver: Version> S3Fetcher<Ver> {
 
     #[instrument(skip(self), level = "debug")]
     async fn fetch_file(&self, ver: &Ver) -> Result<(Bytes, H256), FetchError> {
-        {
-            let versions = self.versions.read();
-            if !versions.contains(ver) {
-                return Err(FetchError::NotFound(ver.clone().to_string()));
-            }
-        }
+        self.ensure_version_exists(ver)?;
 
         let folder = PathBuf::from(ver.to_string());
         let data = spawn_fetch_s3(self.bucket.clone(), folder.join("solc"));
-        let hash = spawn_fetch_s3(self.bucket.clone(), folder.join("sha256.hash"));
+        let hash = self.fetch_hash(ver);
         let (data, hash) = futures::join!(data, hash);
-        let (data, hash) = (data??, hash??);
-        let (status_code, hash) = (hash.status_code(), hash.bytes());
-        if status_code != 200 {
-            return Err(status_code_error("hash data", status_code));
-        }
+        let (data, hash) = (data??, hash?);
         let (status_code, data) = (data.status_code(), data.bytes().to_vec());
         if status_code != 200 {
             return Err(status_code_error("executable file", status_code));
         }
+        Ok((data.into(), hash))
+    }
+
+    fn ensure_version_exists(&self, ver: &Ver) -> Result<(), FetchError> {
+        let versions = self.versions.read();
+        if versions.contains(ver) {
+            Ok(())
+        } else {
+            Err(FetchError::NotFound(ver.clone().to_string()))
+        }
+    }
+
+    async fn fetch_hash(&self, ver: &Ver) -> Result<H256, FetchError> {
+        self.ensure_version_exists(ver)?;
+        let path = PathBuf::from(ver.to_string()).join("sha256.hash");
+        let response = spawn_fetch_s3(self.bucket.clone(), path).await??;
+        let (status_code, hash) = (response.status_code(), response.bytes());
+        if status_code != 200 {
+            return Err(status_code_error("hash data", status_code));
+        }
         let hash = std::str::from_utf8(hash)
             .map_err(anyhow::Error::msg)
             .map_err(FetchError::HashParse)?;
-        let hash = H256::from_str(hash)
+        H256::from_str(hash)
             .map_err(anyhow::Error::msg)
-            .map_err(FetchError::HashParse)?;
-        Ok((data.into(), hash))
+            .map_err(FetchError::HashParse)
     }
 }
 
@@ -149,6 +165,12 @@ impl<Ver: Version> Fetcher for S3Fetcher<Ver> {
     async fn fetch(&self, ver: &Self::Version) -> Result<PathBuf, FetchError> {
         let (data, hash) = self.fetch_file(ver).await?;
         super::fetcher::write_executable(data, hash, &self.folder, ver, self.validator.as_deref())
+            .await
+    }
+
+    async fn validate_file(&self, ver: &Self::Version, path: &Path) -> Result<(), FetchError> {
+        let expected = self.fetch_hash(ver).await?;
+        super::fetcher::validate_existing_executable(path, expected, ver, self.validator.as_deref())
             .await
     }
 
@@ -293,6 +315,44 @@ mod tests {
                 version
             );
         }
+    }
+
+    #[tokio::test]
+    async fn validating_preloaded_file_fetches_only_authoritative_checksum() {
+        let expected_file = b"preloaded compiler";
+        let expected_hash = Sha256::digest(expected_file);
+        let version = evm_version::DetailedVersion::from_str("v0.4.10+commit.f0d539ae").unwrap();
+        let mock_server = MockServer::start().await;
+
+        mock_get_object(
+            "/solc-releases/v0.4.10%2Bcommit.f0d539ae/sha256.hash",
+            hex::encode(expected_hash).as_bytes(),
+        )
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+        mock_get_object(
+            "/solc-releases/v0.4.10%2Bcommit.f0d539ae/solc",
+            b"must not be downloaded",
+        )
+        .expect(0)
+        .mount(&mock_server)
+        .await;
+
+        let fetcher = S3Fetcher {
+            bucket: test_bucket(mock_server.uri()),
+            folder: Default::default(),
+            versions: VersionsRefresher::new_static(HashSet::from_iter([version.clone()])),
+            validator: None,
+        };
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let compiler_path = tmp_dir.path().join("solc");
+        std::fs::write(&compiler_path, expected_file).unwrap();
+
+        fetcher
+            .validate_file(&version, &compiler_path)
+            .await
+            .expect("preloaded compiler should match authoritative S3 checksum");
     }
 
     #[tokio::test]

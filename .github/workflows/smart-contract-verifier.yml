@@ -73,6 +73,20 @@ jobs:
       ARM_RUNNER_HOSTNAME: ${{ secrets.ARM_RUNNER_HOSTNAME }}
       ARM_RUNNER_KEY: ${{ secrets.ARM_RUNNER_KEY }}
 
+  docker-compiler-runner:
+    name: Docker build and docker push (compiler runner)
+    uses: ./.github/workflows/_docker-build-push.yml
+    with:
+      service-name: smart-contract-verifier-compiler-runner
+      # Versioned runner images are published with smart-contract-verifier releases.
+      release-tag-prefix: smart-contract-verifier
+      docker-context-path: smart-contract-verifier/
+      dockerfile-path: smart-contract-verifier/compiler-runner.Dockerfile
+      build-contexts: ''
+    secrets:
+      ARM_RUNNER_HOSTNAME: ${{ secrets.ARM_RUNNER_HOSTNAME }}
+      ARM_RUNNER_KEY: ${{ secrets.ARM_RUNNER_KEY }}
+
   push-swagger:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags'))
     uses: ./.github/workflows/_push_swagger.yml

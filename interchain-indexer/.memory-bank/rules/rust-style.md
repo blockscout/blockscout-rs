@@ -33,6 +33,36 @@ In `interchain-indexer-proto/build.rs`, treat serde field attributes as behavior
 - When a request field truly needs deserialization behavior on omission, prefer the attribute that matches that behavior. Example: non-optional enum query fields may need `#[serde(default)]`; `skip_serializing_if` is not a substitute.
 - Before adding any new serde field attribute in `build.rs`, check whether the message is used as input, output, or both, and document the reason in the surrounding task artifacts or code comment when it is not obvious.
 
+## Proto Enums: Scope Bare Value Names By Nesting
+
+Protobuf scopes enum *value* names to the enclosing **package**, not to the
+enum. A package-level `enum TokenType { UNSPECIFIED = 0; ERC20 = 1; ... }`
+therefore reserves the bare names `UNSPECIFIED`, `ERC20`, `NATIVE`, … for the
+whole of `blockscout.interchainIndexer.v1` and blocks every future enum in it
+from reusing them. `MessageStatus` avoids this the conventional way, by
+prefixing its values (`MESSAGE_STATUS_*`).
+
+Prefixing is not always available. A value's JSON name is the proto value name
+as written: `build.rs` sets `.retain_enum_prefix()`, so the generated Rust
+variant idents are the proto value names verbatim, and
+`actix_prost_macros::serde` renames them `SCREAMING_SNAKE_CASE` on the way out.
+Renaming the values to `TOKEN_TYPE_*` would therefore change the REST payload,
+and `prost-build` has no per-variant attribute hook to rename them back.
+
+When an enum's public JSON strings must stay unprefixed, **nest it inside the
+message that owns it** (`TokenInfo.TokenType`). Nesting scopes the value names
+to that message and leaves the JSON untouched; only the generated Rust module
+path and the swagger definition key change. Keep the rationale here rather than
+in the `.proto` doc comment — `protoc-gen-openapiv2` copies attached comments
+into the published swagger description, and detached comments are misattributed
+to the enclosing message, so there is no in-proto place for it that stays out of
+the public API docs.
+
+Existing package-level enums with bare value names (`SortOrder`,
+`BridgedTokensSort`, `StatsChainsSort` in `stats.proto`) are query-parameter
+inputs; renaming them would break the live request contract, so they stay as
+they are. Do not add new ones.
+
 ## Logging
 
 Use `tracing` with field-style syntax (static messages, dynamic fields):

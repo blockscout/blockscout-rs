@@ -17,8 +17,8 @@ use thiserror::Error;
 use super::{
     db_interaction::read::ApproxUnsignedDiff,
     indexing_status::{
-        BlockscoutIndexingStatus, IndexingStatus, IndexingStatusTrait, UserOpsIndexingStatus,
-        ZetachainCctxIndexingStatus,
+        BlockscoutIndexingStatus, IndexingStatus, IndexingStatusTrait, InterchainIndexingStatus,
+        UserOpsIndexingStatus, ZetachainCctxIndexingStatus,
     },
     query_dispatch::{ChartTypeSpecifics, QuerySerialized, QuerySerializedDyn},
 };
@@ -204,6 +204,8 @@ pub trait ChartProperties: Sync + Named {
             user_ops: UserOpsIndexingStatus::LEAST_RESTRICTIVE,
             // most of the charts don't depend on zetachain cctx
             zetachain_cctx: ZetachainCctxIndexingStatus::LEAST_RESTRICTIVE,
+            // most of the charts don't depend on the interchain indexer
+            interchain: InterchainIndexingStatus::LEAST_RESTRICTIVE,
         }
     }
 

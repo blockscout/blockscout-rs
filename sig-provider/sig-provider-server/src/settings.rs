@@ -38,7 +38,7 @@ impl Default for SourcesSettings {
     fn default() -> Self {
         Self {
             fourbyte: url::Url::parse("https://www.4byte.directory/").unwrap(),
-            sigeth: url::Url::parse("https://sig.eth.samczsun.com/").unwrap(),
+            sigeth: url::Url::parse("https://api.4byte.sourcify.dev/").unwrap(),
             eth_bytecode_db: Default::default(),
         }
     }

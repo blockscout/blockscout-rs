@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task To Code"
+  short_description: "Implement a prepared coding task exactly"
+  default_prompt: "Use $task-to-code with the task name and coding-task index to implement the prepared coding task without inventing scope."

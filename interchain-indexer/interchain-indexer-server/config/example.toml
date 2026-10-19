@@ -1,5 +1,5 @@
-chains_config = "config/avalanche/chains.json"
-bridges_config = "config/avalanche/bridges.json"
+chains_config = "config/full-mainnet/chains.json"
+bridges_config = "config/full-mainnet/bridges.json"
 
 [token_info]
 onchain_retry_interval = 10
@@ -19,6 +19,33 @@ fetch_interval = 1
 # pull_interval_ms = 10000
 # batch_size = 1000
 
+# [avalanche_indexer.failure_retry]
+# enabled = true
+# scan_interval = 60                  # seconds
+# backoff_base = 30                   # seconds; applied after a complete replay sweep
+# backoff_cap = 3600                  # seconds
+# max_chunks_per_pass = 8             # bridge-wide chunks per tick
+# split_after_attempts = 3            # initial record plus wholly failed sweeps before narrowing
+# record_retry_attempts = 3
+# record_retry_initial_backoff = 200  # milliseconds
+
+# AMB indexer settings (all fields optional, these are the defaults)
+# [amb_indexer]
+# pull_interval_ms = 500
+# batch_size = 1000
+# receipt_concurrency = 25
+# clock_skew_tolerance = 300          # seconds
+
+# [amb_indexer.failure_retry]
+# enabled = true
+# scan_interval = 60                  # seconds
+# backoff_base = 30                   # seconds; applied after a complete replay sweep
+# backoff_cap = 3600                  # seconds
+# max_chunks_per_pass = 8             # bridge-wide chunks per tick
+# split_after_attempts = 3            # initial record plus wholly failed sweeps before narrowing
+# record_retry_attempts = 3
+# record_retry_initial_backoff = 200  # milliseconds
+
 [database.connect_options]
 min_connections = 10
 max_connections = 20
@@ -33,6 +60,11 @@ run_migrations = true
 # backfill_on_start = false
 # chains_recalculation_period_secs = 3600
 # include_zero_chains = true
+
+# Placeholder for the env documentation only (not a valid digest): one variable
+# per key, `INTERCHAIN_INDEXER__WRITE_API__KEYS_SHA256__<KEY_NAME>`.
+[write_api.keys_sha256]
+"<key_name>" = "<64-hex sha256 of the key>"
 
 [api]
 default_page_size = 50

@@ -34,7 +34,7 @@ services:
       ## optional: if provided, would be used as a configuration file
       ETH_BYTECODE_DB__CONFIG: /app/config.toml
       ETH_BYTECODE_DB__VERIFIER__URI: http://smart-contract-verifier:8050
-      ETH_BYTECODE_DB__DATABASE__URL: postgres://postgres:@database:5432/eth_bytecode_db
+      ETH_BYTECODE_DB__DATABASE__CONNECT__URL: postgres://postgres:@database:5432/eth_bytecode_db
       ETH_BYTECODE_DB__DATABASE__CREATE_DATABASE: true
       ETH_BYTECODE_DB__DATABASE__RUN_MIGRATIONS: true
     env_file:

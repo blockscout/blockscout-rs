@@ -12,12 +12,42 @@
 //! Together with the per-day burn delta (see `burn_actor_balance`) it
 //! forms the chain-wide fees total.
 //!
+//! The per-transaction tip term is shared, via [`fevm_tip_term`], with the
+//! 24-hour counter `filecoinChainFees24h`
+//! (`counters/blockscout_instance/filecoin_chain_fees_24h.rs`) — the daily
+//! line and the counter must never disagree about tip semantics.
+//!
 //! Internal-only chart: never exposed through the API (stays disabled),
 //! updated transitively as a dependency of the public Filecoin charts.
 
 use std::{collections::HashSet, ops::Range};
 
 use crate::{chart_prelude::*, utils::ETHER};
+
+/// The per-transaction FEVM miner tip, floored at zero, as a SQL
+/// expression: `(gas_price - base_fee_per_gas) * gas_used`, or `0` when the
+/// transaction underbids the base fee. The floor is a `CASE` rather than
+/// `GREATEST(diff, 0)` so that a NULL `base_fee_per_gas` keeps the term
+/// NULL — see the rationale comment in
+/// [`FevmFeeTipsStatement`]'s `get_statement`.
+///
+/// Caller contract: the expression reads `{alias}.gas_price`,
+/// `{alias}.gas_used` and `b.base_fee_per_gas`, so the caller owns the
+/// `blocks b` join and the `consensus` / `!= to_timestamp(0)` guards on
+/// both sides of it.
+///
+/// Consumers: [`FevmFeeTipsStatement`] (both migration branches) and
+/// `FilecoinChainFees24hStatement` (the 24h counter's `tips` CTE). The term
+/// exists exactly once so the two can never drift apart.
+pub fn fevm_tip_term(transactions_alias: &str) -> String {
+    format!(
+        "CASE
+            WHEN {a}.gas_price < b.base_fee_per_gas THEN 0
+            ELSE ({a}.gas_price - b.base_fee_per_gas) * {a}.gas_used
+        END",
+        a = transactions_alias
+    )
+}
 
 pub struct FevmFeeTipsStatement;
 impl_db_choice!(FevmFeeTipsStatement, UsePrimaryDB);
@@ -49,16 +79,14 @@ impl StatementFromRange for FevmFeeTipsStatement {
             let (block_filter, new_args) =
                 produce_filter_and_values(range.clone(), "b.timestamp", args.len() + 1);
             args.extend(new_args);
+            let tip_term = fevm_tip_term("t_filtered");
             let sql = format!(
                 r#"
                     SELECT date, value FROM (
                         SELECT
                             DATE(b.timestamp) as date,
                             (SUM(
-                                CASE
-                                    WHEN t_filtered.gas_price < b.base_fee_per_gas THEN 0
-                                    ELSE (t_filtered.gas_price - b.base_fee_per_gas) * t_filtered.gas_used
-                                END
+                                {tip_term}
                             ) / $1)::FLOAT as value
                         FROM (
                             SELECT * from transactions t
@@ -84,10 +112,7 @@ impl StatementFromRange for FevmFeeTipsStatement {
                         SELECT
                             DATE(b.timestamp) as date,
                             (SUM(
-                                CASE
-                                    WHEN t.gas_price < b.base_fee_per_gas THEN 0
-                                    ELSE (t.gas_price - b.base_fee_per_gas) * t.gas_used
-                                END
+                                {tip_term}
                             ) / $1)::FLOAT as value
                         FROM transactions t
                         JOIN blocks       b ON t.block_hash = b.hash
@@ -100,7 +125,8 @@ impl StatementFromRange for FevmFeeTipsStatement {
                 "#,
                 [ETHER.into()],
                 "b.timestamp",
-                range
+                range,
+                tip_term = fevm_tip_term("t")
             )
         }
     }
@@ -222,13 +248,21 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs database to run"]
     async fn update_fevm_fee_tips() {
-        // `2022-11-09` and `2023-03-01` are deliberately omitted: the only
-        // block of each day carries a zero-gas-price transaction, so it keeps
-        // `base_fee_per_gas = NULL` (fixture hazard rule), the day's `SUM` is
-        // NULL and the row is dropped by the outer `value IS NOT NULL` guard.
+        // `2022-11-09` is deliberately omitted: its only block carries a
+        // zero-gas-price transaction, so it keeps `base_fee_per_gas = NULL`
+        // (fixture hazard rule), the day's `SUM` is NULL and the row is
+        // dropped by the outer `value IS NOT NULL` guard.
         // `2023-02-14` is the "mixed" day: its hazard block's tip terms are
         // NULL and skipped by `SUM`, so the stored value is understated (see
         // `mixed_day_value_characterizes_the_undercount`).
+        // `2023-02-28` and `2023-03-01` now carry one priced transaction each
+        // from the 24-hour counter's fixture blocks (`COUNTER_DENSE_BLOCK_2`
+        // and `COUNTER_END_ANCHOR_BLOCK`); `2023-03-01`'s original only block
+        // (12) still keeps `base_fee_per_gas = NULL` (hazard rule) and its
+        // term is skipped by `SUM`, same as the mixed day. The window-edge
+        // boundary block (`COUNTER_WINDOW_EDGE_BLOCK`, dated exactly
+        // `2023-03-01T12:00:00` — this chart's own update range's upper
+        // bound) does not contribute here either.
         simple_test_chart_filecoin_with_migration_variants::<FevmFeeTips>(
             "update_fevm_fee_tips",
             vec![
@@ -239,6 +273,8 @@ mod tests {
                 ("2023-01-01", "0.000021492592569"),
                 ("2023-02-01", "0.001051166665605"),
                 ("2023-02-14", "0.0001"),
+                ("2023-02-28", "0.0001029"),
+                ("2023-03-01", "0.0001029"),
             ],
         )
         .await;

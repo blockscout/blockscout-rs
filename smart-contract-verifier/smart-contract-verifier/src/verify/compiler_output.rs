@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use foundry_compilers::artifacts;
+use foundry_compilers_artifacts as artifacts;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use verification_common::verifier_alliance::{ImmutableReferences, LinkReferences};

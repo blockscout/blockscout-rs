@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use chrono::NaiveDateTime;
-use interchain_indexer_logic::{ChainBridgeFilter, IndexedChains};
+use interchain_indexer_logic::{ChainBridgeFilter, IndexedChains, protocol_metadata};
 use sea_orm::JsonValue;
 use tonic::Status;
 
+/// Delegates to `interchain_indexer_logic::protocol_metadata::rfc3339_millis_z`
+/// so the Read API's general timestamp rendering and the
+/// `multiple_executions` namespace's `additional_executions[].timestamp`
+/// (assembled in logic, not here) can never drift into two different formats.
 pub fn db_datetime_to_string(ts: NaiveDateTime) -> String {
-    ts.and_utc()
-        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+    protocol_metadata::rfc3339_millis_z(ts)
 }
 
 pub fn map_db_error(err: anyhow::Error) -> tonic::Status {
@@ -131,10 +134,27 @@ pub fn checked_bridge_id(bridge_id: Option<u32>) -> Result<Option<i32>, Status> 
 #[cfg(test)]
 mod tests {
     use super::{
-        build_chain_bridge_filter, checked_bridge_id, non_empty, parse_bridge_ids_csv,
-        parse_chain_ids_csv,
+        build_chain_bridge_filter, checked_bridge_id, db_datetime_to_string, non_empty,
+        parse_bridge_ids_csv, parse_chain_ids_csv,
     };
     use interchain_indexer_logic::IndexedChains;
+
+    /// `db_datetime_to_string` delegates to
+    /// `interchain_indexer_logic::protocol_metadata::rfc3339_millis_z`, so the
+    /// general Read API timestamp format and the `multiple_executions`
+    /// namespace's `additional_executions[].timestamp` (assembled in logic)
+    /// can never drift into two different formats.
+    #[test]
+    fn db_datetime_to_string_matches_protocol_metadata_rfc3339_millis_z() {
+        let ts = chrono::DateTime::from_timestamp(1_752_785_570, 0)
+            .unwrap()
+            .naive_utc();
+        assert_eq!(
+            db_datetime_to_string(ts),
+            interchain_indexer_logic::protocol_metadata::rfc3339_millis_z(ts)
+        );
+        assert_eq!(db_datetime_to_string(ts), "2025-07-17T20:52:50.000Z");
+    }
 
     #[test]
     fn parse_chain_ids_csv_accepts_missing_and_empty() {

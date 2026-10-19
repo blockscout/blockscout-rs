@@ -1,0 +1,10 @@
+[package]
+name = "env-docs-generation"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "LicenseRef-Blockscout"
+
+[dependencies]
+multichain-aggregator-server = { workspace = true }
+env-collector = { workspace = true }

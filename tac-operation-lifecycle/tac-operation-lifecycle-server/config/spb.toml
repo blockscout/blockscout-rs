@@ -27,6 +27,8 @@ forever_pending_operations_age_sec = 604800
 
 [rpc]
 url = "https://data.spb.tac.build/"
-request_per_second = 100
+request_per_second = 5
 num_of_retries = 10
 retry_delay_ms = 1000
+stage_profiling_mode = "prefer_v2"
+stage_profiling_v2_probe_interval = 60

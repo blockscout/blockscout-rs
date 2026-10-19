@@ -3,7 +3,7 @@
 use std::ops::Range;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
-use sea_orm::{DatabaseConnection, DbErr};
+use sea_orm::DbErr;
 use thiserror::Error;
 
 use crate::{
@@ -44,20 +44,23 @@ impl RemoteQueryBehaviour for QueryFullIndexerTimestampRange {
         cx: &UpdateContext<'_>,
         _range: UniversalRange<DateTime<Utc>>,
     ) -> Result<Self::Output, ChartError> {
-        let min_date = get_min_date(cx.indexer_db, cx.mode).await;
+        let min_date = get_min_date(cx).await;
 
         let start_timestamp = min_date.map_err(ChartError::IndexerDB)?.and_utc();
         Ok(start_timestamp..cx.time)
     }
 }
 
-pub async fn get_min_date(
-    indexer_db: &DatabaseConnection,
-    mode: crate::Mode,
-) -> Result<NaiveDateTime, DbErr> {
-    match mode {
-        Mode::Interchain => get_min_date_interchain(indexer_db).await,
-        Mode::MultichainAggregator => get_min_date_multichain(indexer_db).await,
-        Mode::Blockscout | Mode::Zetachain => get_min_date_blockscout(indexer_db).await,
+/// The earliest date the indexer has data for — the floor every batched backfill
+/// starts from.
+///
+/// Takes the whole [`UpdateContext`] rather than a connection and a [`Mode`],
+/// because in `Interchain` mode the floor is filter-dependent: see
+/// [`get_min_date_interchain`].
+pub async fn get_min_date(cx: &UpdateContext<'_>) -> Result<NaiveDateTime, DbErr> {
+    match cx.mode {
+        Mode::Interchain => get_min_date_interchain(cx).await,
+        Mode::MultichainAggregator => get_min_date_multichain(cx.indexer_db).await,
+        Mode::Blockscout | Mode::Zetachain => get_min_date_blockscout(cx.indexer_db).await,
     }
 }

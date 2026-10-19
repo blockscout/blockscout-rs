@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(just check *)",
+      "Bash(just test *)",
+      "Bash(just test-with-db *)",
+      "Bash(just check-envs *)",
+      "Bash(just format *)",
+      "Bash(just --list*)",
+      "Bash(cargo test *)",
+      "Bash(cargo clippy -p *)",
+      "Bash(cargo fmt --all -- --check*)",
+      "Bash(git grep *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v graphify >/dev/null 2>&1 && exec graphify hook-guard search || exit 0"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v graphify >/dev/null 2>&1 && exec graphify hook-guard read || exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}

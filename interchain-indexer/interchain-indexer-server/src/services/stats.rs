@@ -2,17 +2,20 @@
 
 use super::{
     chain_info_proto::chain_model_to_proto,
+    interchain_service::token_type_to_proto,
     utils::{build_chain_bridge_filter, non_empty, parse_bridge_ids_csv, parse_chain_ids_csv},
 };
 use crate::{
-    proto::{interchain_statistics_service_server::*, *},
+    // `TokenType` is nested in `TokenInfo` so its value names do not squat the
+    // proto package namespace — see `.memory-bank/rules/rust-style.md`.
+    proto::{interchain_statistics_service_server::*, token_info::TokenType, *},
     settings::ApiSettings,
 };
 use chrono::{DateTime, NaiveDate, Utc};
 use interchain_indexer_logic::{
     BridgedTokenListRow, BridgedTokensPaginationLogic, BridgedTokensSortField, ChainInfoService,
-    IndexedChains, StatsChainListRow, StatsChainsPaginationLogic, StatsChainsSortField,
-    StatsListQuery, StatsService, StatsSortOrder, utils::to_hex_prefixed,
+    IndexedChains, StatsChainListRow, StatsChainsPaginationLogic, StatsChainsScope,
+    StatsChainsSortField, StatsListQuery, StatsService, StatsSortOrder, utils::to_hex_prefixed,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -42,6 +45,24 @@ impl InterchainStatisticsServiceImpl {
 
 #[async_trait::async_trait]
 impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
+    /// DEPRECATED — `GET /api/v1/stats/common`. Returns zero counters without
+    /// touching the database.
+    ///
+    /// Every call used to run an unbounded `COUNT(*)` over
+    /// `crosschain_messages` plus a joined `COUNT(*)` over
+    /// `crosschain_transfers`, uncached, inside one transaction — the heaviest
+    /// query this service served, growing with the canonical tables. The same
+    /// numbers now come from the stats service in interchain mode, which
+    /// precomputes them.
+    ///
+    /// The request is still parsed and its filters still validated, so a
+    /// malformed query keeps failing with `400` instead of silently returning
+    /// zeros. `timestamp` is still echoed back, because it is the request's own
+    /// value, not a computed statistic.
+    ///
+    /// TODO(next API iteration): remove this handler, the RPC and its messages
+    /// in `stats.proto`, the HTTP rule in `api_config_http.yaml`, and
+    /// `InterchainDatabase::get_total_counters` with its tests.
     async fn get_common_statistics(
         &self,
         request: Request<GetCommonStatisticsRequest>,
@@ -52,7 +73,9 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .and_then(|ts| DateTime::<Utc>::from_timestamp(ts as i64, 0).map(|dt| dt.naive_utc()))
             .unwrap_or_else(|| Utc::now().naive_utc());
 
-        let filter = build_chain_bridge_filter(
+        // Parsed and validated, then dropped: a malformed query keeps failing
+        // with `400` rather than silently answering zeros, and no query runs.
+        build_chain_bridge_filter(
             inner.home_chain_id,
             inner.counterparty_chain_ids.as_deref(),
             inner.src_chain_ids.as_deref(),
@@ -62,21 +85,22 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             inner.include_unindexed_chains.unwrap_or(false),
         )?;
 
-        let counters = self
-            .stats
-            .interchain_db()
-            .get_total_counters(timestamp, &filter)
-            .await
-            .map_err(map_stats_error)?;
-
         let response = GetCommonStatisticsResponse {
-            timestamp: super::utils::db_datetime_to_string(counters.timestamp),
-            total_messages: counters.total_messages,
-            total_transfers: counters.total_transfers,
+            timestamp: super::utils::db_datetime_to_string(timestamp),
+            total_messages: 0,
+            total_transfers: 0,
         };
         Ok(Response::new(response))
     }
 
+    /// DEPRECATED — `GET /api/v1/stats/daily`. Returns zero counters without
+    /// touching the database. Same reasoning, same removal plan as
+    /// [`Self::get_common_statistics`]; `date` is still the day of the
+    /// request's own `timestamp`.
+    ///
+    /// TODO(next API iteration): remove this handler, the RPC and its messages
+    /// in `stats.proto`, the HTTP rule in `api_config_http.yaml`, and
+    /// `InterchainDatabase::get_daily_counters` with its tests.
     async fn get_daily_statistics(
         &self,
         request: Request<GetDailyStatisticsRequest>,
@@ -87,7 +111,9 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .and_then(|ts| DateTime::<Utc>::from_timestamp(ts as i64, 0).map(|dt| dt.naive_utc()))
             .unwrap_or_else(|| Utc::now().naive_utc());
 
-        let filter = build_chain_bridge_filter(
+        // Parsed and validated, then dropped: a malformed query keeps failing
+        // with `400` rather than silently answering zeros, and no query runs.
+        build_chain_bridge_filter(
             inner.home_chain_id,
             inner.counterparty_chain_ids.as_deref(),
             inner.src_chain_ids.as_deref(),
@@ -97,17 +123,10 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             inner.include_unindexed_chains.unwrap_or(false),
         )?;
 
-        let counters = self
-            .stats
-            .interchain_db()
-            .get_daily_counters(timestamp, &filter)
-            .await
-            .map_err(map_stats_error)?;
-
         let response = GetDailyStatisticsResponse {
-            date: counters.date.to_string(),
-            daily_messages: counters.daily_messages,
-            daily_transfers: counters.daily_transfers,
+            date: timestamp.date().to_string(),
+            daily_messages: 0,
+            daily_transfers: 0,
         };
         Ok(Response::new(response))
     }
@@ -240,14 +259,38 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
 
         // `None` = no restriction (opt-in, or an `AllIndexed` configuration).
         // Derived from the same `configured_union()` accessor `GetChains` uses,
-        // so the two directory views cannot drift apart.
+        // so the two directory views cannot drift apart. This gate stays
+        // global even under a bridge-filtered scope: `include_unindexed_chains`
+        // means "no configured bridge indexes this chain", never "not indexed
+        // by the selected bridges".
         let indexed = (!include_unindexed)
             .then(|| self.indexed_chains.configured_union())
             .flatten();
 
+        let mut bridge_ids = parse_bridge_ids_csv(inner.bridge_ids.as_deref())?;
+        bridge_ids.sort_unstable();
+        bridge_ids.dedup();
+        // Current configured chains of the selected bridges, for zero-row
+        // candidates. Only meaningful (and only computed) for a non-empty
+        // selection; `StatsChainsScope::Bridges` requires it non-empty.
+        let selected_configured_chain_ids = if bridge_ids.is_empty() {
+            Vec::new()
+        } else {
+            self.indexed_chains.selected_configured_union(&bridge_ids)
+        };
+        let scope = if bridge_ids.is_empty() {
+            StatsChainsScope::Global
+        } else {
+            StatsChainsScope::Bridges {
+                bridge_ids: &bridge_ids,
+                configured_chain_ids: &selected_configured_chain_ids,
+            }
+        };
+
         let (rows, pagination) = self
             .stats
             .get_stats_chains(
+                scope,
                 chain_ids,
                 indexed.as_deref(),
                 StatsListQuery {
@@ -422,11 +465,13 @@ fn bridged_row_to_proto(row: BridgedTokenListRow) -> StatsBridgedTokenRow {
             .into_iter()
             .map(|t| StatsBridgedTokenItem {
                 chain_id: t.chain_id.to_string(),
-                token_address: to_hex_prefixed(t.token_address.as_slice()),
+                token_address: (token_type_to_proto(&t.token_type) != TokenType::Native)
+                    .then(|| to_hex_prefixed(t.token_address.as_slice())),
                 name: t.name,
                 symbol: t.symbol,
                 icon_url: t.icon_url,
                 decimals: t.decimals.map(|d| d as u32),
+                r#type: token_type_to_proto(&t.token_type) as i32,
             })
             .collect(),
     }

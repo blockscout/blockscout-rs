@@ -7,8 +7,6 @@ use sea_orm::entity::prelude::*;
 #[sea_orm(table_name = "stats_asset_edges")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub stats_asset_id: i64,
-    #[sea_orm(primary_key, auto_increment = false)]
     pub src_chain_id: i64,
     #[sea_orm(primary_key, auto_increment = false)]
     pub dst_chain_id: i64,
@@ -21,6 +19,10 @@ pub struct Model {
     pub updated_at: DateTime,
     #[sea_orm(primary_key, auto_increment = false)]
     pub bridge_id: i32,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub src_stats_asset_id: i64,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub dst_stats_asset_id: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -51,23 +53,25 @@ pub enum Relation {
     Chains1,
     #[sea_orm(
         belongs_to = "super::stats_assets::Entity",
-        from = "Column::StatsAssetId",
+        from = "Column::DstStatsAssetId",
         to = "super::stats_assets::Column::Id",
         on_update = "NoAction",
         on_delete = "Cascade"
     )]
-    StatsAssets,
+    StatsAssets2,
+    #[sea_orm(
+        belongs_to = "super::stats_assets::Entity",
+        from = "Column::SrcStatsAssetId",
+        to = "super::stats_assets::Column::Id",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    StatsAssets1,
 }
 
 impl Related<super::bridges::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Bridges.def()
-    }
-}
-
-impl Related<super::stats_assets::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::StatsAssets.def()
     }
 }
 

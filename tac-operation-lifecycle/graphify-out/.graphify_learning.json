@@ -1,0 +1,90 @@
+{
+  "generated_at": "2026-08-07T06:39:21.870603+00:00",
+  "nodes": {
+    "tac_operation_lifecycle_server_src_services_operations": {
+      "code_fingerprint": "adb7a72775dab547e0891ed03221ac30bc491734cabe5db0923bcc5aefa89271",
+      "label": "services/operations.rs",
+      "last": "2026-08-07T06:27:10.168046+00:00",
+      "provenance": [
+        {
+          "date": "2026-08-07T06:27:10.168046+00:00",
+          "outcome": "useful",
+          "q": "Переименовать Pending в UNKNOWN; сделать type и status enum и rollback обязательным bool в V2OperationBriefDetails/V2OperationDetails."
+        },
+        {
+          "date": "2026-08-06T23:31:06.888964+00:00",
+          "outcome": "useful",
+          "q": "Где формируются V2OperationBriefDetails и V2OperationDetails и как на уровне API спроецировать status/type по profiling_version?"
+        }
+      ],
+      "score": 1.992956604,
+      "source_file": "tac-operation-lifecycle-server/src/services/operations.rs",
+      "status": "preferred",
+      "uses": 2
+    },
+    "tac_operation_lifecycle_server_src_services_operations_operationsservice_convert_full_v2": {
+      "code_fingerprint": "adb7a72775dab547e0891ed03221ac30bc491734cabe5db0923bcc5aefa89271",
+      "label": ".convert_full_v2()",
+      "last": "2026-08-07T06:27:10.168046+00:00",
+      "provenance": [
+        {
+          "date": "2026-08-07T06:27:10.168046+00:00",
+          "outcome": "useful",
+          "q": "Переименовать Pending в UNKNOWN; сделать type и status enum и rollback обязательным bool в V2OperationBriefDetails/V2OperationDetails."
+        },
+        {
+          "date": "2026-08-06T23:31:06.888964+00:00",
+          "outcome": "useful",
+          "q": "Где формируются V2OperationBriefDetails и V2OperationDetails и как на уровне API спроецировать status/type по profiling_version?"
+        }
+      ],
+      "score": 1.992956604,
+      "source_file": "tac-operation-lifecycle-server/src/services/operations.rs",
+      "status": "preferred",
+      "uses": 2
+    },
+    "v2operationbriefdetails": {
+      "code_fingerprint": "",
+      "label": "V2OperationBriefDetails",
+      "last": "2026-08-07T06:27:10.168046+00:00",
+      "provenance": [
+        {
+          "date": "2026-08-07T06:27:10.168046+00:00",
+          "outcome": "useful",
+          "q": "Переименовать Pending в UNKNOWN; сделать type и status enum и rollback обязательным bool в V2OperationBriefDetails/V2OperationDetails."
+        },
+        {
+          "date": "2026-08-06T23:31:06.888964+00:00",
+          "outcome": "useful",
+          "q": "Где формируются V2OperationBriefDetails и V2OperationDetails и как на уровне API спроецировать status/type по profiling_version?"
+        }
+      ],
+      "score": 1.992956604,
+      "source_file": "",
+      "status": "preferred",
+      "uses": 2
+    },
+    "v2operationdetails": {
+      "code_fingerprint": "",
+      "label": "V2OperationDetails",
+      "last": "2026-08-07T06:27:10.168046+00:00",
+      "provenance": [
+        {
+          "date": "2026-08-07T06:27:10.168046+00:00",
+          "outcome": "useful",
+          "q": "Переименовать Pending в UNKNOWN; сделать type и status enum и rollback обязательным bool в V2OperationBriefDetails/V2OperationDetails."
+        },
+        {
+          "date": "2026-08-06T23:31:06.888964+00:00",
+          "outcome": "useful",
+          "q": "Где формируются V2OperationBriefDetails и V2OperationDetails и как на уровне API спроецировать status/type по profiling_version?"
+        }
+      ],
+      "score": 1.992956604,
+      "source_file": "",
+      "status": "preferred",
+      "uses": 2
+    }
+  },
+  "version": 1
+}

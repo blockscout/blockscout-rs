@@ -162,13 +162,21 @@ Common commands from `justfile`:
 - `just generate-entities`
   - regenerate SeaORM codegen into `interchain-indexer-entity/src/codegen`
 - `just run`
-  - start the service against Avalanche config with migrations enabled
+  - start the service against `config/full-mainnet` with migrations enabled
 - `just run-dev`
-  - same as `run`, but loads env vars from `.env`
+  - same as `run`, but with `.env` loaded (`dotenv` CLI). The only recipe that reads
+    `.env` — see the gotcha on why `set dotenv-load` is deliberately not set
 - `just check`
   - `cargo check` + strict clippy
 - `just format`
   - `cargo sort` when available + `cargo fmt`
+- `just graphify-init`
+  - rebuild the local graphify knowledge graph (`graphify-out/`, gitignored — see
+    `.memory-bank/rules/graphify.mdc`); run once after cloning or whenever
+    `graphify-out/graph.json` is missing
+- `just graphify-hooks`
+  - install local git hooks that keep `graphify-out/` refreshed automatically on
+    commit/checkout; one-time per clone
 
 ## Testing Flow
 

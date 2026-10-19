@@ -1,0 +1,73 @@
+---
+description: graphify knowledge graph context
+alwaysApply: true
+---
+
+This project has a graphify knowledge graph at `graphify-out/`. It is
+**local-only**: `/graphify-out/` is listed in `stats/.gitignore` and must
+**never** be committed. The graph is a local cache kept out of git so it
+never adds a diff to any commit — every session may need to build, refresh,
+or rebuild it, and that's expected and fine.
+
+**MANDATORY: Before using Read, Grep, Glob, or Bash to explore the codebase, you MUST run graphify first:**
+- `graphify query "<question>"` — scoped subgraph for any codebase or architecture question
+- `graphify path "<A>" "<B>"` — dependency path between two symbols
+- `graphify explain "<concept>"` — all nodes related to a concept
+
+This applies to YOU and to every subagent you spawn. Include this rule
+explicitly in every subagent prompt that involves code exploration. Do not
+skip graphify because files are "already known" or because you are executing
+a plan — the graph surfaces cross-file dependencies and inferred edges that
+grep and Read cannot find.
+
+## Bootstrap, Refresh, Rebuild
+
+- **Bootstrap when missing:** if `graphify-out/graph.json` does not exist,
+  run `graphify .` from `stats/` (a full build) before relying on
+  query/path/explain.
+- **Keep fresh after edits:** after modifying code files, run
+  `graphify update .` (AST-only, no API cost) to keep the graph current.
+- **Rebuild fully** (`graphify .`) after a large refactor, a long gap since
+  the last build, or a branch switch that moved many files — an incremental
+  `update` cannot repair a graph that has drifted that far.
+
+## Fallback
+
+Only use Read/Grep/Glob directly when:
+
+1. graphify has already oriented you and you need to modify or debug specific lines
+2. `graphify-out/graph.json` does not exist yet **and it cannot be built** in
+   the current environment (e.g. `graphify` is not installed) — a missing
+   local graph is never a blocker on its own; fall back to Read/Grep/Glob and
+   say so explicitly rather than stalling
+
+Additional navigation aids, when present:
+
+- If `graphify-out/wiki/index.md` exists, navigate it instead of reading raw files.
+- Read `graphify-out/GRAPH_REPORT.md` only for broad architecture review when
+  query/path/explain do not surface enough context.
+
+## This Repo's Two Graphs
+
+The monorepo root (`blockscout-rs/graphify-out/`) has its own graph covering
+every service. `stats/graphify-out/` is a separate, stats-scoped graph. When
+working in `stats/`, use the stats-scoped one — run graphify commands with
+`stats/` as the working directory so they resolve `graphify-out/` locally.
+Both are gitignored.
+
+## Build Cost Notes
+
+- File selection honours `.gitignore` (the whole ancestor chain up to the
+  monorepo VCS root), so `target/`, `data/`, `tmp/`, and `graphify-out/` are
+  excluded automatically. No manual exclude flags are needed. Sanity check:
+  the detect step should report a few hundred files, not tens of thousands —
+  if it reports tens of thousands, `target/` leaked in.
+- Semantic extraction uses Gemini when `GEMINI_API_KEY` / `GOOGLE_API_KEY` is
+  set. Without a key it falls back to a dispatched Claude subagent, which
+  costs conversation tokens instead (order of 10^5 output tokens for this
+  corpus). A full rebuild is therefore not free — prefer `graphify update .`
+  for routine freshness and reserve `graphify .` for real drift.
+- Community labels in the current graph are **heuristic** (derived from the
+  dominant file/directory per community), not LLM-authored. Treat a label as a
+  hint about where a cluster lives, not as a curated description. `graphify
+  label .` would replace them with LLM-authored ones at API cost.

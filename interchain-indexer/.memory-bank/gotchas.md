@@ -330,6 +330,44 @@ longer silently drops failed-AMB aggregates.
 
 **Fix:** Use `batched_upsert()` or `run_in_batches()` from `bulk.rs`. Calculate batch size as `65535 / columns_per_row`.
 
+**This does not cover row-valued `IN` — see the next gotcha.** The fix above
+only bounds *bind count*; a row-valued `IN` has a second, lower, and less
+predictable ceiling that bind arithmetic cannot express.
+
+---
+
+## Row-Valued `IN` Has A Second, Lower Ceiling: Planner Stack Depth, Not Bind Count
+
+**Symptom:** `stack depth limit exceeded`, appearing on the *same* query shape
+that elsewhere fails with `too many arguments for query: N` depending on
+cohort size — both are the same underlying bug (see
+`.memory-bank/research/stats-projection-unbatched-pks-lookup-crash.md`).
+
+**Root cause:** A composite/row-valued `IN` — `(a, b) IN ((...),(...))`, e.g.
+SeaORM's `Expr::tuple([...]).in_tuples(...)` — is expanded by PostgreSQL into
+an `OR`-tree of row comparisons, and the parser/planner recurses over that
+tree. The ceiling this hits is `max_stack_depth`, not the 65535 bind-parameter
+count above — and it is **lower and reached first**: 32 767 tuples in a
+2-column row-`IN` (exactly `PG_BIND_PARAM_LIMIT / 2`, i.e. the "correctly
+chunked" size by the bind-count rule) is precisely the shape that overflowed a
+production planner stack while using barely half the bind budget. Applying the
+"PostgreSQL Bind Parameter Limit" fix above (`PG_BIND_PARAM_LIMIT / width`) to
+a row-valued `IN` is **bind-safe but not stack-safe** and was the mistake that
+let this bug propagate to multiple sites in `stats/projection.rs` and
+`stats/service.rs` before it was caught.
+
+**Fix:** Use `bulk::ROW_IN_KEY_CHUNK` (a fixed, margin-justified-not-derived
+constant) and `bulk::run_in_chunks()` for the write side; a hand-rolled
+`for batch in keys.chunks(chunk) { ...; results.extend(...) }`
+read-accumulator loop for the read side. Applies to `SELECT`, `UPDATE`, and
+`DELETE` alike. When the query result feeds a cross-row aggregation (union-find
+merges, additive counters, contradiction de-dup sets), chunk only the **load**
+— chunking the aggregation itself is a silent correctness regression, not a
+performance tweak; see `stats/projection.rs`'s `project_transfers_batch` for
+why. See `.memory-bank/rules/database.md` §Batching for the full rule and
+`.memory-bank/research/stats-projection-unbatched-pks-lookup-crash.md` for the
+incident this was found in.
+
 ---
 
 ## Indexer Cleanup Guard Runs on Panic
@@ -352,6 +390,110 @@ longer silently drops failed-AMB aggregates.
 
 ---
 
+## Avalanche Peer Resolution Can Fail On The Source Side Too
+
+**Accepted scope:** [ADR-010](adr/010-unresolved-avalanche-destinations-and-protocol-metadata.md)
+keeps `src_chain_id` NOT NULL and unresolved sources on the existing
+`indexer_failures`/replay path. The nullable-source consequences below are
+research findings, not instructions to expand the destination-metadata task.
+
+`ReceiveCrossChainMessage`, `MessageExecuted`, and `MessageExecutionFailed`
+resolve `sourceBlockchainID` through the same `BlockchainIdResolver` used for
+outbound destinations. An incoming event does not establish that the external
+Data API can supply an EVM chain ID. The observed destination is known from
+`ctx.chain_id`; the peer source can still fail resolution before `buffer.alter`.
+See `indexer/avalanche/mod.rs` and `blockchain_id_resolver.rs` under
+`interchain-indexer-logic/src/`.
+
+The current schema cannot store that partial identity: `crosschain_messages`
+has nullable destination but NOT NULL source. If source is made nullable,
+changing the entity alone is insufficient. In particular,
+`STATS_CHAINS_MESSAGE_USER_COUNTS_SQL` in `database.rs` guards only
+`sender_address` on the source arm, while its destination arm also guards the
+chain ID. A nullable source would create a NULL-chain group unless that source
+guard is added. Message live projection and backfill likewise currently rely
+on source being non-null and only explicitly filter out NULL destinations.
+The API serializer also always builds source `ChainInfo`.
+
+These are current assumptions to revisit during a schema change, not evidence
+of existing NULL-source rows or an observed production incoming incident.
+
+The impact crosses process boundaries. `interchain-indexer-filters/src/lib.rs`
+is shared with the sibling `stats` service; its permissive arm for a bridge
+absent from configuration guards only the destination against NULL. A nullable
+source would pass that arm until an equivalent source guard is added. `stats`
+pins entity, filters, and migration to a common git revision in its Cargo.toml,
+so fixing this workspace alone does not update that consumer.
+
+The failure is not limited to reporting: message projection, canonical writes,
+pending persistence and cursor persistence share the maintenance transaction.
+If a newly allowed NULL source reaches a direction table that still requires
+both chains, the failed projection rolls back the entire flush. Startup
+backfill propagates its error too. Keep direction/token chain IDs mandatory
+and explicitly defer partial message identities before projection.
+
+---
+
+## Avalanche Data API Has Two Indistinguishable 404 Shapes
+
+**Symptom:** A blockchain ID that genuinely does not exist and a blockchain
+ID request hitting a mistyped or moved Data API path both return HTTP 404
+with `Content-Type: application/json` and an identical top-level
+`"error":"Not Found"` field. Classifying by status code, or by checking the
+body for a substring like `contains("not found")`, cannot tell them apart —
+`"Cannot GET /v1/networks/mainnet/blockchains/222/yH8D7Th..."` also contains
+`"error":"Not Found"` in the same envelope shape as the real not-found body.
+
+**Root cause:** The Data API's 404 error envelope is generic
+(`{"message": ..., "error": "Not Found", "statusCode": 404}`) regardless of
+*why* the route 404'd. Only the `message` field's exact text distinguishes
+"this blockchain ID is valid but unknown to the network" (`message:
+"Blockchain not found"`) from every other 404 cause. Fixtures captured
+against the live API (2026-09-10, four request shapes: unknown blockchain,
+changed handler path, unknown network, invalid ID) are preserved as tests in
+`interchain-indexer-logic/src/avalanche_data_api.rs`.
+
+**Fix:** `classify_error_response` in `avalanche_data_api.rs` treats a 404 as
+a confirmed missing destination (`DataApiError::BlockchainNotFound`) **only**
+when the body decodes into the error envelope, `message` is a string, and it
+equals `"Blockchain not found"` after `trim()` and case-insensitive
+comparison. Every other shape — a different `message`, an unparseable body,
+HTML from a proxy, or any non-404 status — stays `DataApiError::Status` and
+remains a retryable processing error, never a resolved-as-data outcome. Do
+not weaken this comparison to a substring match; do not classify by status
+code or `Content-Type` alone. See
+[ADR-010](adr/010-unresolved-avalanche-destinations-and-protocol-metadata.md)
+for how this feeds `BlockchainIdResolver`'s destination-path
+`Resolution::Unresolved` outcome.
+
+---
+
+## Resolved Avalanche Mappings Must Take Precedence Over Negative Cache Entries
+
+`BlockchainIdResolver` shares its positive cache between source and destination
+lookups, while only destination lookups use the negative cache. A source lookup
+can therefore resolve an ID while its earlier negative entry is still alive.
+`resolve_destination` must check the positive cache first; otherwise it reports
+an already-known chain as unresolved until the negative TTL expires. With
+`process_unknown_chains = false`, this can incorrectly filter out sends without
+recording a failure for replay. The resolver's
+`destination_negative_cache_does_not_leak_into_source_path` test covers the
+sequence: negative destination → successful source → successful destination.
+
+---
+
+## Clamp Retry Backoff In Integer Space
+
+`failure_ledger::policy::capped_backoff_secs` computes growth in `f64`, but
+the configured cap is a `u64`. Above `2^53`, casting the cap to `f64` can
+round it upward: `9007199254740995` becomes `9007199254740996`. Clamping
+before casting back can therefore exceed the configured limit. Convert the
+computed delay to `u64` first, then apply `.min(cap_secs)`; Rust's saturating
+float-to-integer cast also handles infinite growth. The regression test
+`capped_backoff_respects_caps_above_f64_exact_integer_range` covers this.
+
+---
+
 ## Cross-Bridge Resolver Persistence Leaks
 
 **Symptom:** Bridge B (with `process_unknown_chains: false`) resolves a previously unknown blockchain ID on the first lookup without hitting the Avalanche Data API.
@@ -366,67 +508,213 @@ longer silently drops failed-AMB aggregates.
 
 ## Stats Asset Mapping Conflicts Merge; Only Same-Chain Collisions Skip
 
-**Symptom:** A transfer whose two endpoints already map to two different
-`stats_assets` no longer stalls as a fragmented pair — the components are
-merged automatically, visible as `interchain_indexer_stats_asset_merges_total{outcome="merged"}`
-increasing. The skip that remains is rarer: a warning like `stats projection:
-stats asset already has a different token on the destination chain; skipping
-transfer` (or `...two different tokens on one chain; skipping`), paired with
-`interchain_indexer_stats_asset_merges_total{outcome="refused_chain_collision"}`.
-Separately, `stats projection: skipping transfer due to stats_asset_edges
-decimals mismatch` paired with `interchain_indexer_stats_edge_decimals_conflict_total`
-is a different, non-corrupting skip — see below.
+*(Rewritten 2026-09-15 for [ADR-011](adr/011-cross-asset-edges-and-per-transfer-linkage.md)'s
+two-column `src_stats_asset_id` / `dst_stats_asset_id` and per-transfer
+`asset_linkage`. Everything below about `merge_assets` and the refusal paths
+applies to `mirror` transfers only — a `conversion` transfer never merges its
+two endpoints; see "A `conversion` Transfer's Two Endpoints Are Never Merged,
+Even When They Look Mergeable" below.)*
+
+**Symptom:** A `mirror` transfer whose two endpoints already map to two
+different `stats_assets` no longer stalls as a fragmented pair — the
+components are merged automatically, visible as
+`interchain_indexer_stats_asset_merges_total{outcome="merged"}` increasing.
+The skip that remains is rarer: a warning like `stats projection: stats asset
+already has a different token on the destination chain; skipping transfer`
+(or `...two different tokens on one chain; skipping`), paired with
+`interchain_indexer_stats_asset_merges_total{outcome="refused_chain_collision"}`
+(a merge that would place two different tokens of one chain into one asset)
+or `{outcome="refused_token_on_chain"}` (the counterpart-side lookup found the
+asset already holding a different token on that chain, refused before a merge
+was even attempted — added in ADR-011 so this path is observable too, not
+just logged). Separately, `stats projection: skipping transfer due to
+stats_asset_edges decimals mismatch` paired with
+`interchain_indexer_stats_edge_decimals_conflict_total` is a different,
+non-corrupting skip — see below.
 
 **Root cause:** Asset identity is an incrementally discovered connected-component
-problem — two complete transfers on fully indexed chains can legitimately form
-disjoint components (`{A,B}` and `{C,D}`) that a later `B→C` transfer must join.
-`ensure_asset_for_transfer` resolves this via `merge_assets`: a transactional,
-validate-then-mutate union (weighted — the component with more linked tokens
-wins, ties go to the lower id) that repoints the loser's `stats_asset_tokens`,
-`stats_asset_edges` (folding amounts, rescaling for a decimals difference), and
-`crosschain_transfers.stats_asset_id`, then deletes the loser `stats_assets`
-row, all inside the same transaction as the triggering transfer. The only
-genuine refusal left is a merge that would place two different tokens of one
-chain into one `stats_asset` (a `stats_asset` can hold at most one token per
-chain) — that case cannot be resolved automatically and cannot be forced
-without corrupting the chain-uniqueness invariant.
+problem — two complete `mirror` transfers on fully indexed chains can
+legitimately form disjoint components (`{A,B}` and `{C,D}`) that a later
+`B→C` transfer must join. `ensure_asset_for_transfer`'s `mirror` branch
+resolves this via `merge_assets`: a transactional, validate-then-mutate union
+(weighted — the component with more linked tokens wins, ties go to the lower
+id) that repoints the loser's `stats_asset_tokens`, `stats_asset_edges`
+(folding amounts on both the `src_stats_asset_id` and `dst_stats_asset_id`
+columns now, rescaling for a decimals difference), and
+`crosschain_transfers.src_stats_asset_id` / `dst_stats_asset_id` (via a single
+`CASE WHEN … THEN winner ELSE …` update per column, so a row with the loser on
+both sides is fixed in one pass), then deletes the loser `stats_assets` row,
+all inside the same transaction as the triggering transfer. The only genuine
+refusal left is a merge that would place two different tokens of one chain
+into one `stats_asset` (a `stats_asset` can hold at most one token per chain)
+— that case cannot be resolved automatically and cannot be forced without
+corrupting the chain-uniqueness invariant.
 
 A decimals conflict is a separate, unrelated skip on the *counting* path:
 by the time it fires, this transfer's asset identity is already resolved
 unambiguously (directly or via a merge) — the conflict is only about whether
 this transfer's amount can be safely folded into the edge aggregate. It never
 aborts the batch (task Decision 7) and, since identity succeeded here, the
-transfer still links its resolved `stats_asset_id`.
+transfer still links its resolved asset pair.
 
 **Impact:** Canonical `crosschain_messages` / `crosschain_transfers` rows are
 never at risk in any of these paths. For a successful merge, the database
 changes: the winner asset absorbs the loser's tokens, edges, and transfers,
 and the loser row is gone — by design, not a side effect to repair. For a
-refused chain-collision merge, the transaction leaves the database
+refused-merge (either outcome label), the transaction leaves the database
 byte-identical: nothing is mutated beyond marking the triggering transfer
-`stats_processed += 1` with `stats_asset_id` left `NULL`. For a decimals
-conflict, `stats_processed += 1` and `stats_asset_id` is set to the resolved
-asset, with no `stats_asset_edges` contribution.
+`stats_processed += 1` with both `src_stats_asset_id` and
+`dst_stats_asset_id` left `NULL`. For a decimals conflict,
+`stats_processed += 1` and both columns are set to the resolved pair
+(`src == dst` for a mirror transfer), with no `stats_asset_edges`
+contribution.
 
-Read `crosschain_transfers.stats_asset_id` accordingly: `NULL` means identity
-is genuinely unknown or ambiguous (the chain-collision refusal is the only
-remaining case); a set `stats_asset_id` with `stats_processed > 0` and no
-corresponding edge contribution means identity is known but this transfer's
-amount was not counted (the decimals-conflict case). Either way the skipped
-row is marked processed so it does not re-warn every maintenance cycle;
-ongoing warnings usually mean new transfers keep hitting the same bad token
-data or a backfill is processing historical rows.
+Read `crosschain_transfers.src_stats_asset_id` / `dst_stats_asset_id`
+accordingly: both `NULL` means identity is genuinely unknown or ambiguous (a
+refused-merge mirror transfer, or a linkage the indexer has not stated yet —
+see the `asset_linkage IS NULL` deferral, a different, non-processed state);
+both set with `stats_processed > 0` and no corresponding edge contribution
+means identity is known but this transfer's amount was not counted (the
+decimals-conflict case). Either way the skipped row is marked processed so it
+does not re-warn every maintenance cycle; ongoing warnings usually mean new
+transfers keep hitting the same bad token data or a backfill is processing
+historical rows.
 
 **Fix:** A successful merge needs no manual repair — it already is the repair.
-A chain-collision refusal is a genuine data problem: verify the token address
-recorded per chain for both components (a token's address was likely
-misattributed to the wrong chain), fix the source data, then reset the
-affected transfers' `stats_processed` for re-projection. For local
-development, a fresh reindex may be simpler.
+A refused merge is a genuine data problem: verify the token address recorded
+per chain for both components (a token's address was likely misattributed to
+the wrong chain, **or** a converting route was declared `mirror` by mistake —
+check `asset_linkage` on the transfers involved first, since that is now a
+possible cause the warning message itself calls out), fix the source data,
+then reset the affected transfers' `stats_processed` for re-projection. For
+local development, a fresh reindex may be simpler.
 
 To confirm this at runtime against a live database, see
 `.memory-bank/runbooks/runtime-verification.md` queries A (split-asset
-detector) and B (refusal legitimacy check).
+detector, now qualified to `mirror` rows only) and B (refusal legitimacy
+check).
+
+---
+
+## A `conversion` Transfer's Two Endpoints Are Never Merged, Even When They Look Mergeable
+
+**Symptom:** A converting bridge's two assets (e.g. Ethereum DAI and Gnosis
+native xDAI) stay as two separate `stats_assets` rows joined by one
+cross-asset `stats_asset_edges` row, even though a naive read might expect
+"this is clearly the same economic movement, why doesn't it merge like the
+mirror case does?"
+
+**Root cause:** This is the entire point of [ADR-011](adr/011-cross-asset-edges-and-per-transfer-linkage.md)
+and is not a bug. `ensure_asset_for_transfer`'s `conversion` branch resolves
+each endpoint independently via `lookup_token_asset` / `insert_stats_asset`,
+and never calls `merge_assets`. Two contradiction guards exist specifically to
+flag it when a `mirror` declaration or bad token data has caused the two
+sides to *end up* being the same asset anyway
+(`STATS_ASSET_LINKAGE_CONTRADICTION_TOTAL{kind="conversion_self_asset"}`), or
+when a later mirror merge folds a pre-existing cross-asset edge into a
+self-edge (`{kind="cross_asset_edge_collapsed"}`) — both are warn-and-continue
+diagnostics, not corrections.
+
+**Fix:** Do not "fix" two assets for one converting route as if it were
+fragmentation. If the two sides genuinely should be one asset (i.e. the
+bridge is not actually converting), the fix is on the indexer side: the
+transfer constructor is declaring the wrong linkage.
+
+---
+
+## The `..Default::default()` Omission Silently Defers Every Transfer From An Indexer
+
+**Symptom:** Every transfer from one specific bridge/indexer sits at
+`stats_processed = 0` forever, both `src_stats_asset_id` and
+`dst_stats_asset_id` stay `NULL`, and
+`STATS_TRANSFERS_DEFERRED_TOTAL{reason="linkage_unknown"}` climbs steadily —
+with no other symptom. The code that builds the transfer looks completely
+ordinary.
+
+**Root cause:** `crosschain_transfers::ActiveModel`'s `Default` impl leaves
+every field `ActiveValue::NotSet`, including `asset_linkage`. A `NotSet`
+column is *omitted from the INSERT column list*, so on first insert the
+column takes the database's default — SQL `NULL` — even though nothing looks
+wrong in the constructor. Avalanche's three transfer constructors originally
+built with `..Default::default()` and did not set `asset_linkage`,
+`stats_processed`, or an asset link at all, so there was no local cue a stats
+column was missing.
+
+**Fix:** Every transfer constructor must start from
+`interchain_indexer_entity::new_transfer(linkage)`
+(`interchain-indexer-entity/src/manual/`), which sets `asset_linkage`,
+`stats_processed = 0`, and both asset columns to `NotSet`/`None` correctly,
+then `..` the rest in from there — never from `Default::default()` directly.
+This is a correct-default-path fix, not enforcement: `ActiveModel` is a
+public struct with public fields, so a seventh site can still write
+`ActiveModel { .., ..Default::default() }` and compile. The actual guard is
+at the single write chokepoint, `message_buffer::persistence::flush_to_final_storage`:
+it `debug_assert!`s that `asset_linkage` was `Set` (so this fires loudly in
+the first test that flushes such a transfer, since tests build in debug) and
+in release warns + increments
+`STATS_TRANSFER_ASSET_LINKAGE_UNSET_TOTAL` + leaves the value unset, so the
+row defers rather than being silently stamped with a guessed `mirror`. If you
+add a new indexer, use `new_transfer` and expect a debug-build panic
+immediately if you forget — that is the intended, loud failure mode.
+
+---
+
+## `stats_asset_edges`'s Regenerated Primary-Key Tuple Order Is Table-Column Order, Not PK-Declaration Order
+
+**Symptom:** After regenerating entities
+(`interchain-indexer-entity/src/codegen/stats_asset_edges.rs`), the
+`Model`'s `#[sea_orm(primary_key)]` field order does not match the `PRIMARY
+KEY (...)` clause in the migration SQL, and a `find_by_id((...))` call
+written to match the SQL's column order fails to compile or resolves to the
+wrong row.
+
+**Root cause:** `sea-orm-cli generate entity` emits primary-key fields in
+**table column order** (the order `\d stats_asset_edges` would print them),
+not in the order they appear inside `PRIMARY KEY (...)`. Since
+`bridge_id` was appended to the table by an earlier migration
+(`m20260720_120000_add_read_filters_and_bridge_stats`) and
+`src_stats_asset_id` / `dst_stats_asset_id` were appended after that by a
+later one, the generated tuple is
+`(src_chain_id, dst_chain_id, bridge_id, src_stats_asset_id, dst_stats_asset_id)`
+— not the SQL declaration's
+`(src_stats_asset_id, dst_stats_asset_id, bridge_id, src_chain_id, dst_chain_id)`
+and not the historical `(stats_asset_id, src_chain_id, dst_chain_id,
+bridge_id)` order either.
+
+**Fix:** After any migration that changes `stats_asset_edges`'s columns,
+regenerate entities and **read the generated `Model` struct** to derive the
+`find_by_id` tuple order — never assume it matches the migration SQL or patch
+an old tuple by inserting an extra element. `database.rs`'s
+`create_or_update_stats_asset_edge` and any test calling `find_by_id` on this
+entity must be re-derived this way every time the column set changes.
+
+---
+
+## AMB `replace_existing` Does Not Roll Back The Asset Graph, So Write-Once Does Not Protect A Replacement Row
+
+**Symptom:** (Not yet reachable — AMB only ever declares `mirror` — but a
+real hazard for any future bridge that emits `conversion` *and* has a
+message-replacement path like AMB's collision handling.) A replaced
+`crosschain_transfers` row's `asset_linkage` is not what an earlier flush for
+the *displaced* body had declared, even though `asset_linkage` is supposed to
+be write-once.
+
+**Root cause:** the AMB `messageId`-collision path
+(`message_buffer/persistence.rs`'s `replace_existing` filter and
+`delete_replaced_messages`) deletes the parent `crosschain_messages` row
+first; `ON DELETE CASCADE` removes its `crosschain_transfers` row with it, and
+the replacement body is inserted as a **fresh row** with
+`stats_processed = 0` and no asset link. Write-once protects a value already
+stored *on a row*, not the identity of "this canonical key" across a
+replacement — the asset graph built from the displaced body's tokens is not
+rolled back either, because `stats_asset_tokens` is keyed by token, not by
+transfer.
+
+**Fix:** Not applicable today (no reachable case). If a future bridge
+combines `conversion` transfers with a collision-replacement path, the
+replacement row must re-declare `asset_linkage` from scratch exactly like any
+new row — do not assume a prior flush's declaration survives a
+`replace_existing` cycle.
 
 ---
 
@@ -557,7 +845,9 @@ in this code path.**
 **Operational consequence:** this fix changes `stats_chains` unique-user
 counts. `unique_message_users_count` counts distinct non-NULL
 `recipient_address` values grouped by `dst_chain_id`
-(`select_stats_chains_message_user_counts` in `database.rs`); with
+(`STATS_CHAINS_MESSAGE_USER_COUNTS_SQL` in `database.rs`, formerly
+`select_stats_chains_message_user_counts` before ADR-009's bridge-qualified
+rewrite); with
 `recipient_address` NULL for every unindexed-source message, that chain's
 count was silently deflated (one production chain showed 23 against 13,865
 uncounted completed incoming messages). After this fix and a stats rebuild,
@@ -766,6 +1056,35 @@ Same-Chain Collisions Skip," rather than by eyeballing address equality.
 
 ---
 
+## ICTT Can Register Multiple Remote Contracts On One Remote Chain
+
+**Symptom:** A second legitimate ICTT Remote on an already represented chain
+hits the stats asset's one-token-per-chain guard, even though both transfers
+are lock/mint transfers of the same home asset.
+
+**Root cause:** ICTT does not enforce one Remote per blockchain. The Home's
+registration and collateral accounting are keyed by `(remoteBlockchainID,
+remoteTokenTransferrerAddress)`. Its registration guard rejects a duplicate
+pair, and rejects a Remote on the Home's own chain; it does not reject a second
+Remote address on another chain. Standard `ERC20TokenRemote` is itself an
+ERC20 contract, so two deployments have two token addresses while representing
+the same home asset. This does not require changing the backing token of an
+existing Home, or replacing code at an existing Remote address.
+
+**Implication:** Under the current transferrer-address identity convention,
+`Home@A → Remote1@B` followed by `Home@A → Remote2@B` reaches the same-chain
+mapping refusal in `stats/projection.rs`. Calling the second transfer a
+conversion merely to avoid the constraint is not justified by standard ICTT
+semantics. Supporting this topology needs an explicit asset-model decision.
+
+Verified against Avalanche documentation and Ava Labs source on 2026-09-15:
+
+- [ICTT design](https://docs.avax.network/academy/avalanche-l1/erc20-bridge/02-avalanche-interchain-token-transfer/02-bridge-design).
+- [Home registration checks](https://github.com/ava-labs/icm-services/blob/b952c604bdf403b847ae88bb2e2e31f13627572e/icm-contracts/avalanche/ictt/TokenHome/TokenHome.sol#L158-L209).
+- [ERC20 Remote implementation](https://github.com/ava-labs/icm-services/blob/b952c604bdf403b847ae88bb2e2e31f13627572e/icm-contracts/avalanche/ictt/TokenRemote/ERC20TokenRemoteUpgradeable.sol#L72-L89).
+
+---
+
 ## Upgrading Unknown Chains to Proper Bridges
 
 **Symptom:** You have partial messages (unknown source chain) and want to properly index that chain pair.
@@ -911,3 +1230,1896 @@ here because a false-positive ICTT payload decode would fabricate a bogus
 `crosschain_transfers` row from an arbitrary ICM message.
 
 ---
+
+## A Checkpoint Certifies Scanning, Not Correctness
+
+**Symptom:** `indexer_checkpoints` shows a chain fully caught up, and
+`GET /api/v1/status/indexing` reports `catchup_progress_percent: 100` — while
+messages from blocks inside that range are missing from the database.
+
+**Root cause:** A checkpoint records that `eth_getLogs` returned successfully for
+a range, plus gaps between known blocks inferred as "scanned but empty". It has
+never meant "every covered block was processed without errors". A range that was
+fetched and then failed downstream leaves no hot barrier, so a later successful
+item moves the frontier straight across it.
+
+**Fix:** Read the two records together. Completeness lives in `indexer_failures`
+(the failed-range ledger), not in the cursors — the percentage is the *scanned*
+share and reaches 100% with holes still open, by design. The API payload reads
+both for you: `catchup_complete` is `catchup_progress_percent == 100.0 &&
+failed_blocks == 0`, so `catchup_progress_percent: 100` with
+`catchup_complete: false` is the shape this gotcha produces, and `failed_blocks`
+is the field that says how much. Operationally, alert on
+`interchain_indexer_oldest_open_hole_age_seconds`: the retry pass is the only
+recovery path, so a hole that stops draining is invisible otherwise.
+
+**The converse does not hold**, and `catchup_complete: true` inherits the
+limitation whole. `failed_blocks == 0` means "nothing was recorded", not
+"nothing was lost". A failure only becomes a row if it reaches the
+driver as a `BatchError`, so an error a handler swallows is invisible — and worse,
+a replay covering that range reads as success and `resolve`s an existing hole.
+Malformed input is skipped as data quality on purpose (a log without
+`transaction_hash`, an event without `topic0`, a failed token-enrichment decode),
+and `resolve` runs before the mutation is durable. When adding an indexer or an
+event handler, propagating the failure is what buys you the guarantee; nothing
+else does. See ADR-005 and
+`.memory-bank/research/indexing-gaps-retries-and-checkpoint-safety.md`.
+
+---
+
+## The Failure Ledger's Healthy Path Is DB-Free Only Because One Process Owns A Bridge
+
+**Symptom:** Running two replicas against the same database appears to work, then
+produces overlapping `indexer_failures` rows, over-reported `failed_blocks`, and
+holes that resolve on one replica while another still believes they are open.
+
+**Root cause:** `FailureLedger` keeps an in-memory set of `(bridge_id, chain_id)`
+pairs known to have open holes, so a successful batch on a healthy chain performs
+**zero** database statements. That cache may be stale-*true* (one redundant
+query, harmless) but must never be stale-*false* — which holds only while a single
+process indexes a given bridge. `failed_blocks` also sums row widths directly,
+which is exact only because rows for a pair are disjoint and non-adjacent, an
+invariant maintained by merge-on-write within one writer.
+
+**Fix:** Keep one replica per bridge. The assumption was already implicit in
+checkpointing (`LEAST`/`GREATEST` upserts tolerate concurrency but do not make it
+correct); the ledger simply gives it a second consumer. If multi-writer ever
+becomes real, the ledger needs a database-level non-overlap constraint
+(`EXCLUDE USING gist`) before the cache can be trusted.
+
+---
+
+## Failure Rows Are Coverage Sets, Not Stable Retry Tasks
+
+`record_indexer_failures` merges overlapping **and adjacent** ranges with
+`attempts = max(existing attempts) + 1`. Recording two failed halves therefore
+reconstitutes the parent; it does not preserve a retry split. During replay,
+recording a narrow `BatchError.attributed` inside an existing wide row also
+leaves the wide coverage intact. Only a successful `resolve` subtracts blocks.
+
+`resolve_indexer_failures` resets every affected remainder to `attempts = 1`
+while retaining the parent's timestamps. Thus `attempts` is neither a lifetime
+retry count nor the number of times each block was attempted. A retry policy
+derived only from `batch_size` and this counter can repeatedly revisit coarse
+widths after successful partial recovery. Any adaptive-width change must
+account for the **current remainder's width** and the reset semantics together.
+
+`retry_scheduler.rs` now emits one virtual chunk at a time under the shared
+budget, so singleton replay retains memory proportional to open ledger rows,
+not failed blocks. The coverage-set limitation remains: only `resolve` removes
+blocks and `attempts` is still approximate after union/difference.
+
+The adaptive retry scheduler accounts for these contracts with sticky in-memory
+width, progress confirmed only by successful `resolve`, and reconciliation by
+coverage overlap rather than DB row identity. Sources:
+`interchain-indexer-logic/src/database.rs`
+(`record_indexer_failures`, `resolve_indexer_failures`),
+`interchain-indexer-logic/src/indexer/range_driver.rs`, and ADR-005.
+
+---
+
+## A Retry Cursor Over Only Due Rows Can Revisit The Same Prefix Forever
+
+The old cursor over a pre-filtered due queue could starve interval tails. The
+adaptive scheduler instead reconciles the full open snapshot each tick and
+retains an active frontier per interval; ready sessions are selected round-robin
+by stable local id. A missing target still consumes its position, so it cannot
+pin a chain ahead of ready work elsewhere.
+
+Related, and also fixed: continuous adjacent forward failures used to keep
+updating one merged row's `updated_at` more often than its backoff expired, so
+that row never became due at all. A row's `attempts`/`updated_at` are now read
+exactly once, when the scheduler first bootstraps a session for it;
+reconciliation afterwards inherits that session's own `next_due_at` and ignores
+live DB values, so new records cannot postpone an already scheduled sweep
+(`retry_scheduler.rs::reconcile`, pinned by
+`changed_db_attempts_and_timestamp_do_not_reschedule_an_existing_session`).
+
+What a stable finite-backlog convergence claim still excludes is the opposite
+case: failures arriving faster than `max_chunks_per_pass` can replay them. A
+frozen sweep end guarantees each *started* sweep finishes, not that replay keeps
+up with an unbounded incoming stream.
+
+Sources: `interchain-indexer-logic/src/indexer/range_driver.rs`
+(`run_retry_tick`, `run_retry_tick_at`, `retry_chunk`),
+`interchain-indexer-logic/src/indexer/retry_scheduler.rs`,
+`interchain-indexer-logic/src/indexer/failure_ledger/policy.rs`, and
+`interchain-indexer-logic/src/database.rs::record_indexer_failures`.
+
+## External indexer_failures Writers: Ledger Cache And Scheduler Width (Fixed)
+
+**Symptom (before the fix):**
+
+- A failure row inserted by someone other than this process's
+  `FailureLedger::record` (a rescan, manual SQL, another process) was replayed
+  forever: the retry tick reported its chunk as resolved, yet the row stayed
+  because `resolve` short-circuited with no SQL on a pair absent from
+  `pairs_with_holes`.
+- A fresh row inserted over just-resolved coverage inherited the old session's
+  tiny width. Resolving a singleton `[100,100]` (width 1), then inserting
+  `[100,1000099]` before the next snapshot, made the whole range replay one
+  block per chunk: about 87 days for 1M blocks at eight chunks per minute.
+
+**Root cause:**
+
+- The in-memory "pairs with holes" cache is only updated by this process's own
+  `record`, so a row written elsewhere is invisible to `resolve`.
+- `RetryScheduler::reconcile` matches new rows against the previous tick's
+  in-memory `coverage`, including coverage already removed by successful
+  `resolve` calls, and inherits the parent's width. `finish_sweep` resets
+  failure count and backoff on progress but never restores width.
+
+**Fix:**
+
+- `RangeDriver::run_retry_tick_at` calls `FailureLedger::note_open` for every
+  pair of a successfully read snapshot, before any `resolve` of that tick.
+  `note_open` is a `bump_epoch`, so it also stops an in-flight `resolve` from
+  clearing the pair.
+- `RetryScheduler` records chunks resolved through `report_outcome` in
+  `resolved_since_snapshot`; `reconcile` takes that list and ignores a parent
+  whose overlap with the row is entirely covered by those chunks, so the row
+  starts a fresh session. A genuine remainder keeps the inherited adaptive state.
+
+**Residual limitation:** blocks resolved by the forward path (not via
+`report_outcome`) are not in the list. External writers should stay below the
+realtime cursor and out of unscanned catch-up.
+
+**Do not:**
+
+- remove the `note_open` call or move it after the chunk loop's `resolve` calls;
+- "simplify" the parent filter back to plain `overlaps`;
+- clear `resolved_since_snapshot` anywhere but `reconcile` (a failed `open`
+  never reaches `begin_tick` and must leave the list intact).
+
+Sources: `interchain-indexer-logic/src/indexer/failure_ledger/mod.rs`
+(`note_open`), `interchain-indexer-logic/src/indexer/range_driver.rs`
+(`run_retry_tick_at`), `interchain-indexer-logic/src/indexer/retry_scheduler.rs`
+(`report_outcome`, `reconcile`, `has_unresolved_overlap`).
+
+## Token Cache Writers W1, W3 And Admin Invalidation Share The Per-Key Mutex
+
+Three paths write the `TokenInfoService` cache of a token, and the cache has no
+TTL for positive entries: W1 (background metadata upsert,
+`persist_fetched_token`), W3 (request-time icon refill, `update_token_icon`:
+DB write, DB read, stats propagation, then a cache patch with its own argument)
+and the admin `invalidate_cached`. Invalidation alone does not fence W3: if W3
+has written U to the DB and the admin commits A and invalidates, a read can
+refill the cache with A before W3 resumes, and W3 then patches that entry back
+to U while the DB keeps A. The divergence lasts until a restart. So all three
+paths take the same per-key mutex (`get_lock_for_key`):
+
+- The fast path of `get_token_info` returns a cached model directly only for a
+  native token or a non-empty icon. Everything else (an ERC-20 without an icon)
+  takes the mutex, so W3 runs under it.
+- W1 publishes the `RETURNING` row of its upsert under the same mutex and runs
+  `propagate_token_info_to_stats_tables` after releasing it.
+- `invalidate_cached` removes the entry under the mutex, strictly **after** the
+  admin transaction has committed.
+
+**Do not:**
+
+- take the mutex inside `update_token_icon` or `fetch_icon_if_needed`: their
+  only caller, the slow path, already holds it, and the tokio `Mutex` is not
+  reentrant (a self-deadlock);
+- take the per-key mutex, or call `get_token_info`, while a DB transaction that
+  holds a `tokens` row lock is open. W1 and W3 hold the mutex while they wait on
+  that row, so the transaction would wait for the mutex and the mutex holder for
+  the row: an application-level deadlock PostgreSQL cannot see;
+- hold a `parking_lot` guard across an `.await`;
+- "simplify" the handler's spawned invalidation into an inline `.await`: the
+  invalidation can wait for a request-time Blockscout lookup (up to ~15 s), and a
+  handler future dropped meanwhile (client reset, gRPC deadline) would skip it,
+  leaving a committed change invisible in this process's cache. Dropping the
+  `JoinHandle` of a spawned task does not cancel the task.
+
+**Guarantee boundary:** a request that starts after a successful admin call sees
+the database value. A request concurrent with the call may see either value. The
+guarantee is per process: another process serving the API on the same database
+keeps its cache until it restarts.
+
+Test: `token_cache_db_delayed_icon_refill_cannot_overwrite_an_admin_write` in
+`interchain-indexer-logic/src/token_info/service.rs` stops W3 after its DB write
+(a second connection holds the linked `stats_assets` row) and asserts that the
+invalidation waits for it. Restoring the old fast path makes it fail.
+Sources: `interchain-indexer-logic/src/token_info/service.rs`
+(`get_token_info`, `persist_fetched_token`, `invalidate_cached`,
+`fetch_icon_if_needed`, `update_token_icon`),
+`interchain-indexer-server/src/services/admin/mod.rs` (`apply_token_icon`).
+
+---
+
+## The AMB Scan Floor Is The `amb_proxy` Contract's `started_at_block`
+
+**Symptom:** Lowering `omnibridge_mediator`'s `started_at_block` in
+`config/omnibridge/bridges.json` changes nothing — no earlier history is scanned,
+and the progress endpoint's denominator does not move.
+
+**Root cause:** AMB declares two contracts per `(bridge, chain)`, but one log
+stream covers both addresses, and its floor comes from the `amb_proxy` entries
+alone. In the shipped config the mediator's value sits ~7.4M blocks below the
+proxy's on chain 1, so taking `min` across a chain's contracts would understate
+the scan floor by that much.
+
+**Fix:** Change the `amb_proxy` value to reach earlier history. Do not add a
+second place that derives a floor: `ChainPlan`/`plan_bridge`
+(`interchain-indexer-server/src/indexers.rs`) is the one selection rule, and the
+progress denominator, the running indexer's `genesis_block` and the startup
+floor reconciliation all read it. The rule is `min` over the contracts of the
+kind that drives the scan — `amb_proxy` for AMB, all of them otherwise — and
+`min` rather than "the first one" because several versions of the same kind is
+how a contract upgrade is expressed. An AMB chain with no `amb_proxy` yields no
+floor at all rather than falling back to the mediator's: it cannot be indexed,
+and a plausible number for a scan that never runs is worse than none.
+
+A mediator floor *above* the proxy floor is legal — AMB-only operation indexes
+messages without transfers — and both directions of divergence are warned about
+once at startup by `log_amb_floor_divergence`. A chain with **no** mediator is
+also legal and still indexed; a mediator that *is* configured but has a broken
+ABI stays fatal, because that is a config error rather than a choice.
+
+Operator-facing semantics of changing `started_at_block` — what is rescanned,
+what the reported progress does, and why a failed floor reconciliation is a
+`warn` — are in `README.md` → "Changing `started_at_block` on a live
+deployment". Keep the two in step: the README is what an operator reads before
+editing a live config.
+
+---
+
+## A Contract Version Is `(address, block)`, Not `address`
+
+**Symptom:** Adding a second entry for a contract in `bridges.json` — same
+address, higher `version`, a `started_at_block` where the implementation
+changed — changes nothing, or events stop decoding after that block.
+
+**Root cause:** An AMB proxy is upgraded **behind the same address**. That is
+what `bridge_contracts`' `UNIQUE(bridge_id, chain_id, address, version)` and its
+`started_at_block` column ("needed to select proper contract for the concrete
+block") are for. Address alone cannot identify the implementation, and neither
+can `topic0`: it hashes the event signature, which does **not** include which
+parameters are `indexed`, so two versions can share a topic and still decode
+differently.
+
+**Fix:** Resolve at decode time by `(address, block)` —
+`AbiRegistry::resolve_log`. A version is in force from its `started_at_block`
+until the next one's; the last is open-ended.
+
+Deliberately *not* fixed by splitting the `eth_getLogs` call into per-version
+windows. The fetch filter stays a union over every address and every version,
+because narrowing the fetch would have to be mirrored exactly by the retry path,
+and a replay whose filter is narrower than the forward scan resolves holes it
+never re-read — the same class as the Avalanche multi-contract filter bug.
+Version selection at decode costs one lookup and adds no cross-path invariant.
+
+Consequence to watch: a log whose topic belongs to a *different* version window
+than its block is dropped. That is correct only if the configured boundaries are
+right, so it is counted by
+`interchain_indexer_amb_logs_dropped_wrong_version_total` and warned about.
+Non-zero means a `started_at_block` disagrees with the chain and real events are
+being discarded — with no ledger row, because the blocks were scanned.
+
+---
+
+## One Scanner Per `(bridge, chain)`, Never One Per Contract
+
+**Symptom:** A chain with more than one configured contract loses a block range
+after a restart. No `indexer_failures` row, no RPC error, no gap in any log —
+the checkpoint simply sits above blocks that were never scanned for one of the
+addresses.
+
+**Root cause:** `indexer_checkpoints`, `indexer_failures` and the progress API
+are all keyed `(bridge_id, chain_id)`. Give a chain two independent scanners and
+they share one scan frontier while each covers only part of the address set.
+Catch-up completion is the sharpest form: `mark_catchup_complete` lowers
+`catchup_max_cursor` with `LEAST`, so the first scanner to reach its floor
+publishes that floor for the whole pair, and after a restart the other resumes
+below its own remaining work. Realtime has the same shape whenever one scanner
+stalls while another advances the cursor past it.
+
+**Fix:** One `AvalancheChainConfig` (and one `LogStream`) per chain, with every
+configured address in one filter and `min(started_at_block)` as the floor. AMB
+was already built this way; Avalanche was not. When adding a protocol, the
+invariant to hold is that the unit of scanning matches the key of the records
+that describe scanning. Scanning a wider address set or a lower floor than
+strictly needed is free; splitting the scan under a shared key is not.
+
+---
+
+## A Batch Is A Bridge-Wide Blocking Unit, So One Slow Chain Manufactures Timeouts On The Others
+
+**Symptom:** Every stream of one bridge advances in bursts a few hundred
+milliseconds wide, separated by 45–90 s of silence, and each burst is preceded
+by a cluster of `TimedOut` RPC warnings for *different* chains sharing the same
+millisecond. The endpoints named in those warnings are healthy — curl them and
+they answer instantly. Nothing appears in `indexer_failures`.
+
+**Root cause:** Three facts compose.
+
+1. `RangeDriver::run` awaits `handle_batch` inside its `tokio::select!`, so
+   while one chain's `process_batch` runs, `stream.next()` is not polled and
+   every other chain's in-flight `eth_getLogs` future sits parked.
+2. `RPC_HTTP_TIMEOUT` is 30 s (`provider_layers.rs`). A reqwest timeout is a
+   tokio timer: it elapses whether or not the future is polled, and the error
+   surfaces on the *next* poll — which is why the warnings share a millisecond
+   with the log line that follows them.
+3. A single `process_batch` can take far longer than 30 s. It issues two RPC
+   calls per transaction under `buffer_unordered(25)`, and the per-node
+   `max_rps` limiter throttles them: at `max_rps = 1`, a batch with N
+   transactions takes ~2N seconds, all of it inside `handle_batch`.
+
+Each fake timeout also feeds `mark_error`, so at `error_threshold = 3` the pool
+cools down a node that never actually failed, and the primary rotates. The
+timeouts never reach the ledger either: `fetch_logs` fails *inside* the stream,
+which retries the same range without yielding a batch, so the driver never
+learns and no `indexer_failures` row is written. The cost is invisible to every
+metric.
+
+**Fix:** Two config invariants, then a structural one.
+
+- **`max_rps` must agree with the receipt concurrency.** Avalanche's
+  the fan-out is `receipt_concurrency` (default 25, a setting on both adapters
+  since ADR-008; it was a literal `buffer_unordered(25)` on Avalanche). A node
+  left on `default_max_rps() = 10` puts 15 of every 25 calls on the
+  wait-for-a-token path. Note this costs latency, not throughput — throughput is
+  bounded by `max_rps` either way — so raising `max_rps` is the fix and lowering
+  `receipt_concurrency` only trims in-flight futures. Set `max_rps` explicitly
+  for every node a bridge indexes, fallbacks included.
+- **Size `batch_size` by blocking time, not by RPC efficiency.** While the
+  batch was indivisible for the whole bridge, a wide batch traded one long
+  stall for the other chains' timeouts. On `config/full-mainnet` with three
+  Avalanche chains, 1000 → 200 removed the timeouts outright and roughly
+  doubled catch-up throughput.
+
+**Status: fixed.** `RangeDriver::run` now drives one sequential handler future
+per chain, joined with `try_join_all`, with the retry pass as a sibling future
+— so a batch blocks only its own chain. A bridge whose chains have wildly
+different `max_rps` is no longer pathological: the slow chain parks on its own
+`until_ready()` and its siblings are polled throughout. `batch_size` is now
+tuned for a chain's own latency rather than against bridge-wide blocking.
+
+What remains true, and is the reason to keep this entry: a bridge is still ONE
+tokio task, so a long *CPU-bound* stretch with no `.await` still delays
+siblings. It is bounded by construction — `process_batch` awaits an RPC per
+transaction — but the ceiling is real. See
+`.memory-bank/research/indexing-concurrency-model.md`.
+
+**Diagnosing it:** group the `scanning … logs` lines by `(bridge, chain,
+direction)` and look at the gap distribution, not the averages. Independent
+chains interleave smoothly; a shared blocked task shows near-identical gaps
+across every stream of one bridge and near-zero gaps *within* a burst.
+
+---
+
+## `config/*/ENVs.md` Is Hand-Maintained; `check-envs` Only Touches `README.md`
+
+**Symptom:** you edit `config/<set>/chains.json`, look for the command that
+regenerates the matching `ENVs.md`, run `just generate-envs`, and conclude from
+an unrelated dirty file that the tool rewrote your config.
+
+**What is actually true.** `interchain-indexer-server/src/bin/check-envs.rs`
+calls `run_env_collector_cli` six times with exactly one
+`markdown_path("README.md")` and `config_path("…/config/example.toml")`. It
+never reads or writes anything under `config/<set>/`. Its filters are all
+`INTERCHAIN_INDEXER__*` — the **service settings** family. The
+`INTERCHAIN_INDEXER_CHAINS*` / `INTERCHAIN_INDEXER_BRIDGES*` families that
+`ENVs.md` documents are invisible to it (that is the whole point of the single
+vs double underscore split — see the config gotcha below).
+
+So:
+
+- `just generate-envs` regenerates the settings tables in **`README.md`** only.
+  On a clean tree it writes nothing else; verified empirically.
+- `just check-envs` is the same binary with `--validate-only`. It reports
+  "All variables are documented correctly" per collector run — again about
+  `README.md`, not about `config/*/ENVs.md`.
+- **Every `config/*/ENVs.md` is maintained by hand.** After changing a
+  `chains.json` or `bridges.json`, update the matching `ENVs.md` yourself: both
+  the one-variable JSON form and the field-by-field block, since they must
+  agree with the file.
+- The per-variable **descriptions** in `README.md` are also hand-maintained.
+  The collector refreshes values and adds missing rows; it does not rewrite an
+  existing description, so a description can silently go stale after a
+  behaviour change. Two did on this branch.
+
+**Why this is worth an entry.** The naming invites the wrong inference:
+`generate-envs` sounds like it owns everything named `ENVs.md`. It does not,
+and acting on that inference caused a `git checkout` over a hand-edited
+`config/full-mainnet/chains.json` during this work. If a config file is dirty
+and you did not edit it, read the diff and ask — do not attribute it to
+tooling.
+
+---
+
+## A Replay Can Only Recover What The Replay Can Still Find
+
+**Symptom:** A recorded `indexer_failures` row disappears after a retry pass
+that "succeeded", but the data it covered is still missing.
+
+**Root cause:** The ledger records *block ranges*, and a replay re-fetches those
+blocks and reprocesses them. Anything the failed attempt consumed from memory —
+an entry taken out of a correlation queue, a lookup removed, a channel drained —
+is not restored by re-fetching the blocks. The replay then finds nothing to do,
+returns `Ok`, and `resolve` deletes the row. The concrete instance: AMB's
+message-hash queue used to `remove` the pending entry before running the
+fallible applies, so a mid-drain failure lost the remainder while the block was
+correctly recorded. Both halves looked right in isolation.
+
+**Fix:** Consume in-memory state **last**. Work on a clone, and remove the
+original only after every fallible step has succeeded. This makes the operation
+at-least-once rather than exactly-once, which is already the regime for any
+replayed range. When reviewing a new adapter, the question is not "is the
+failure recorded" but "will a replay of those blocks reconstruct everything the
+failed attempt consumed".
+
+---
+
+## The Retry Pass Starves The Forward Streams, And That Looks Like RPC Failure
+
+**Symptom:** Catch-up and realtime stop logging for a minute or two, then a burst
+of `RPC request to node failed ... source: TimedOut` warnings appears for *every*
+configured chain at once, and only after that do the forward scans resume.
+Nothing is wrong with the endpoints — the retry pass was making successful
+`eth_getLogs` calls against the same node throughout.
+
+**Root cause:** `RangeDriver::run` is a single task with one `tokio::select!`
+([`range_driver.rs`](../interchain-indexer-logic/src/indexer/range_driver.rs)).
+`run_retry_tick` is awaited *inside* one branch, so while it runs the
+`stream.next()` branch is not polled and the combined log stream cannot advance.
+The pass is a sequential loop of up to `max_chunks_per_pass` chunks, each with an
+awaited `eth_getLogs` plus `process`, so the pause is
+`max_chunks_per_pass × per-chunk latency` — a bound in chunks, not in time.
+
+The timeout burst is a *consequence* of the pause, not a cause. The forward
+requests already in flight had their deadlines registered before the pass began.
+Their timers fire on schedule and wake the driver task, but the task is busy in
+the retry pass, so nothing is polled; the first poll after the pass returns
+`TimedOut` immediately. One warning per in-flight forward request — with N chains
+that is 2N warnings (catch-up plus realtime) inside the same millisecond, which
+is the signature to look for. A `scanning CATCHUP`/`scanning REALTIME` line is
+printed *before* the await, so it means "request issued", never "response
+received".
+
+Observed on Avalanche C-Chain: `max_chunks_per_pass = 16` against
+`api.avax.network` measured ~87s per pass, longer than the 60s `scan_interval`,
+so the tick was already due when the pass returned and two passes ran
+back-to-back with zero forward progress in between.
+
+**Fix: done — the pass is now a sibling future.** `run_retry_tick` is raced
+alongside the per-chain handlers inside the same task instead of occupying a
+`select!` branch, so a replay pass no longer stops forward consumption. This
+needed neither `Arc<P>` nor a `tokio::spawn`, which an earlier reading of this
+entry assumed.
+
+It does mean `process()` runs concurrently with the forward path, which this
+entry previously called a design change of the class ADR-005 rejected. That was
+right about the mechanism and wrong about the severity: cross-chain concurrency
+introduces the same class regardless, and the two genuinely lossy interleavings
+it exposes are both closed — the AMB correlation drain now compare-and-removes
+only what it applied, and `FailureLedger` carries a per-pair record epoch so a
+`record` landing inside a `resolve`'s round trip cannot be erased from the
+cache.
+
+`max_chunks_per_pass` still matters, and its default is `8`: it now bounds
+replay *RPC load* per pass against the same rate-limited endpoints rather than a
+pause. It remains bridge-wide across every due interval on every chain.
+
+The timeout-burst symptom above is historical. Keep the diagnosis: it is still
+how to read a cluster of same-millisecond `TimedOut` warnings if any future
+change reintroduces a shared blocking section.
+
+---
+
+## `catchup_min_cursor` Is A Stored Floor, Not A Frontier — And Code Depends On That
+
+**Symptom:** none yet. This is the precondition a whole startup path silently
+rests on, recorded so the next person to touch cursor semantics sees it before
+they break it.
+
+**Root cause:** the name suggests a moving lower boundary, symmetric with
+`catchup_max_cursor`. It is not. `catchup_min_cursor` never advances with
+progress: `upsert_cursors` always supplies `0` for it and relies on
+`GREATEST(existing, 0)` purely to preserve whatever is stored
+([`message_buffer/persistence.rs`](../interchain-indexer-logic/src/message_buffer/persistence.rs)).
+Exactly two writers move it — `seed_catchup_floor` (raise-only) and
+`lower_catchup_floor` (lower-only) — so its value is the pair's configured scan
+floor and nothing else.
+
+`reconcile_catchup_floors` is licensed by precisely that. It enforces
+`catchup_min_cursor == configured floor` by lowering the stored value whenever
+configuration sits below it, unconditionally, every startup. That is exact only
+because the stored value is a floor. Make it a frontier and the same comparison
+becomes true whenever the ascending walk has progressed, so the pass would reset
+that walk on **every** restart — a loop, not a one-off rescan. ADR-007 states the
+expiry condition and the replacement (a dedicated floor column, plus
+`catchup_max_cursor = old_floor - 1` to bound the rescan); ADR-005 records why
+the failed write is only a `warn` today and why that must change too.
+
+**Fix:** if you make `catchup_min_cursor` a real scan boundary, replace
+`reconcile_catchup_floors` rather than extending it, and read ADR-007 first. The
+tell that you are in this situation: you are adding a writer that raises
+`catchup_min_cursor` for a reason other than a configuration change.
+
+---
+
+## Lowering A Scan Floor Does Not Cause A Rescan
+
+**Symptom:** an operator expects lowering `started_at_block` to re-fetch
+everything above the new floor, and plans a maintenance window for it.
+
+**Root cause:** the descending catch-up resumes from `catchup_max_cursor`, and a
+completed catch-up left that cursor at `old_floor - 1` (`mark_catchup_complete`),
+which is exactly the top of the newly opened range. A catch-up still in progress
+has the cursor above the old floor and simply keeps walking past it to the new
+one. Either way only `[new_floor, old_floor - 1]` is fetched.
+
+The reconciliation deliberately does not touch `catchup_max_cursor` for this
+reason — writing it would at best be a no-op and at worst re-fetch a block.
+
+**Fix:** nothing to do. The case that *does* rescan is the asymmetric one:
+raising a floor and later restoring it re-fetches the range between the two
+floors, because the raise let catch-up complete above the old floor and the
+descending cursor moved on. Rows there are re-derived, not duplicated. Plan floor
+changes as deliberate rescans only in that direction.
+
+---
+
+## `pull_interval_ms` Paces Historical Catch-Up, Not Just Realtime Polling
+
+**Symptom:** adding a chain to a bridge — or forcing a rescan — takes days
+rather than hours, and the catch-up log lines arrive at a steady, suspiciously
+round rate no matter how empty the ranges are. The name reads like a realtime
+polling knob, so nobody sizes the backfill window against it.
+
+**Root cause:** `LogStream` carries **one** `poll_interval`, fed from the
+indexer's `pull_interval_ms` by `build_log_stream_for_chain`
+(`indexer/evm/log_stream_builder.rs`). `build_catchup_stream` (`log_stream.rs`)
+sleeps for it after **every** batch, and that sleep is unconditional: it runs
+even when `fetch_logs` returned nothing and no `LogBatch` was yielded. So
+catch-up pacing has nothing to do with how much data the range holds — it is
+pure throttle.
+
+The ceiling is therefore `batch_size / pull_interval_ms`:
+
+| Indexer | `BATCH_SIZE` | `PULL_INTERVAL_MS` | Ceiling |
+| --- | --- | --- | --- |
+| Avalanche | `1000` | `10000` | 100 blocks/s ≈ **8.6M blocks/day/chain** |
+| AMB | `1000` | `500` | 2000 blocks/s ≈ 173M blocks/day/chain |
+
+The two defaults differ by 20×, which is why this only bites on the Avalanche
+side. A C-Chain catch-up from the ICTT floor (`42526120` in
+`config/avalanche/bridges.json`) spans tens of millions of blocks — multiple
+days at the Avalanche default, an afternoon at AMB's.
+
+There is no separate catch-up knob, and the setting is per **indexer**, not per
+chain: `run()` hands the same `settings.pull_interval_ms` to every chain's
+stream. Raising catch-up throughput therefore also increases realtime
+`eth_getLogs` / `eth_blockNumber` frequency on every chain of that bridge.
+
+The retry pass is paced independently (`max_chunks_per_pass` / `scan_interval`,
+`indexer/range_driver.rs`) and ignores `poll_interval` entirely — at its
+defaults it is slower still, ~33 blocks/s. Neither number is a scan rate you
+can infer from the other.
+
+**Fix:** size the window from `batch_size / pull_interval_ms` *before* adding a
+chain or planning a rescan, not after. For a one-off backfill, lower
+`PULL_INTERVAL_MS` for the duration and restore it afterwards, bounded by the
+provider's rate limit; `BATCH_SIZE` is the other half of the ratio and raising
+it costs fewer requests for the same span, bounded by the provider's
+`eth_getLogs` range limit. Both are per-bridge, so a deployment that needs one
+chain backfilled fast and another polled gently cannot express that today.
+
+---
+
+## Server Tests Exhaust The Default macOS Descriptor Limit
+
+**Symptom:** every test in a server test binary fails at once with
+`Os { code: 24, kind: Uncategorized, message: "Too many open files" }`, panicking
+inside `actix-server`'s worker loop, followed by
+`Server did not start in time, and did not terminate` from
+`test_server::init_server`. Running the tests serially with `--test-threads=1`
+does not fix it — it only moves which test fails first.
+
+**Root cause:** each test boots the *entire* service through `run()`: an actix
+`HttpServer` (the launcher never calls `.workers(n)`, so actix uses one worker
+per CPU core), a Postgres pool and the RPC provider pools for every configured
+chain. `test_server::init_server` never shuts a server down, so all of that
+stays alive for the rest of the process and the descriptors accumulate across
+the tests of a binary. macOS defaults the *soft* limit to 256
+(`launchctl limit maxfiles`), which is exhausted around the fourth server on a
+14-core machine. Serial execution does not help precisely because the cost is
+cumulative, not concurrent.
+
+**Fix:** the `test` recipe in the `justfile` raises the soft limit to 8192
+before invoking `cargo test`, and `test-with-db` inherits it. Running
+`cargo test` directly still needs `ulimit -n 8192` in the shell first. The hard
+limit is `unlimited` on macOS, so no `sudo` is involved. Measured on a 14-core
+host: 256 fails 5/5, 1024 and above passes.
+
+Related, and now closed: these tests assume no reachable RPC ("indexer failed to
+start" is the state they exercise), which used to be a property of the *machine*
+— `config/omnibridge/chains.json` carries real public endpoints, so on a
+developer machine with egress the indexers genuinely started and scanned
+mainnet. The harness now boots against
+`interchain-indexer-server/tests/fixtures/chains-offline.json` (same chains,
+`http://127.0.0.1:1`), so the state is a property of the fixture instead.
+`test_offline_chains_fixture_matches_the_omnibridge_chains_config` keeps the two
+chain sets in sync; add a chain to one and add it to the other.
+
+The fixture is **not** a fix for the descriptor limit — measured separately, the
+offline harness still fails 5/5 at `ulimit -n 256`, because actix workers, not
+RPC sockets, are what exhausts it.
+
+**The symptom that live RPC produces**, seen on GitHub Actions before the
+fixture landed:
+
+```
+get_indexing_progress_pair_with_no_checkpoint_reports_zero_and_absent_updated_at
+assertion `left == right` failed
+  left: Number(0.000020304127402714295)
+ right: Number(0.0)
+```
+
+`CatchupProgress::compute` returns exactly `0.0` when no checkpoint row exists,
+so a non-zero value means one did. The only writer that can create it during
+that test is `seed_catchup_floor`, called from `build_log_stream_for_chain`
+*after* `get_block_number()` succeeds — a runner with egress reaches the public
+endpoints, the indexer starts, and the row lands as
+`(min = start_block, max = head - 1, realtime = head)`: exactly one scanned
+block out of ~4.9M, which is that percentage. Reproduced bit-for-bit against a
+local mock RPC, and it is a race — the same run passes whenever the HTTP query
+beats the seeding, which is why it looked intermittent. The test now asserts
+the premise (`indexer_checkpoints` empty) so this fails by name instead of by
+float.
+
+---
+
+## RPC Pool Order Comes From `order`, Never From JSON Key Order
+
+The primary RPC node is element 0 of the pool: `ProviderLayer::layer` sets
+`primary_index: RwLock::new(0)`
+(`interchain-indexer-logic/src/provider_layers.rs`). That element is chosen by
+`ranked_rpc_providers` (`interchain-indexer-server/src/config.rs`), which sorts
+enabled providers by `(order, index in the rpcs array, provider name)` —
+`order` ascending, providers without one last (`u32::MAX`).
+
+The field is `order: Option<u32>`, not `priority`, deliberately: "priority"
+carries no agreed direction (DNS MX/SRV, AWS ALB rules and Envoy locality treat
+lower as preferred; Kubernetes `PriorityClass` and VRRP treat higher as
+preferred), and guessing wrong here silently inverts the pool without failing
+anything. `order` reads as an ascending position. It is unsigned because unset
+already means "rank me last", so a negative order would have no meaning — serde
+rejects one at startup.
+
+**Key order inside an `rpcs` object is not part of that key, because it does not
+survive loading.** `chains[].rpcs` is `Vec<HashMap<String, RpcProviderConfig>>`,
+and every config file is read through `serde_json::Value` (whose `Map` is a
+`BTreeMap` — `preserve_order` is not enabled) before landing in a `HashMap`
+whose iteration order is randomly seeded per process. So the *array* index is
+usable as a tie-break; the object key order is gone by then. Writing providers
+in your preferred order in the JSON and expecting the first one to be primary
+does not work — set `order`.
+
+Before the sort existed, the startup primary was literally whatever the
+`HashMap` yielded: five runs of the equivalent four-key map produced four
+different first keys, so two replicas on one config could disagree and a restart
+could reshuffle away from a node you just fixed.
+`test_ranked_rpc_providers_order_is_stable_across_parses` guards this — distinct
+`HashMap` instances get distinct hasher seeds, so an order-by-iteration
+regression fails it inside a single process run.
+
+Diagnostics: node names are `"<chain name>[<provider key>]"` (e.g.
+`Ethereum[drpc]`). Each chain logs its resolved pool once at startup, at INFO —
+`Created layered provider for chain` carries `primary` (the startup primary) and
+`nodes` (the full order), so the answer to "which node is primary" never
+requires re-deriving the ranking by hand; failures and
+rotations name the node in `RPC request to node failed` and
+`Rotating primary RPC node after repeated failures` (`from`/`to`). URLs are
+never logged — they may embed API keys.
+
+Also worth knowing before chasing a rotation warning: primary is just the
+*scan start*. `pick_node` walks the pool round-robin from `primary_index`,
+skipping nodes in cooldown or over their `max_rps`, and the fallback path picks
+uniformly at random among available nodes ignoring the limiter. So a
+non-primary node serves plenty of traffic, and rotation only fires when the
+failing node *is* the primary (deliberate — see the comment in `mark_error`).
+Rotation is one-way: nothing moves the pointer back to the lowest-`order` node
+except wrapping all the way around — `order` sets the *startup* position, it is
+not a preference the pool drifts back to.
+
+Per-provider rotation knobs (`RpcProviderConfig`): `error_threshold` (default
+3) consecutive errors → cooldown; `cooldown_threshold` (default 1) cooldowns →
+rotate the primary away; `cooldown_secs` (default 60); `enabled: false` drops
+the provider from the pool entirely (and out of the ranking). Pool-wide
+retry/lag settings live in the per-chain `pool_config` (`PoolConfig`).
+
+---
+
+## An RPC URL Reaches Postgres and the Public Status API Through `reqwest::Error` Rendering
+
+**Symptom:** A secret embedded in an RPC URL (an API key in the path, query, or
+userinfo) ends up persisted in the database and served by a public endpoint,
+even though nothing in this codebase ever logs a URL on purpose.
+
+**Root cause:** `reqwest::Error` renders the full request URL in **both**
+`Display` (`" for url ({url})"`) and `Debug` (a literal `url` field). `alloy`
+boxes it verbatim in `TransportErrorKind::Custom(Box<dyn Error>)` under
+`#[derive(Debug, Error)]` with `#[error("{0}")]`, so both `{:?}` and `{:#}` of a
+transport error expose the URL — `without_url()` is unreachable through the
+box. Two sinks pick this text up and persist/serve it:
+
+- `range_driver.rs` builds `indexer_failures.reason` from `{:#}` of the
+  processing error before calling `FailureLedger::record` — a **Postgres**
+  column.
+- `avalanche/mod.rs` and `amb/indexer.rs` build
+  `CrosschainIndexerState::Failed(format!("{err:#}"))` — rendered into
+  `IndexerStatus.state` and returned by the **public** `GetFullStatus` /
+  `GetStatusByIndexerName` endpoints.
+
+**Fix:** `interchain-indexer-logic/src/secret.rs`'s `redact_urls` is the
+required boundary at both sinks — it reduces every URL in a string to
+`scheme://host[:port]/<redacted>`, dropping path, query, fragment, and
+userinfo, with no regex dependency. **Redact before `truncate_reason`, never
+after** — truncation can otherwise cut a URL mid-redaction and leave a
+fragment (`range_driver.rs`'s `MAX_REASON_LEN` truncation runs after
+`redact_urls` for exactly this reason).
+
+For the API-key feature (`interchain-indexer-server/src/config.rs`'s
+`ApiKeyConfig`/`ApiKeyLocation`), this is why `header` is the preferred
+location and `NodeConfig`/`CredentialHeader`
+(`interchain-indexer-logic/src/provider_layers.rs`) carry the key as a
+`Secret<String>` rather than URL-embedded: `HeaderValue::set_sensitive(true)`
+gives free redaction even from renderers this codebase does not control (it is
+called exactly once, in `credential_header_map`). `query`/`path` keys have no
+equivalent — they are part of the URL by construction, so they remain visible
+at `RUST_LOG=debug` through `alloy-transport-http`'s own `debug_span!`, which
+cannot be patched from this repo. The only reason that span is not currently
+visible in normal operation is the `alloy_transport_http=warn` filter in
+`justfile` and `docker/docker-compose.yml` — that is an incidental default, not
+a policy this code enforces, so do not rely on it if the log level is ever
+raised.
+
+`NodeConfig` deliberately derives `Clone` only, never `Debug` — a derived
+`Debug` on a struct holding a `Secret<String>` `http_url` would still be safe
+(`Secret`'s own `Debug` redacts unconditionally), but the struct comment exists
+so a future field addition doesn't assume otherwise.
+
+**Known residual channel — `redact_urls` is URL-shaped, not value-shaped.** It
+finds URLs, not secrets. If a node echoes the key back inside the *text* of a
+JSON-RPC error (`{"error":{"message":"invalid api key abc123"}}`), that string is
+not a URL, so it passes through unredacted into `failover_error`
+(`provider_layers.rs`), the failure ledger, and indexer state. Closing it would
+mean a process-wide registry of resolved secrets, scrubbing every error string by
+value — much more surface than the leak it removes, so it was consciously not
+built. Treat it as a reason to prefer `header` (a node cannot echo a header it
+was never sent in a URL) and to read a provider's error semantics before pointing
+production at it. Do not "fix" this by widening `redact_urls`: dropping arbitrary
+tokens from error text would destroy the diagnostics the ledger exists for.
+
+---
+
+## `.env` Is Loaded By `just run-dev` Only — Never Add `set dotenv-load`
+
+`justfile` deliberately does **not** set `dotenv-load`. The recipes that run
+the service with a dotenv file are `run-dev` (`.env`) and `run-dev-testnet`
+(`.env-testnet`):
+
+```just
+run-dev:
+    dotenv -e .env -- just run
+```
+
+`set dotenv-load := true` is a **global** setting — just has no per-recipe scope
+for it, and neither `dotenv-path` nor `dotenv-filename` changes that. Globally
+loaded, `.env` also reaches `just test` and `just test-with-db`, and that breaks
+them: the server tests boot the real `run()` against
+`interchain-indexer-server/tests/fixtures/chains-offline.json` (chains `1` and
+`100` only), and `load_chains_from_file` applies process-env overrides to
+*whatever* file it was given. An override addressing any other chain does not
+"not match" — per the env-merge rules it **appends a new entry** with the id
+injected, so an `INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__LOCATION`
+line in `.env` creates a chain `8021` carrying an `api_key` and nothing else,
+failing the typed parse with `missing field name` in every server test in the
+binary, from a file none of them mention.
+
+Consequences worth keeping straight:
+
+- Because `.env` is opt-in per invocation, it can hold both halves of a
+  credential — the `…__RPCS__<PROVIDER>__API_KEY__*` shape and its
+  `INTERCHAIN_INDEXER_RPC_API_KEY__*` value — which is what keeps `api_key` out of
+  the committed config entirely. `just run` then starts the same service without
+  the key, and `just run-dev` with it.
+- `dotenv` puts the variables in the environment *before* `just` starts, so they
+  also feed just's own `env_var_or_default` — `DB_*`, `RUST_LOG`, `DOCKER_NAME`
+  work from `.env` under `run-dev`. Sourcing inside a recipe would not do that.
+- Adding `set dotenv-load := true` reintroduces the fixture breakage above — and
+  silently, since an override for a chain that *does* exist in the fixture (`1` or
+  `100`) parses fine and merely changes what the "offline" tests talk to.
+- No committed file under `config/` or `docker/` may declare an `api_key` at all:
+  it would make the secret mandatory for every deployment reading that file.
+  `test_no_repo_config_file_declares_an_api_key` enforces this.
+
+---
+
+## `stats_chains_by_bridge` Per-Bridge Uniques Are Not Additive (ADR-009)
+
+`GET /api/v1/stats/chains` accepts an optional `bridge_ids` CSV filter backed
+by a companion snapshot, `stats_chains_by_bridge (bridge_id, chain_id)`,
+rebuilt in the same transaction as the exact global `stats_chains` by the same
+periodic worker (`InterchainDatabase::recompute_stats_chains`).
+
+**The exactness boundary, precisely:**
+
+- no/blank `bridge_ids` → reads `stats_chains` directly, exact, unchanged from
+  before this feature existed. This path must **never** be reimplemented as a
+  sum over `stats_chains_by_bridge` rows — that would only be correct while no
+  two bridges ever see the same address on the same chain, which is not
+  guaranteed (a bridge with `process_unknown_chains = true` can observe a
+  chain outside its own configured set).
+- one `bridge_ids` value → exact. A single bridge's distinct-user count cannot
+  be inflated by another bridge, because the cell is keyed by that bridge
+  alone.
+- two or more `bridge_ids` values → **sums per-bridge distinct counts**, which
+  overcounts an address by exactly (number of selected bridges that saw it on
+  that chain) − 1, but **only** when that address appears on the **same
+  chain** through more than one of the *selected* bridges. The same address on
+  two *different* chains is not an error — it legitimately belongs once in
+  each chain's own row.
+
+**Why the same-chain/same-address condition is the whole story:** the
+recompute derives both snapshots from one bridge-qualified, `MATERIALIZED` CTE
+of `(bridge_id, chain_id, address)` triples per domain (message/transfer).
+`COUNT(DISTINCT address) GROUP BY chain_id` (global arm) already dedupes an
+address across bridges on the same chain — that is what keeps `stats_chains`
+exact. `COUNT(*) GROUP BY (bridge_id, chain_id)` (per-bridge arm) counts rows
+that are already distinct *within* one bridge, so summing several such cells
+double-counts exactly the addresses the global arm dedupes away and nothing
+else.
+
+**Reading the observability signals** (see `stats/metrics.rs`,
+`stats/overlap_warning.rs`, `server.rs`):
+
+- `IndexedChains::configured_overlaps()` (startup-only warning) is *structural
+  risk*: it fires when a chain is configured for two or more distinct bridge
+  ids, whether or not any of them has actually observed a duplicate address
+  there yet. It says nothing about whether an overcount is currently real.
+- `interchain_indexer_stats_chains_bridge_sum_overcount_users{kind}` /
+  `..._affected_chains{kind}` (gauges, updated every successful recomputation)
+  are the *actual* signal: `SUM` over chains of `SUM(per_bridge_count) -
+  global_distinct_count`, computed **across all bridges**, not just a
+  particular request's selection. A positive gauge means *some* multi-bridge
+  selection is currently approximate somewhere in the config/history, not that
+  every multi-bridge request is affected — it is an upper bound, not a
+  per-request figure. Read it alongside `overlap_transition`'s one-shot
+  warn-on-appearance log, not instead of it: neither signal substitutes for
+  the other.
+- Both counters (`unique_transfer_users_count` and `unique_message_users_count`)
+  are scoped in every stats-chains snapshot even though only the transfer
+  count is exposed in the API response — `include_zero_chains = false` reads
+  both, so a message-only chain/bridge cell must still survive that guard.
+
+**Do not** derive `stats_chains_by_bridge`'s candidate rows (for
+`include_zero_chains = false`) from `bridge_contracts` — like every other
+membership question in the stats layer, use the in-memory `IndexedChains`
+(`selected_configured_union`), which distinguishes a bridge that is absent
+from config (no current candidates, but retained history still queryable)
+from one present with an empty contract set, per ADR-004 Decision 5.
+
+**`bridge_ids` restricts the chain list too, on purpose.** A live report
+(2026-08-25) initially read as "a chain visible without `bridge_ids` vanished
+once `bridge_ids` was added" and got "fixed" by dropping the candidate
+predicate entirely, making every known chain a zero-row candidate for any
+`bridge_ids` value regardless of relevance. That is wrong: the confirmed,
+correct contract is that `bridge_ids` scopes **both** the count and which
+chains can appear — a chain neither touched by, nor currently configured for,
+any of the selected bridges must not appear at all, even under
+`include_unindexed_chains=true`. The candidate predicate (`agg.chain_id IS NOT
+NULL OR c.id IN (selected bridges' current configured chains)`) is therefore
+load-bearing, not incidental; the original live-report symptom traced back to
+`stats_chains_by_bridge` simply being empty (periodic worker hadn't run yet
+on a fresh database), not to this predicate. Do not remove it again on a
+similar report — verify the snapshot actually has rows for the
+bridge/chain pair in question first.
+
+**Placeholder numbering, fixed alongside the above.** The `chain_ids`
+predicate in `list_stats_chains` hardcoded `$1, $2, ...` instead of deriving
+from `values.len()`, silently mis-binding once `Bridges` scope's own bridge-id
+(and, when non-empty, configured-chain-id) placeholders preceded it in
+`values`. Masked in the one test that combined both filters, because its `q`
+filter happened to narrow to the same answer the collision produced by
+accident — see `stats_chains_bridges_scope_chain_ids_placeholders_stay_correct_after_bridge_scope`
+for a case chosen so the collision is observably wrong instead of
+coincidentally right. Per `.memory-bank/rules/database.md`'s placeholder
+rule: derive every predicate's `$N` from `values.len() + 1` at the point of
+use, never a literal count of that predicate's own values.
+
+---
+
+## Some RPC Gateways Cross-Contaminate `eth_call` Responses Per Address
+
+**Symptom:** A token's `tokens.decimals` (and sometimes `name`/`symbol`) in
+the DB does not match its real on-chain value — observed as `decimals=32` for
+an 18-decimals token (chain 8021/Numine, WAVAX at
+`0x012cb6651cb29c7d5dc96173756a773f7fb87cfb`), which then propagates into
+`stats_asset_edges.decimals` and corrupts displayed/scaled amounts by orders
+of magnitude in `/stats/*` responses.
+
+**Root cause:** `Erc20TokenInfoFetcher::fetch_token_info`
+(`interchain-indexer-logic/src/token_info/fetchers/erc20.rs`) calls
+`name()`, `symbol()`, and `decimals()` on the same contract address in quick
+succession. Some Avalanche subnet RPC gateways (confirmed on Glacier's
+`https://glacier-api.avax.network/v1/ext/bc/{chainId}/rpc` proxy, at least
+for chain 8021) occasionally return the *wrong* call's response for a given
+request to the same `to` address — e.g. `decimals()` gets back the raw bytes
+of a `name()`/`symbol()` response. Confirmed via direct reproduction against
+the live endpoint: this happens with `tokio::try_join!` (concurrent) calls,
+with plain sequential `.await` calls, with a fresh connection per call
+(`pool_max_idle_per_host(0)`), and with HTTP/1.1 forced — so it is **not**
+something fixable by changing call ordering, connection reuse, or HTTP
+version on our side. It is an external gateway defect outside our control.
+
+Decoding a `name()`/`symbol()` response (ABI-encoded dynamic `string`) as if
+it were a `decimals()` response (ABI-encoded static `uint8`) reads the
+leading word of that response, which per the ABI spec is *always* the offset
+`0x20` for a single dynamic return value — i.e. decimals decodes to exactly
+**32**, regardless of the actual string. Rejecting the *decoded value* `32`
+outright is not sound though: a genuine `decimals() == 32` token would then
+be permanently unpersistable, since every real fetch would also be rejected.
+The decoded value alone cannot tell the two cases apart — the raw response
+can.
+
+**Fix:** `fetch_token_info` now inspects the raw `eth_call` response before
+decoding, via the generated call builder's `.call_raw()` (`erc20.rs`,
+`is_valid_uint8_word`). A genuine `decimals()` return is ABI-encoded as
+exactly one right-padded 32-byte word, whatever its value; the
+`name()`/`symbol()` string encoding this contamination actually carries is
+always longer (offset word + length word + data). A response that isn't
+exactly 32 raw bytes is rejected as a failed fetch — including a real
+`decimals() == 32` token's genuine (also 32-byte) response, which passes and
+decodes normally. Rejection leaves `tokens.decimals` as `NULL`, which the
+existing `kickoff_token_fetch_for_stats_enrichment` eligibility check
+(decimals `IS NULL`) already retries on a later background cycle — by then
+the gateway is usually no longer misbehaving for that address. `name`/`symbol`
+contamination has no equivalent generic detection (no ground truth to check
+against) and is a known residual risk, but is cosmetic, not
+financially significant like `decimals`.
+
+Confirmed live against the real (still-misbehaving) gateway after the fix:
+20/20 attempts against the corrupted address correctly rejected the 96-byte
+contaminated response (offset + length + `"Wrapped AVAX"`/`"WAVAX"` data)
+and never once decoded it into a bogus value.
+
+**If you find more corrupted rows:** `SELECT decimals, count(*) FROM tokens
+GROUP BY decimals ORDER BY decimals;` — real-world ERC20 decimals are
+essentially always ≤ 18; an outlier value (32 or otherwise) on a chain with a
+fragile/low-`max_rps` RPC provider is a strong signal of this same class of
+bug. Fix the specific `tokens` row and any `stats_asset_edges` rows derived
+from it directly via SQL — `propagate_token_info_to_stats_tables` only fills
+edge `decimals` when `NULL`, so correcting `tokens` alone does not
+retroactively fix an already-populated (wrong) edge value.
+
+---
+
+## Native Token Identity Must Survive Missing Seed Metadata
+
+**Symptom:** A native token appears as a zero-address contract in an API
+response, its metadata lookup tries ERC-20 calls, or its statistics edge has
+`decimals = NULL` after an unsuccessful metadata seed.
+
+**Root cause:** The Gnosis leg of every xDai transfer is native xDAI, which
+has no token contract and therefore no address to record. Leaving that side
+`NULL` is not an option: `stats/indexed_chains.rs::transfer_identity_ready_condition`
+only accepts a `NULL` token endpoint when its chain is *unindexed* for the
+bridge — Gnosis is very much indexed here, so every xDai transfer would
+defer forever with `stats_processed = 0`, invisible in bridged-token stats.
+
+The internal storage key is the twenty-byte zero-address sentinel:
+`interchain-indexer-logic/src/indexer/xdai/types.rs::NATIVE_SENTINEL`
+(`0x0000000000000000000000000000000000000000` on chain `100`), written to
+`crosschain_transfers.token_dst_address` (Eth→Gno) or `token_src_address`
+(Gno→Eth). This makes the Gnosis leg a
+real, non-NULL endpoint, so `ensure_asset_for_transfer`'s `conversion` branch
+(ADR-011) can resolve it to its own `stats_assets` row rather than deferring
+with `identity_incomplete`.
+
+**Post-ADR-011 correction:** the sentinel and the Ethereum-side ERC-20 land in
+**two separate** `stats_assets` rows joined by one `stats_asset_edges` row
+(`src_stats_asset_id` = the Ethereum DAI/USDS asset, `dst_stats_asset_id` = the
+Gnosis native-xDAI asset, for an Eth→Gno transfer), never merged into one
+shared row — merging them was the exact bug ADR-011 exists to fix. Do not
+"fix" a test or a live observation showing two assets for a DAI↔xDAI pair as
+if it were the fragmentation problem ADR-004's union-find addresses; that
+union-find still applies to `mirror` transfers only.
+
+**Type belongs to the token, independently of transfers.** Under
+[ADR-012](./adr/012-chain-local-token-types.md), `tokens.type` is authoritative
+and `stats_asset_tokens.type` carries its statistics projection. Both are
+non-null. `crosschain_transfers.type` and the mixed transfer enum variants are
+removed. `asset_linkage` still independently declares `mirror` or `conversion`.
+
+Before registry metadata exists, the shared `TokenType::from_address`
+fallback in `interchain-indexer-entity/src/manual/mod.rs` recognizes exactly
+twenty zero bytes as native. An empty address or another zero-byte length is
+not that sentinel. Other keys fall back to ERC-20 because all currently
+indexed contract tokens are ERC-20; an explicit registry kind takes precedence
+over the fallback. NFT ingestion is not supported.
+
+Both transfer and statistics APIs return `type = NATIVE` and a null address
+for native tokens. `TokenInfoService` skips contract fetching for the native
+storage key in both request-time lookup and stats enrichment, even when the
+metadata seed is missing. Do not remove these guards on the assumption that
+startup always manages to seed metadata.
+
+**Seed metadata separately:** `XDaiIndexer::start()` writes exactly one row —
+`chain_id = 100, address = 0x00…00, type = native, symbol = "xDAI", name =
+"xDai", decimals = 18` — through idempotent `upsert_token_info`. This remains
+indexer-specific work rather than a `server::run` responsibility. A failure
+logs a warning and does not stop ingestion; the seed retries on the next
+restart. Missing metadata can still leave edge decimals null: projection
+reads decimals from the endpoint selected by the sticky `amount_side`, so
+Gno→Eth edges need the Gnosis sentinel's metadata. Missing metadata must not
+change native identity, leak the sentinel, or cause a contract-fetch loop.
+
+**The sentinel constant is shared, not xDai-private.** If another bridge
+later writes a native leg on chain `100`, it must reuse
+`xdai::types::NATIVE_SENTINEL` rather than its own zero-address literal, or
+the two bridges' native xDAI legs form two disjoint `stats_assets` rows for
+the same coin instead of sharing one. This still holds under ADR-011's
+per-endpoint `conversion` resolution: `(100, NATIVE_SENTINEL)` is looked up
+per side regardless of linkage, so reusing the constant is what makes a
+second bridge's native leg land in the *same* Gnosis-native asset as xDai's,
+even though it no longer also merges with whatever asset sits on the other
+end of either bridge's edge.
+
+---
+
+## xDai Destination Events Can Carry Legacy Source Hashes Above The Epoch Floor
+
+The 2025-04-15 floors (Ethereum `22273407`, Gnosis `39569937`) constrain
+which logs are scanned, not the identity of messages completing there.
+The research note's **The epoch boundary is not clean on the destination
+side** documents 348 orphaned hash-based affirmations, three delayed Gno→Eth
+claims and one affirmed Ethereum plain-transfer deposit. A maintenance pause
+did not eliminate this population. Identity cannot be inferred solely from
+the destination contract version.
+
+Destination `bytes32` values are now classified per event: values through
+`u64::MAX` are nonces, while larger values are raw 32-byte source transaction
+hashes. The eight-byte threshold is about the numeric value (24 leading zero
+bytes for a nonce), not about four or eight leading zero bytes. Source events
+remain nonce-only and reject values above `u64::MAX`.
+
+Hash completions fetch the counterpart receipt and block before mutating the
+buffer. Their `native_id` and `src_tx_hash` are the raw source hash; sender and
+initial timestamp come from that receipt/block. A matching legacy two-argument
+source event supplies the observed source amount and recipient, while the
+destination completion independently supplies the destination amount. When the
+source event is not recognized, completion.value supplies both amounts, including
+late Gno→Eth claims. That source amount is inferred, not independently observed;
+Gno→Eth reconstruction emits a WARN with source hash/block and destination context.
+Sender and source timestamp still come from the fetched receipt/block. Full API
+fields do not imply full source verification: fallback cannot independently
+validate source recipient or preserve a source/payout amount difference. The API
+has no provenance marker for inferred src_amount; the WARN is the only indication.
+This is an accepted limitation, not a request to add historical grammar support.
+
+A hash-based `SignedForAffirmation` alone must not manufacture a transfer or
+be attached to the genuine nonce-based message for the same source transaction:
+those are distinct on-chain signing buckets. A successful legacy completion
+is stronger evidence: its bytes32 identifies the source transaction on the
+opposite chain, enabling a targeted source lookup even below the scan floor.
+For an Ethereum plain ERC-20 transfer, no bridge source event exists at all;
+only later affirmation makes it an observable cross-chain transfer.
+
+Two reconstruction traps matter when implementing this support:
+
+- A source block number belongs to the **source chain**. For a Gno→Eth
+  claim, Gnosis block `39557691` must never be compared with Ethereum's
+  USDS cutover `23748179`. The legacy 104-byte message format selects DAI
+  through `Message.parseMessage`; only Eth→Gno uses Ethereum source-block
+  asset thresholds. An asset resolver should require direction explicitly.
+- The fetched source receipt can contain the legacy two-argument
+  `UserRequestForSignature(address,uint256)` or
+  `UserRequestForAffirmation(address,uint256)`. Decode the correct proxy's
+  event to preserve its observed source amount and validate recipient;
+  do not replace that amount with completion.value. A missing bridge source
+  event is expected for an Ethereum plain token transfer. A Gnosis native send
+  emits UserRequestForSignature, but an older event topic can be unrecognized
+  by the decoder. Missing recognition must not prevent a successful legacy
+  completion from being indexed. Malformed recognized events and recipient
+  conflicts still fail rather than being silently replaced by the fallback.
+- Solidity event names are part of topic0. A sol! declaration named
+  `LegacyUserRequestForSignature` hashes that literal name, not the historical
+  `UserRequestForSignature` name. Tests that encode with the same declaration
+  cannot detect this mismatch; use the actual on-chain signature in fixtures.
+  Full historical grammar support remains outside the current fallback fix.
+
+Standalone hash confirmations — a hash-keyed `SignedForAffirmation` with no
+hash-keyed `AffirmationCompleted` of the same `bytes32` in its transaction —
+use the ordinary buffer/pending path and emit a WARN; they do not perform source
+RPC and do not bypass the confirmations FK. On mainnet they sign a disjoint
+on-chain `hashMsg` bucket that never executes, so they remain pending
+indefinitely by design: they are not confirmations of any execution, and this
+is not a reason to create a phantom message.
+
+A hash-keyed signature that **does** share its transaction with a hash-keyed
+completion is part of that execution (`executeAffirmation` emits both with one
+`bytes32`). `xdai::events::dispatch_transaction` pairs them in a pre-pass
+(`pair_colocated_hash_signatures`): the signature handler skips it and
+`handle_affirmation_completed` inserts it, as the last mutation of its `alter`,
+under the canonical key it resolved (ADR-015). Before this, the signature was
+keyed on the raw hash and orphaned — Chiado nonce 2 was `completed` with zero
+confirmations. Residual: when `requiredSignatures > 1`, the other hash-keyed
+signatures of an executed hash bucket sit in *other* transactions and still
+stay pending; no instance is known. A late confirmation for an already stored
+key is attached by the detached-confirmation channel (see *Backward Catchup
+Orphans Confirmations…*), so "a confirmation arriving after a completed message
+was flushed can form a new pending entry" no longer holds for xDai.
+
+**Late source enrichment and xDai amount assumptions.** Once a reconstructed completion and a source handler can
+produce the same canonical key (modern nonce aliases or future hash-keyed
+source handlers), finalization and eviction allow a later source-only entry
+under that key. `xdai/consolidation.rs::build_transfer` fills its
+unobserved destination amount from the source amount, and
+`message_buffer/persistence.rs::crosschain_transfers_on_conflict` prefers the
+incoming non-null amount. The message-level terminal guard does not protect
+the transfer row. If source and payout amounts differ, this changes an observed
+payout to an inferred amount. The requester confirmed equal source and
+destination amounts for the current xDai alias-reconciliation scope; do not
+require unequal-amount guards or fee-specific tests for that work. Revisit this
+merge behavior only if unequal amounts become supported. This does not relax
+the requirement to preserve the first canonical destination transaction when
+a later execution is observed.
+
+See [xDai protocol research](./research/xdai-bridge-protocol-and-indexing-fit.md),
+sections **The epoch boundary is not clean on the destination side** and
+**Plain-transfer deposits**. Ordinary nonce-based destination-only entries
+still need their source event; do not generalize legacy reconstruction to them.
+
+---
+
+## xDai Deployments Are Keyed On `(chain_id, side, version)`, And Its `version` Is A Per-Deployment Proxy Counter
+
+xDai no longer hardcodes chain ids 1 and 100. `Direction` maps to a *side*
+(`initiator_side`/`destination_side`), and `abi::AbiRegistry::chain_ids()`
+resolves that side to a configured chain id from `bridges.json`. Every id an
+xDai message writes — `crosschain_messages.src_chain_id`/`dst_chain_id`, both
+`crosschain_transfers` legs, and the leading 4 bytes of the `native_id` blob —
+comes from that pair, which each event handler stamps onto the buffered
+`Message` alongside `direction`.
+
+A message with a direction but no `chain_ids` — a `pending_messages.payload`
+written before the field existed and revived through `#[serde(default)]` —
+never falls back to a literal. It is reported as **not consolidatable**
+(`warn` + `interchain_indexer_xdai_messages_missing_chain_ids_total`), *not*
+as an error: `Consolidate::consolidate` is called from
+`maintenance.rs::classify_item`, which `?`-propagates into `plan_maintenance`
+before the maintenance transaction is opened, so an `Err` there would abort
+the flush, stats projection and cursor persistence for the whole bridge on
+every cycle, permanently, over one buffer entry. The entry stays buffered
+until its hot TTL offloads it; clear those `pending_messages` rows and let the
+blocks be re-indexed.
+
+The *chain ids* being config-driven is not the same as the *protocol
+constants* being deployment-aware, and the second half is where the trap is.
+Epoch floors and the Foreign reserve-asset table are **still in code**, in
+`indexer/xdai/version.rs` — deliberately, because `bridges.json` would then
+carry the same block numbers twice. They are simply no longer mainnet-only:
+each is declared per deployment and selected by chain id.
+
+Two registered deployments today:
+
+| Deployment | Foreign | Home | Foreign floor | Home floor | Foreign asset(s) |
+| --- | --- | --- | --- | --- | --- |
+| mainnet | Ethereum `1` | Gnosis `100` | 22273407 | 39569937 | DAI below 23748179, USDS from it |
+| testnet | Sepolia `11155111` | Chiado `10200` | 8239484 | 20553827 | one mock DAI, always |
+
+**`version` in `bridges.json` is the proxy's own `EternalStorageProxy.version()`
+counter, and it restarts at 1 per deployment.** Ethereum reports 9/10 and
+Gnosis 6/7; Sepolia reports 2 and Chiado 3. The numbers are therefore *not* a
+key on their own, which is why `version::grammar_for` takes
+`(chain_id, side, version)`. Keyed on `(side, version)` alone, a mainnet config
+could select the Sepolia grammar — and with it an epoch floor 14M blocks too
+low and a `source_asset` that does not exist on Ethereum — merely by writing
+`version: 2`. It is now a hard startup error that names every registered
+deployment. `getBridgeInterfacesVersion()` is useless for telling them apart:
+it returns `6.1.0` on all four proxies.
+
+Adding a third deployment means adding its grammar windows, floor constants and
+asset constants to `version.rs` — not a schema change. `bridges.json` is
+unchanged by all of this.
+
+Two things follow that are easy to get wrong:
+
+- **The Chiado floor is a source-event boundary, but not a destination-identity
+  boundary.** Block `20553827` installs Home v3 and changes
+  `UserRequestForSignature(address,uint256,bytes32)` to
+  `UserRequestForSignature(address,uint256,bytes32,address)`. The unchanged
+  `AffirmationCompleted.bytes32`, however, is whatever the oracle hands
+  `executeAffirmation`: the contract derives nothing, and the testnet oracle
+  alternated between nonce and transaction-hash conventions inside one
+  implementation window and re-affirmed deposits it had already affirmed the
+  other way. `20553827` also happens to be the lowest implementation boundary
+  that excludes every hash-keyed affirmation (the last is at 20553477; the
+  only later nonce-keyed one is at 20706963). Lowering it
+  produces **two `crosschain_messages` rows for one deposit**, which nothing
+  detects — the contract's own dedup is over
+  `keccak(recipient‖value‖bytes32)`, which differs between the two forms, so
+  both executions are valid on chain. The accepted cost is that Sepolia
+  deposits with nonces 0, 1 and 2 stay permanently `Initiated`: their
+  affirmations are below this floor, which is why the bridge's two sides are
+  indexed over ranges eleven months apart.
+
+  **Do not "fix" the asymmetry by lowering the floor.** Four of the six
+  hash-keyed affirmations it would admit resolve to Sepolia transactions
+  emitting the *modern* three-argument source event, and
+  `decode_legacy_source_event` ends with an `ensure!` rejecting exactly that
+  ("source receipt contains unsupported modern xDai source-request grammar").
+  Those blocks would not duplicate rows — they would error and retry forever.
+  Re-keying the affirmation to its source nonce fixes that, and then collides
+  with `ensure_completion_compatible` for the three deposits Chiado affirmed
+  *twice*, in two distinct transactions. The full per-affirmation breakdown,
+  and why closing the gap is not worth relaxing a mainnet-shared invariant, is
+  in
+  [the independent upgrade-history research](./research/xdai-bridge-sepolia-chiado-upgrade-history.md).
+- **`legacy_home_ethereum_asset` is total on purpose.** It resolves the
+  Home v6 `token_dst_address` fallback (the legacy 104-byte `parseMessage`
+  hardcodes one ERC-20) from `chain_ids.foreign`, and returns DAI for any
+  unrecognised chain id rather than erroring. It is read from
+  `Consolidate::consolidate`, i.e. inside the maintenance plan — see the skip
+  rationale above. Do not "tighten" it into a `Result`.
+
+Related: the Foreign version windows in `bridges.json` and the DAI→USDS
+boundary (`USDS_EPOCH_START_BLOCK`) are two independent statements of the same
+fact. `AbiRegistry::from_chains` asserts that every Foreign window's
+`source_asset` matches `legacy_ethereum_asset(chain_id, EthToGno,
+started_at_block)`, so an env override that shifts `started_at_block` fails at
+startup instead of silently labelling a range of transfers with the wrong
+`token_src_address`. Both sides of that comparison are per deployment.
+
+---
+
+## Retyping A Numeric Proto Field To `string` Silently Turns Any Sort On It Lexicographic
+
+**Symptom:** After `ChainIndexingProgress.chain_id` was retyped from `int64`
+to `string`, `GET /api/v1/status/indexing` would have emitted chain ids
+`{1, 2, 100}` in the order `1, 100, 2`. Nothing fails to compile: the sort key
+is still valid, just a `String` now, and `String: Ord` is lexicographic.
+
+**Root cause:** `collect_indexing_progress`
+(`interchain-indexer-server/src/services/status.rs`) built the proto items
+first and sorted them afterwards with
+`items.sort_by_key(|item| (item.bridge_id, item.chain_id))`. The proto struct
+is the *wire* representation; once its `chain_id` is a decimal string, that
+line orders by string, not by number.
+
+**Why no test caught it:** the shared test fixture
+(`config/omnibridge/bridges.json`) declares only chains `{1, 100}`, whose
+lexicographic and numeric orders coincide. A two-element fixture cannot
+distinguish the two orderings at all — you need at least three ids where the
+widths differ, e.g. `{1, 2, 100}`.
+
+**Rule:** settle ordering on the domain type before converting to the wire
+type, per `.memory-bank/rules/rust-style.md`'s "Domain Types over Storage
+Types". `status.rs` now sorts the `IndexingTarget` slice on the numeric `i64`
+and stringifies only when the proto struct is built;
+`bridge_proto.rs`'s `indexed_chain_ids` likewise maps `to_string()` *after*
+`IndexedChains::chain_ids_for`'s numeric sort.
+
+**When you next stringify a numeric proto field, grep for every `sort`,
+`sort_by_key`, `BTreeMap`, `BTreeSet`, `min`, `max` and `binary_search` that
+touches it** — all of them change meaning silently, and only the ones with a
+three-plus-element, mixed-width fixture will fail a test.
+`test_collect_indexing_progress_orders_chain_ids_numerically` (`status.rs`)
+is the guard for this specific field; it was confirmed to fail against the
+lexicographic sort before landing.
+
+---
+
+## Third-Party Log Noise Is Suppressed In Code, Not Only Via `RUST_LOG`
+
+`alloy_transport_http` wraps every JSON-RPC call in
+`#[instrument(name = "request", ...)]`, and `#[instrument]` defaults to the
+**INFO** level. `blockscout-service-launcher`'s `TracingFormat::Default` fmt
+layer is built with `FmtSpan::NEW | FmtSpan::CLOSE`, so each RPC call prints
+two INFO lines (`request{method_names=eth_getTransactionReceipt}: ... new` /
+`... close time.busy=...`). At the indexer's request rate that buries every
+other log line — including our own INFO logs — which is why deployments used
+to carry `RUST_LOG=info,alloy_transport_http=warn`.
+
+The launcher hardcodes `EnvFilter::builder().with_default_directive(INFO)
+.from_env_lossy()`, so there is no way to inject extra *default* directives
+through it. The programmatic hook it does expose is
+`tracing::init_logs_with_filter`, which takes a `FilterFn<&Metadata>` layered
+on top of that `EnvFilter`. `interchain-indexer-server/src/logging.rs` uses it:
+`init_logs` there is a drop-in replacement for the launcher's `init_logs` and
+drops anything from `NOISY_TARGETS` above `NOISY_TARGET_MAX_LEVEL` (WARN).
+
+Two properties worth knowing before touching it:
+
+- The filter is **AND**-ed with the `EnvFilter`, so it can only ever silence,
+  never re-enable. To keep the debugging escape hatch, `suppressed_targets`
+  drops any target that is *named* in `RUST_LOG` (coarse substring check), so
+  `RUST_LOG=info,alloy_transport_http=debug` still works.
+- A `FilterFn` on the fmt layer filters span lifecycle events too (that is what
+  makes it work here at all), and it filters them by the **span's** metadata —
+  suppressing the `request` span's `new`/`close` lines does **not** suppress a
+  WARN/ERROR logged inside that span, since those events carry their own
+  metadata. Real RPC failures still surface.
+
+Adding a new noisy dependency? Append its target to `NOISY_TARGETS` rather than
+extending a deployment's `RUST_LOG`.
+
+---
+
+## Published Message Aggregates Count Terminal States Only — Downstream Totals Will Not Match
+
+**Symptom:** someone compares `stats_messages_days` / `stats_messages` against a naive
+`count(*)` over `crosschain_messages`, or against the stats service's
+`newMessagesInterchain` chart, and the numbers disagree by tens of percent. The instinct
+is that one side is losing rows.
+
+**Root cause:** our aggregates count messages that have reached a **terminal** state, i.e.
+`completed` plus `failed`. In-flight messages (`initiated`, `ready_to_claim`) are not
+counted. The stats service counts **every** message regardless of status, because its
+chart is "messages initiated per day", not "messages delivered per day".
+
+Measured on a live mainnet AMB/Omnibridge dataset filtered to `src=100 OR dst=100`
+(2026-09-04), and the arithmetic closes exactly in both directions:
+
+| | count |
+|---|---|
+| `stats_messages_days` (ours) | 50 262 |
+| raw `completed` | 50 238 |
+| raw `failed` | 24 |
+| raw `initiated` | 21 158 |
+| raw `ready_to_claim` | 270 |
+| stats service, all statuses | 71 690 |
+
+`50 238 + 24 = 50 262`, and the four statuses sum to `71 690`. So the gap is exactly the
+21 428 in-flight messages — neither side is dropping anything.
+
+**Why it matters:** the two numbers are both correct and answer different questions. If a
+UI ever shows ours next to the stats service's, they will differ by the in-flight backlog
+and look like a bug. Say which question is being answered before comparing.
+
+Related: `stats_chains_by_bridge` per-bridge uniques are not additive either (ADR-009).
+
+---
+
+## Message History Is Not Append-Only — We Mutate Rows Long After Their Day Has Passed
+
+**Symptom:** a downstream consumer caches per-day counts and they slowly go stale, or a
+re-derived aggregate disagrees with a snapshot taken earlier, with no rows added for those
+days.
+
+**Root cause:** a bridge message is initiated on one chain and claimed on another, and the
+delay is unbounded. When the claim lands we update the **existing** row — `status` moves
+toward a terminal state, `dst_tx_hash` is filled — and that row's `init_timestamp` still
+points at the original day. So the aggregate for a day weeks or months in the past changes
+without any insert.
+
+Measured on the live stand: a message initiated **2025-03-24** was updated **2026-09-04**
+to `completed` with `dst_tx_hash` set, and 2909 rows were touched within one hour.
+Re-scanning a range rewrites rows too, so `updated_at > init_timestamp` is the norm rather
+than the exception here.
+
+**Why it matters:** any consumer that assumes "days in the past are settled" is wrong for
+this indexer, and the error accumulates silently. It is also why observability-sensitive
+predicates change retroactively: a message only satisfies "destination-side observed" once
+its `dst_tx_hash` arrives, which can be months after the day it belongs to.
+
+The stats service hit exactly this — see its
+`.memory-bank/gotchas.md` → *"Interchain Chart History Drifts After Catch-Up Completes"*.
+
+---
+
+## A `null` RPC Result Is Never A Failover Signal, So A Half-Archive Node Is Invisible
+
+**Symptom:** `indexer_failures` fills with `transaction receipt not found for tx 0x…` for a
+chain whose configured primary node serves every one of those receipts fine when queried by
+hand. Forward indexing looks healthy; only the replay of historical ranges fails, forever,
+with `attempts` climbing into the hundreds.
+
+**Root cause, in three parts.**
+
+1. **A provider can be archive for logs and not for receipts.** `gnosis.drpc.org` returned
+   the *complete* `eth_getLogs` set for a 2024 Gnosis range — 344 logs, byte-identical to
+   two archive nodes — while returning `null` from `eth_getTransactionReceipt` for those
+   very same transaction hashes. Receipt history there is roughly the last 20k–100k blocks.
+   So the pipeline always gets far enough to fail at the receipt stage, and never at the
+   log stage. Do not infer "this node has the history" from a working `eth_getLogs`.
+
+2. **`null` is a successful response, so the pool never punishes it.** `failover_error`
+   (`provider_layers.rs`) only inspects JSON-RPC *error* payloads. An empty result reaches
+   `dispatch` as `Ok`, hits `mark_ok`, and clears the node's error counter — no cooldown, no
+   primary rotation. `fetch_receipts_for_transactions` then turns the `None` into a terminal
+   error for the whole chunk, with no retry against a different provider. A node that lies
+   by omission is treated as the healthiest node in the pool.
+
+3. **The replay pass saturates the pool by construction, so "catch-up is done" buys
+   nothing.** `pick_node` is a non-blocking round-robin: as soon as the primary's `max_rps`
+   cells are spent, the next request goes to the next node, and when every limiter is dry
+   `execute` falls through to `pick_node(true)`, which picks *uniformly at random* among
+   available nodes. A single 500-block AMB chunk on Gnosis holds 47–365 transactions, and
+   each one costs two calls (`eth_getTransactionReceipt` + an un-deduplicated
+   `eth_getBlockByNumber`) — 94–730 calls per chunk, issued 25 at a time against a pool
+   budget of 50 + 5 + 2 rps. The pool is saturated for the entire chunk even when the chain
+   is fully caught up, so a ~3.5% share of calls lands on the bad node. Over 153
+   transactions that is a 99.6% chance the chunk dies; over 365, 99.9998%. The same
+   interval then fails on every retry, indefinitely.
+
+Forward indexing survives the same code path only because 500 blocks take ~42 minutes to
+produce at head: the identical work spread over that window never exhausts the primary's
+budget, and recent receipts exist on the bad node anyway.
+
+**Diagnosis:** query the *same* hash against every provider in the chain's pool
+individually. A per-node split — some `OK`, some `null` — is this bug. Checking only the
+node you believe is primary proves nothing, because the pool spreads load across all of
+them regardless of `order`.
+
+**Related:** `primary_index` is a one-way ratchet. The only write outside construction is
+in `mark_error`; `health_tick` clears `disabled_until` and `consecutive_errors` but never
+re-homes the pointer to the highest-`order` node that recovered. With
+`cooldown_threshold: 1`, three consecutive errors permanently demote the preferred primary,
+and a node whose failure mode is `null` can never be demoted in turn — so the pointer can
+come to rest on the worst node in the pool and stay there.
+
+See also: *"RPC Pool Order Comes From `order`, Never From JSON Key Order"* and *"Some RPC
+Gateways Cross-Contaminate `eth_call` Responses Per Address"* — the same theme, a provider
+that answers confidently and wrongly.
+
+---
+
+## `google.protobuf.Struct` Serializes In `HashMap` Order, So Its JSON Keys Are Not Stable
+
+**Symptom:** `InterchainMessage.extra` and `IndexerStatus.extra_info` emit
+their keys in a different order on every process start. Nothing is wrong with
+the payload — the same keys and values are always there — but two responses
+from two pods are not byte-identical, and a snapshot/golden-file assertion on
+the serialized body would be flaky by construction.
+
+**Root cause:** `prost_wkt_types::Struct` is generated by prost without
+`btree_map`, so its field map is `std::collections::HashMap<String, Value>`
+(see the generated `google.protobuf.rs` in the `prost-wkt-types` build dir).
+Its hand-written `Serialize` impl iterates that map directly, and Rust's
+`HashMap` uses a per-process-random hash seed. Our own `build.rs` calls
+`.btree_map(["."])`, which is why every *other* map in this API is sorted —
+but it cannot reach inside an `extern_path`-ed well-known type.
+
+**Consequence worth knowing:** sorting a `serde_json::Value` before converting
+it into a `Struct` does nothing. `get_indexer_status`
+(`interchain-indexer-server/src/services/status.rs`) does exactly that with
+`sort_json_value` before `serde_json::from_value::<prost_wkt_types::Struct>`;
+the sort is discarded the moment the map becomes a `HashMap`.
+
+**Rule:** treat `Struct`-typed API fields as unordered JSON objects, which is
+what they are. Assert on parsed values (`body["extra"]["ns"]["field"]`), never
+on key order or on a serialized string. If a field ever genuinely needs a
+stable key order, it cannot be a `Struct` — it has to be a declared proto
+message or a `map<string, string>`, both of which `btree_map` does cover.
+
+
+## Raw SQL Must Cast PostgreSQL Enums For SeaORM ActiveEnum Decoding
+
+SeaORM-generated entity selects cast enum columns appropriately, but a raw SQL
+`QueryResult::try_get::<TokenType>` expects the enum's Rust representation
+(`String` / SQL `TEXT`). Selecting `sat.type` directly fails at runtime with
+"SQL type TEXT is not compatible with SQL type token_type". Select
+`sat.type::text AS token_type` when decoding the raw stats query; see
+`interchain-indexer-logic/src/bridged_tokens_query.rs` and its database-backed
+token-list tests. A successful `cargo check` cannot catch this mismatch.
+
+---
+
+## xDai Destination Identity And Anomalousness Are Orthogonal — A Hash Alone Is Never An Anomaly
+
+**Symptom:** It is tempting to treat any hash-keyed `AffirmationCompleted` /
+`RelayedMessage` (`bytes32 > u64::MAX`) as suspicious, or to gate the
+multiple-execution check on "is this identity a hash". Both are wrong.
+
+**Root cause:** Two independent axes got conflated. The *raw observed
+identity* (`MessageIdentity::Nonce` vs `MessageIdentity::SourceTransactionHash`,
+decided purely by whether the destination event's `bytes32` fits in `u64`) is
+about **how this one execution was encoded on chain**. *Anomalousness* is
+about **execution multiplicity** — whether more than one destination
+transaction resolves to the same *canonical* identity. These are unrelated:
+a hash-keyed completion is completely ordinary (Chiado nonce 2's fixture is
+the deliberate negative control — one hash-keyed completion, zero anomalies),
+and a nonce-keyed completion can just as easily be the *second* execution of
+a canonical key (nonce 0 and 1's direct nonce-keyed completions coexist with a
+later hash-keyed alias of the same nonce in the same Chiado window).
+
+**Fix:** Never branch multiple-execution logic on `MessageIdentity`'s variant.
+The only question `message_buffer::persistence::reconcile_destination_executions`
+asks is "does this observation's destination transaction hash match the
+canonical one for this key" — see `xdai::types::ObservedExecution::observed_identity`'s
+doc for why it stores the raw identity only as **provenance**, not as an input
+to the anomaly decision.
+
+---
+
+## A Fixture Built From The Same `sol!` Declaration It Tests Cannot Catch A Wrong `topic0`
+
+**Symptom:** `interchain-indexer-logic/src/indexer/xdai/events.rs`'s legacy
+two-argument source-event decoder filtered on `topic0` values that no
+deployed xDai contract has ever emitted (`LegacyUserRequestForAffirmation` /
+`LegacyUserRequestForSignature`, invented names to work around `alloy::sol!`
+rejecting two events of the same real name in one macro invocation) for an
+entire prior task's implementation and review cycle, and every test for that
+decoder passed the whole time.
+
+**Root cause:** The old tests built their fixture logs via
+`LegacyUserRequestForAffirmation { .. }.encode_log_data()` — which embeds
+`LegacyUserRequestForAffirmation::SIGNATURE_HASH` as `topics[0]` — and the
+decoder under test filtered on that exact same constant
+(`LegacyUserRequestForAffirmation::SIGNATURE_HASH`). Both sides of the
+assertion computed the identical (wrong) hash from the identical (wrong)
+declaration, so the test could never observe that neither one matches what
+the real two-argument `UserRequestForAffirmation(address,uint256)` /
+`UserRequestForSignature(address,uint256)` events actually hash to on chain
+(`0x1d491a42…` / `0x127650bc…`, verified via `cast keccak`).
+
+**Fix:** A fixture testing topic0 recognition must supply the topic0 as a
+literal hex string transcribed from an independent, verified source (an
+on-chain log, a spec table, `cast keccak` output) — never by reading
+`SomeType::SIGNATURE_HASH` off the same `sol!` block the code under test also
+reads from. See `events.rs::tests::REAL_USER_REQUEST_FOR_AFFIRMATION_TWO_ARG_TOPIC0`
+/ `REAL_USER_REQUEST_FOR_SIGNATURE_TWO_ARG_TOPIC0` and the
+`legacy_two_arg_log` helper built around them for the pattern this now uses.
+This generalizes beyond xDai: any test whose purpose is to pin an external
+protocol constant (a signature hash, a magic byte sequence, an address) is
+worthless if the value under test and the value asserted against trace back
+to the same source.
+
+---
+
+## `flushed_for_stats` / `flushed_for_enrichment` Are Cloned Before Destination-Execution Neutralization
+
+**Symptom (latent, not yet observed):** if stats projection or token
+enrichment ever start reading a destination-owned field
+(`dst_tx_hash`, `dst_amount`, `recipient_address`) off the `ConsolidatedMessage`
+models passed to `apply_stats_for_flushed_batch` /
+`kickoff_token_enrichment_for_flushed`, they will silently see the
+**pre-neutralization** value even when
+`message_buffer::persistence::reconcile_destination_executions` decided the
+stored execution wins and rewrote those fields on the batch that actually
+gets upserted.
+
+**Root cause:** `message_buffer::maintenance.rs::commit_maintenance` clones
+`flushed_for_stats` / `flushed_for_enrichment` from `consolidated_entries`
+**before** entering the transaction closure that neutralizes fields (via
+`reconcile_destination_executions`) and flushes. The clones and the
+neutralized-then-flushed `consolidated_entries` are two different values from
+that point on. This is currently safe only because
+`apply_stats_for_flushed_batch` reads exclusively the primary key off each
+model, and `token_keys_from_flushed_for_enrichment` reads exclusively token
+addresses — neither of which neutralization touches.
+
+When the stored execution wins, reconciliation restores the message's
+destination-owned columns and **drops the entry's transfers entirely** rather
+than neutralizing transfer columns one by one. The reason is the conflict
+policy: `crosschain_transfers_on_conflict` is `COALESCE(EXCLUDED.col,
+stored.col)` for every value column (plain `EXCLUDED` for the token chain
+ids), so any completion-derived column left `Set` silently overwrites the
+canonical transfer. For an xDai raw-hash identity whose source receipt has no
+recognized source event, `recipient_address` and `src_amount` both come from
+the completion, so a per-column fix that only nulled `dst_amount` let a late
+execution rewrite them. Dropping is safe because the stored canonical row was
+flushed with its transfer, and stats projection re-reads transfers from the
+database by message PK. The clones still hold the dropped transfer, so
+enrichment may look up its token addresses, which xDai takes from the shared
+source side. Regression:
+`persistence::tests::test_reconcile_late_raw_hash_execution_stored_wins_keeps_canonical_transfer`.
+
+**Fix / rule:** if a future change makes either stats or enrichment read
+`dst_tx_hash`, `dst_amount`, `recipient_address`, or `last_update_timestamp`
+off these pre-transaction clones, it must instead read the neutralized,
+post-reconciliation values — either move the clone to after
+`reconcile_destination_executions` runs, or pass the reconciled amounts
+through explicitly. Do not assume today's "clone before the transaction"
+shape stays safe under a change to what these two functions read.
+
+## `merge_assets` Must Fold Edge Aggregates Relatively — Bridges' Maintenance Transactions Overlap
+
+**Symptom:** none at runtime. A `stats_asset_edges` row ends up with a lower
+`transfers_count` / `cumulative_amount` than the transfers counted into it, with
+no log line and no metric; the lost transfer is already `stats_processed = 1`,
+so nothing ever re-counts it.
+
+**Root cause:** every bridge runs its own `MessageBuffer` maintenance loop, so
+maintenance transactions of different bridges run concurrently under READ
+COMMITTED. `merge_assets`, called from one bridge's projection, rewrites the
+winner/loser edges of **every** bridge, and it reads them without a lock. If the
+fold writes `transfers_count = <total computed from that read>`, an increment
+another bridge commits between the read and the `UPDATE` is overwritten. A
+relative write (`transfers_count = transfers_count + <losers' sum>`) re-reads
+the committed row after the row-lock wait and keeps it.
+
+**Rule:** in `stats/projection.rs`, aggregate columns on rows another bridge may
+touch are updated with `Expr::col(..).add(delta)`, never `Expr::value(total)`.
+`test_merge_fold_keeps_concurrent_increment_on_target_edge` (`database.rs`)
+holds an uncommitted increment on the fold target from a second connection and
+fails on the absolute form. The loser-row read → `DELETE` race predates this and
+is not closed; `SELECT … FOR UPDATE` on the edge load would close both.
+
+## Backward Catchup Orphans Confirmations Of Messages Finalized In A Later Batch
+
+**Status: fixed for xDai (2026-09-29, ADR-015); still present for AMB.** xDai
+implements `Consolidate::detached_confirmations`, and
+`persistence::attach_detached_confirmations` attaches such an entry's
+confirmations to the stored row inside the maintenance transaction and resolves
+the key. AMB keeps the `None` default, so the shape below still forms there.
+
+**Symptom:** a `completed` message has fewer `amb_messages_confirmations` rows
+than the bridge threshold, with no WARN and no failure-ledger entry. A
+`pending_messages` row with the **same** `message_id` holds the missing
+confirmations and nothing else (no source, no execution, `last_flushed_version
+= 0`), and is never flushed.
+
+**Root cause:** `LogStream` catchup scans *downward* in `batch_size` windows.
+A message whose source is already buffered finalizes as soon as the batch with
+its execution (and last signature) is processed; maintenance flushes it,
+deletes its pending row and evicts it from hot. The next, older batch then
+delivers the earlier signatures: `restore` misses (the pending row is gone),
+`alter` creates a fresh default entry under the same key, and `consolidate`
+returns `None` forever because it has no source. Realtime scans forward, so
+signatures always precede the execution there — which is why "no new orphans
+in the last N days" is not evidence the bug is inactive.
+
+**Evidence (xDai mainnet, 2026-09-29, `batch_size = 500`):** 297 Eth→Gno
+messages (plus one legacy hash-keyed one) had 1–3 of 4 confirmations; for every
+one, stored + orphaned signatures sum to exactly 4 distinct validators, every
+orphaned signature is strictly older than every stored one, and the split
+between them falls on a batch boundary with one common residue mod 500 across
+all 297. Gno→Eth is immune by construction: its source is the *oldest* Gnosis
+event, so backward catchup delivers it last and the message cannot finalize
+before its signatures arrive.
+
+**Rule:** never delete `pending_messages` rows merely because a finalized
+`crosschain_messages` row with the same key exists — such a row may be the only
+copy of late evidence — unless the same transaction has just attached its
+entire content (the xDai confirmation-only case). Any late arrival after
+finalization (backward catchup, a failure-ledger retry of an old range,
+arbitrary in-batch dispatch order racing a maintenance cycle) hits the same
+path.
+
+**Reproducing it on a stand:** a restricted recent range with a small
+`INTERCHAIN_INDEXER__XDAI_INDEXER__BATCH_SIZE` multiplies batch boundaries; the
+orphan check is "a `pending_messages` row that joins a `crosschain_messages` row
+on `(message_id, bridge_id)` and whose payload holds only
+`validator_confirmations`". Before the fix a 3-day mainnet range at
+`batch_size = 20` left 2 such rows; after it, none. At the production-like
+`batch_size = 500`, messages initiated 2026-04-15 – 2026-09-28 compared across two
+full catch-ups: 280 of 1917 Eth→Gno messages under-counted (575 orphaned
+signatures) before, all 1917 at 4 confirmations after, with 544 late signatures
+attached and identical message counts.
+
+**Also confirmed on AMB production (`bridge_id = 1`, 2026-09-29):** 1221
+confirmation-only rows with the same three invariants (totals of exactly 4, no
+duplicate validators, orphans strictly older). AMB adds a benign sibling shape:
+because an execution alone finalizes an AMB message (`build_destination_only`),
+a source processed *after* that creates a `pending_messages` row with source +
+confirmations that is flushed as `Partial` (its confirmations *are* stored) and
+then lingers forever — that is most of the ~31k leftover rows for completed
+messages.
+
+## AMB: ~7.7k Zero-Confirmation Messages With A Stored Source — Cause Not Yet Identified
+
+**Status: open (2026-09-29).** Not explained by the backward-catchup orphaning
+above (no `pending_messages` row holds their confirmations) and **not by a
+restart** — the service ran without one from its first deploy. Nearly all were
+processed in the first ~3 h after that deploy (initial catchup).
+
+**Shapes on AMB production (`bridge_id = 1`):**
+
+- 6579 Eth→Gno: `completed`, `src_tx_hash` set, zero confirmations, no pending
+  row. On-chain the 4th `SignedForAffirmation` shares the execution's
+  transaction (verified for recent executions and for 2025-02-19), so the
+  signatures exist and are in scan range.
+- 1088 Gno→Eth: `completed`, and a pending row with source only — no
+  confirmations and no `CollectedSignatures`.
+- Losses cluster by chain day (e.g. 2025-02-19: 214 of 277 Eth→Gno executions).
+
+**Ruled out so far:** restart; configured ABI/version windows (one window per
+contract, all `SignedFor*` events declared); lookup removal outside the
+`messageId`-collision paths (both collision paths WARN, and a collision rewrites
+the row as destination-only, which these rows are not); a `messageHash`
+mismatch — for 60 sampled 2025-02-19 Eth→Gno executions the `SignedForAffirmation`
+hash equals `keccak256(encodedData)` of the Foreign `UserRequestForAffirmation`.
+
+**Code facts found on the way (verified, impact on this population unproven):**
+
+- `amb::consolidation::build_destination_only` always returns empty
+  `amb_confirmations`, ignoring `message.validator_confirmations`, and the
+  collision branch sets `replace_existing`, whose delete cascades to stored
+  confirmations.
+- `message_hash_lookup` / `pending_message_hash_events` are process-local
+  `DashMap`s, never persisted or rebuilt. A restart *would* lose them, and
+  cursors do not protect queued events or cold-tier sources (`hot_ttl` default
+  10 s). This is a latent risk, not the cause of the numbers above.
+- `evm::group_logs_by_transaction` returns a `HashMap`, so transactions inside
+  one batch are dispatched in arbitrary order, not block order.
+
+## Resolved-Key Hot Eviction Must Happen At Most Once Per Key Per Cycle
+
+**Symptom:** none visible — evidence that was never persisted silently
+disappears from the hot tier.
+
+**Root cause:** `evict_resolved_keys` removes an entry with
+`remove_if(key, |item| item.version == planned_version)`. That CAS guards one
+entry *instance* against modification, not against re-creation. After a
+successful first removal (the Stale/Finalized path or the other resolution
+channel), a concurrent `alter` can re-create the key from a cold miss; a fresh
+default restarts at version 0 and reaches 1 after one mutation, which can equal
+a late entry's planning-time version. A second `remove_if` in the same cycle
+would then evict it.
+
+**Rule:** `maintenance::resolved_hot_evictions` selects each resolved key at
+most once and never a key already in `plan.hot_evictions`. The unit test
+`resolved_hot_evictions_skips_already_evicted_and_dedupes` fails if that guard
+is removed. Do not route resolved keys through `remove_from_hot_if_unchanged`
+either: its `Counts` bookkeeping is for the Stale/Finalized reasons only.
+
+## xDai `holds_only_confirmations` Must Classify Every `Message` Field
+
+**Symptom:** a new field added to `xdai::types::Message` does not compile in
+`xdai/consolidation.rs`.
+
+**Why that is intended:** `holds_only_confirmations` destructures `Message`
+exhaustively, without `..`. It decides whether the detached-confirmation channel
+may resolve and **evict** an entry after attaching its confirmations, so a field
+that carries evidence but is not checked would let real evidence be dropped.
+Classify the new field explicitly: identity metadata (`identity`, `direction`,
+`chain_ids` — ignored), the payload (`validator_confirmations`), or evidence
+that must be empty. Add a case to
+`detached_confirmations_is_confirmation_only_iff_no_evidence`.
+
+## xDai Gno→Eth `messageHash` Correlation State Is Process-Local
+
+`xdai::indexer` keeps `message_hash_lookup` (filled when
+`UserRequestForSignature` is processed) and `pending_message_hash_events`
+(`SignedForUserRequest` / `CollectedSignatures` that arrived before their
+source) only in memory; they are never persisted or rebuilt. A restart loses
+both. Cursors do not protect them: queued events are not buffer entries, and a
+source entry stops holding the cursor once offloaded to the cold tier
+(`hot_ttl` defaults to 10 s). So a restart between a Gno→Eth source and its
+signatures can lose those signatures and the `ReadyToClaim` transition;
+`Completed` still arrives through `RelayedMessage`. No such loss has been
+observed on xDai: a crash-and-restart in the middle of a stand catch-up and a
+restart-free full mainnet run both kept every Gno→Eth message at 4
+confirmations. Kept out of ADR-015 deliberately (no evidence); the likely fix,
+if it is ever needed, is rebuilding the lookup from `pending_messages`
+source payloads at startup.
+
+## Autoscout L1 Stats and Frontend Must Use the Same Interchain Slice
+
+For a shared Avalanche indexer, each L1's `stats` in interchain mode applies
+`STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID`, `COUNTERPARTY_CHAIN_IDS` and
+`BRIDGE_IDS` when materializing charts into its own DB; it cannot change that
+slice at read time. The frontend queries the shared indexer directly for
+messages and transfers, so it must pass the same home chain, permitted
+counterparties, bridge IDs, and `include_unindexed_chains` setting. On the
+frontend main commit `dec85c8`, API resource declarations omit
+`counterparty_chain_ids`, and the scope resolver omits `bridge_ids` when a focal
+`home_chain_id` is present. Until the frontend covers the full slice, it can
+show routes outside the paid/plugin scope while stats shows only the L1's
+configured charts. The old compose's `STATS__INTERCHAIN_PRIMARY_ID` is also
+deprecated. Check the deployed image capabilities, not just the presence of
+env names in `docker/docker-compose.yml`. See
+`docs/autoscout-interchain-integration.md`, `stats/stats-server/src/settings.rs`
+in the monorepo, and the frontend `src/api/utils/scope-filters.ts` and
+`src/api/resources/services/interchain-indexer.ts`.
+
+## Chain Icon Is Optional Even Though Runtime `ChainConfig` Uses `String`
+
+`ChainConfig.icon` accepts an absent or JSON `null` value and normalizes it to
+an empty string. Its conversion to the `chains` active model stores that empty
+string as SQL `NULL`. An Autoscout L1 onboarding therefore does not need an
+icon URL or `INTERCHAIN_INDEXER_CHAINS__<ID>__ICON`; passing an explicit URL
+remains supported. See `interchain-indexer-server/src/config.rs`.
+
+## Manual `stats_assets.icon_url` Is Permanent Except For Merge Loss And A One-Round-Trip Fill Race
+
+Three production writers derive `stats_assets.icon_url`, and all of them are
+fill-if-empty: `enrich_stats_assets_for_batch` and the metadata step of
+`merge_assets` (`interchain-indexer-logic/src/stats/projection.rs`), and
+`propagate_token_info_to_stats_tables`
+(`interchain-indexer-logic/src/database.rs`). An icon set through
+`SetStatsAssetIcon` therefore stays: no derivation replaces a non-empty value.
+There are two exceptions.
+
+1. **A lost merge.** `merge_assets` picks the winner by token count (ties go to
+   the lower id). The winner takes the loser's icon only when its own is empty,
+   and the loser row is deleted. A manual icon on a loser whose winner already
+   has an icon is gone, and the old `stats_asset_id` answers `NOT_FOUND`
+   afterwards. The audit row keeps `member_tokens`, which finds the successor
+   (`runbooks/write-api.md`).
+2. **A one-round-trip fill race.** Each writer reads the whole row and writes
+   name, symbol and icon back with no lock. An operator write that commits
+   between that read and that write is overwritten with the value the writer
+   read. The window is one round trip. Locking in the method cannot close it,
+   because the writers do not lock. Accepted in ADR-016.
+
+The method takes `FOR NO KEY UPDATE`, not `FOR UPDATE`. Stats maintenance
+checks its foreign keys (`stats_asset_tokens`, `stats_asset_edges`,
+`crosschain_transfers`) with `FOR KEY SHARE` on the asset row. That is
+compatible with `FOR NO KEY UPDATE` and conflicts with `FOR UPDATE`, which would
+wait for a long maintenance transaction and block its inserts meanwhile.
+`lock_timeout` (`SET LOCAL`, 5 s in the handler) bounds the wait for a
+concurrent writer, and its expiry (SQLSTATE `55P03`) becomes `ABORTED`.
+
+Do not lock `stats_asset_tokens` in the method: merge locks those rows while it
+already holds asset rows, so locking them in the other order builds a deadlock
+cycle. Source: `interchain-indexer-logic/src/write_api.rs`
+(`set_stats_asset_icon_tx`); the `write_api_db_*` tests pin the precedence,
+the lock compatibility and the timeout.
+
+## Admin JSON Bodies: int64 Are Strings, Non-Optional Proto Fields Are Required, `Content-Type` Is Mandatory, `oneof` Hides Conflicts; Pre-Handler Rejects Are Not Traced
+
+actix-prost deserializes the HTTP body into a generated JSON struct before the
+handler runs:
+
+- `int64` / `uint64` fields go through `DisplayFromStr`, so they are JSON
+  **strings** only: `"stats_asset_id": "42"` works and `42` is a 400.
+- Non-optional scalar, string and `repeated` fields are **required**: a missing
+  `reason` is a 400. An `optional` field is an `Option`, and absence is `None`.
+- A body without `Content-Type: application/json` is a 400 even when it is
+  valid.
+- A proto `oneof` is rendered with serde `flatten`, and a body that sets two
+  variants silently picks one. That is why the admin selectors are `optional`
+  fields and "both given" is checked explicitly (`resolve_icon_change`).
+
+All of these rejections happen before the handler. The `x-api-key` header is not
+checked and no trace event is emitted: an accepted deviation recorded in
+ADR-016, because logging them would mean overriding the launcher's app-wide
+`JsonConfig`. Do not expect the `write api …` trace events for such requests.
+`write_api_http_smoke` pins the number-instead-of-string and the
+missing-`Content-Type` cases. Sources: `interchain-indexer-proto/proto/v1/admin.proto`,
+`interchain-indexer-proto/tests/admin_json.rs`.
+
+## Write API Token Icon Is A Patch; TokenInfo (Blockscout) Is The Source Of Truth
+
+`upsert_token_info` (`interchain-indexer-logic/src/database.rs`) writes
+`token_icon` as `COALESCE("excluded"."token_icon", "tokens"."token_icon")`, not
+as a plain `EXCLUDED` column. Consequences, all intended:
+
+- The xDai native seed leaves the icon `NotSet`, so a re-seed on every start no
+  longer wipes an icon (it used to write `NULL`).
+- An icon from the token-info service (Blockscout) **replaces** a manual one:
+  Blockscout is the source of truth, and `SetTokenIcon` only patches a value
+  until it provides its own.
+- A Blockscout miss or error (`token_icon = None`) never erases an icon.
+
+This is what keeps a manual icon from `SetTokenIcon` alive across restarts and
+background refreshes. Do not "simplify" it back to
+`update_columns([.., TokenIcon])`. The `token_upsert_db_*` tests and
+`token_icon_db_xdai_reseed_keeps_an_existing_native_icon` pin it.
+
+`SetTokenIcon` updates only `tokens.token_icon` of an existing row and never
+touches `stats_assets` or `stats_asset_tokens`; an empty asset icon can still be
+filled later from the token by the existing fill-if-empty derivation.
+
+After a code rollback to the old rule, the next xDai start erases the native
+icon and Blockscout misses erase ERC-20 icons: re-apply manual icons from
+`write_api_audit_log` (`runbooks/write-api.md`). The cache protocol that makes
+the new value visible without a restart is described in "Token Cache Writers W1,
+W3 And Admin Invalidation Share The Per-Key Mutex".

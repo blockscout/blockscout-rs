@@ -1597,13 +1597,13 @@ checksum = "8b75356056920673b02621b35afd0f7dda9306d03c79a30f5c56c44cf256e3de"
 
 [[package]]
 name = "async-trait"
-version = "0.1.89"
+version = "0.1.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9035ad2d096bed7955a320ee7e2230574d28fd3c3a0f186cbea1ff3c7eed5dbb"
+checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.117",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -4060,6 +4060,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "interchain-indexer-filters"
+version = "0.0.0"
+dependencies = [
+ "interchain-indexer-entity",
+ "sea-orm",
+]
+
+[[package]]
 name = "interchain-indexer-logic"
 version = "0.1.0"
 dependencies = [
@@ -4081,6 +4089,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "interchain-indexer-entity",
+ "interchain-indexer-filters",
  "interchain-indexer-migration",
  "interchain-indexer-proto",
  "itertools 0.14.0",
@@ -4095,6 +4104,7 @@ dependencies = [
  "reqwest-retry",
  "rstest",
  "sea-orm",
+ "sea-orm-migration",
  "serde",
  "serde_json",
  "serde_with",
@@ -4106,6 +4116,7 @@ dependencies = [
  "tower 0.4.13",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -4132,6 +4143,7 @@ dependencies = [
  "prost-wkt-build",
  "prost-wkt-types",
  "serde",
+ "serde_json",
  "serde_with",
  "tonic",
  "tonic-prost",
@@ -4165,11 +4177,14 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
+ "thiserror 2.0.18",
  "tokio",
  "tonic",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -7426,6 +7441,17 @@ name = "syn"
 version = "2.0.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e665b8803e7b1d2a727f4023456bbbbe74da67099c585258af0ad9c5013b9b99"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
+name = "syn"
+version = "3.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
 dependencies = [
  "proc-macro2",
  "quote",

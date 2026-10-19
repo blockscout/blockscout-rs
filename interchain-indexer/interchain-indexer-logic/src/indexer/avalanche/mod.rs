@@ -31,7 +31,7 @@ use alloy::{
     sol_types::SolEvent,
 };
 use anyhow::{Context, Error, Result, anyhow, ensure};
-use futures::{StreamExt, TryStreamExt, stream, stream::SelectAll};
+use futures::{StreamExt, TryStreamExt, stream};
 use itertools::Itertools;
 use std::sync::atomic::Ordering;
 
@@ -46,23 +46,46 @@ use crate::{
     CrosschainIndexer, CrosschainIndexerState, CrosschainIndexerStatus, InterchainDatabase,
     StatsService,
     avalanche::settings::AvalancheIndexerSettings,
-    log_stream::LogStream,
+    avalanche_data_api::blockchain_id_to_cb58,
+    indexer::{
+        failure_ledger::FailureLedger,
+        range_driver::{BatchError, RangeDriver, RangeProcessor},
+    },
+    log_stream::LogBatch,
     message_buffer::{Key, MessageBuffer},
+    protocol_metadata::{
+        AvalancheIcmDestination, UnresolvedDestination, UnresolvedDestinationProtocol,
+        UnresolvedReason,
+    },
+    secret::redact_urls,
 };
 
 use abi::{ITeleporterMessenger, ITokenHome, ITokenTransferrer};
-use blockchain_id_resolver::BlockchainIdResolver;
+use blockchain_id_resolver::{BlockchainIdResolver, Resolution};
 
 use types::{
     AnnotatedEvent, AnnotatedICTTSource, CallOutcome, Message, MessageExecutionOutcome,
     SentOrRouted, SentOrRoutedAndCalled, TokenTransfer,
 };
 
+/// One chain this bridge indexes: every Teleporter Messenger deployment
+/// configured on it, scanned as a single unit.
+///
+/// **One config per chain, not per contract.** Checkpoints, the failure ledger
+/// and the progress API are all keyed `(bridge_id, chain_id)`, so a chain
+/// covered by several independent scanners has several producers writing one
+/// scan frontier. Whichever finished first published a floor for the pair —
+/// `mark_catchup_complete` lowers `catchup_max_cursor` with `LEAST` — and after
+/// a restart the others resumed from it, never scanning the range they had
+/// left. That loss needs no RPC failure and leaves no ledger row: the blocks
+/// were "scanned" as far as every shared record could tell.
 #[derive(Clone, Debug)]
 pub struct AvalancheChainConfig {
     pub chain_id: i64,
     pub provider: DynProvider<Ethereum>,
-    pub contract_address: Address,
+    pub contract_addresses: Vec<Address>,
+    /// The lowest `started_at_block` among this chain's contracts — the only
+    /// floor under which every configured address is covered.
     pub start_block: u64,
 }
 
@@ -143,6 +166,13 @@ impl AvalancheIndexer {
             "Avalanche indexer requires at least one configured chain"
         );
 
+        validate_chain_configs(&chains)?;
+
+        settings
+            .failure_retry
+            .validate()
+            .context("invalid Avalanche indexer failure_retry settings")?;
+
         // Validate home_chain if set: it must be one of the configured chains.
         let home_chain = home_chain
             .map(i64::try_from)
@@ -204,9 +234,11 @@ impl AvalancheIndexer {
     ///
     /// - Restores cursors from checkpoints (or starts from config).
     /// - Builds one log stream per chain (catchup + realtime).
-    /// - Merges streams and processes batches in order of arrival.
+    /// - Drives one sequential handler per chain concurrently, so a slow or
+    ///   throttled chain cannot delay its siblings.
     async fn run(self) -> Result<()> {
         let db = (*self.db).clone();
+        let ledger = Arc::new(FailureLedger::new(self.db.clone()));
         let bridge_id = self.bridge_id;
         let chains = self.chains;
         let home_chain = self.home_chain;
@@ -215,10 +247,11 @@ impl AvalancheIndexer {
         let settings = self.settings;
         let buffer = self.buffer;
 
-        let chain_ids: HashSet<i64> = chains.iter().map(|c| c.chain_id).collect();
+        let chain_ids: Arc<HashSet<i64>> = Arc::new(chains.iter().map(|c| c.chain_id).collect());
 
         let data_api_settings = settings.data_api_client_settings.clone();
-        let blockchain_id_resolver = BlockchainIdResolver::new(data_api_settings, db.clone());
+        let blockchain_id_resolver =
+            Arc::new(BlockchainIdResolver::new(data_api_settings, db.clone()));
 
         tracing::info!(
             bridge_id,
@@ -226,92 +259,181 @@ impl AvalancheIndexer {
             "starting Avalanche indexer"
         );
 
-        let mut combined_stream = SelectAll::new();
+        let mut streams = Vec::with_capacity(chains.len());
 
-        for chain in chains {
+        for chain in &chains {
             let chain_id = chain.chain_id;
-            let start_block = chain.start_block;
-            let contract_address = chain.contract_address;
-            let provider = chain.provider.clone();
 
-            // Restore checkpoint if it exists for this bridge and chain.
-            let checkpoint = db.get_checkpoint(bridge_id as u64, chain_id as u64).await?;
+            let filter = teleporter_log_filter(&chain.contract_addresses)
+                .with_context(|| format!("failed to build log filter for chain {chain_id}"))?;
 
-            let (realtime_cursor, catchup_cursor) = if let Some(cp) = checkpoint {
-                let realtime_cursor = cp.validated_realtime_cursor();
-                let catchup_cursor = cp.validated_catchup_cursor();
+            tracing::info!(
+                bridge_id,
+                chain_id,
+                contract_count = chain.contract_addresses.len(),
+                "resolved Avalanche contract set for chain"
+            );
 
-                tracing::info!(
-                    bridge_id,
-                    chain_id,
-                    realtime_cursor,
-                    catchup_cursor,
-                    "restored Avalanche indexer checkpoint"
-                );
+            // Checkpoint restore, scan-floor seeding and stream construction
+            // are protocol-independent: one shared builder so Avalanche and
+            // AMB cannot drift on cursor validation or floor seeding.
+            let stream = crate::indexer::evm::build_log_stream_for_chain(
+                chain.provider.clone(),
+                chain_id,
+                bridge_id,
+                filter,
+                chain.start_block,
+                &db,
+                settings.pull_interval_ms,
+                settings.batch_size,
+            )
+            .await?;
 
-                (realtime_cursor, catchup_cursor)
-            } else {
-                // No checkpoint yet: start from configuration.
-                let latest_block = provider.get_block_number().await.with_context(|| {
-                    format!("failed to fetch latest block for chain {chain_id}")
-                })?;
-                (latest_block, latest_block.saturating_sub(1))
-            };
-
-            let filter = Filter::new()
-                .address(contract_address)
-                .events(ITeleporterMessenger::ITeleporterMessengerEvents::SIGNATURES);
-
-            tracing::info!(bridge_id, chain_id, "configured log stream");
-
-            let stream_provider = provider.clone();
-            let stream = LogStream::builder(provider.clone())
-                .filter(filter)
-                .poll_interval(settings.pull_interval_ms)
-                .batch_size(settings.batch_size)
-                .genesis_block(start_block)
-                .realtime_cursor(realtime_cursor)
-                .catchup_cursor(catchup_cursor)
-                .bridge_id(bridge_id)
-                .chain_id(chain_id)
-                .db(Arc::new(db.clone()))
-                .catchup()
-                .realtime()
-                .build()?
-                .map(move |logs| (chain_id, stream_provider.clone(), logs))
-                .boxed();
-
-            combined_stream.push(stream);
+            streams.push((chain_id, stream));
         }
 
-        let batch_ctx = BatchProcessContext {
+        let processor = AvalancheRangeProcessor {
             bridge_id,
-            chain_ids: &chain_ids,
+            chains,
+            chain_ids,
             home_chain,
             process_unknown_chains,
             reconstruct_incoming_ictt_transfers,
-            blockchain_id_resolver: &blockchain_id_resolver,
-            buffer: &buffer,
+            blockchain_id_resolver,
+            buffer,
+            batch_size: settings.batch_size,
+            receipt_concurrency: settings.receipt_concurrency,
         };
 
-        // Process events
-        while let Some((chain_id, provider, batch)) = combined_stream.next().await {
-            match process_batch(batch, chain_id, &batch_ctx, &provider).await {
-                Ok(_) => {
-                    tracing::debug!(bridge_id, chain_id, "processed log batch");
-                }
-                Err(err) => {
-                    tracing::error!(
-                        err = ?err,
-                        bridge_id,
-                        chain_id,
-                        "failed to process Avalanche log batch"
-                    );
-                }
-            }
-        }
+        RangeDriver::new(processor, ledger, settings.failure_retry.clone())
+            .run(streams)
+            .await?;
 
         tracing::warn!(bridge_id, "Avalanche indexer stream completed unexpectedly");
+        Ok(())
+    }
+}
+
+/// Owned form of [`BatchProcessContext`] for [`RangeProcessor`].
+/// `BatchProcessContext` itself borrows `run()`'s locals and cannot live
+/// behind a trait, so this struct owns the backing data instead and
+/// rebuilds the borrowed context per call in `process`.
+struct AvalancheRangeProcessor {
+    bridge_id: i32,
+    chains: Vec<AvalancheChainConfig>,
+    chain_ids: Arc<HashSet<i64>>,
+    home_chain: Option<i64>,
+    process_unknown_chains: bool,
+    reconstruct_incoming_ictt_transfers: bool,
+    blockchain_id_resolver: Arc<BlockchainIdResolver>,
+    buffer: Arc<MessageBuffer<Message>>,
+    batch_size: u64,
+    receipt_concurrency: u64,
+}
+
+impl AvalancheRangeProcessor {
+    fn chain_config(&self, chain_id: i64) -> Option<&AvalancheChainConfig> {
+        self.chains.iter().find(|c| c.chain_id == chain_id)
+    }
+}
+
+/// Rejects a chain set that would break the one-scanner-per-pair invariant.
+///
+/// Both checks are structural, not defensive. An empty address list reaches
+/// `Filter::address(vec![])`, which matches *every* address on the chain. Two
+/// configs sharing a `chain_id` become two streams over one
+/// `(bridge_id, chain_id)` checkpoint — the loss `AvalancheChainConfig`
+/// documents, and the reason the per-contract shape was removed.
+///
+/// Enforced at construction rather than at stream build so a bad config names
+/// the offending chain and fails `new()`, instead of taking the whole bridge's
+/// indexing task to `Failed` once it is already running. `AmbIndexer` gets the
+/// same guarantee from `AbiRegistry::from_chains`.
+fn validate_chain_configs(chains: &[AvalancheChainConfig]) -> Result<()> {
+    let mut seen_chain_ids = HashSet::new();
+    for chain in chains {
+        ensure!(
+            !chain.contract_addresses.is_empty(),
+            "Avalanche chain {} has no configured contract address",
+            chain.chain_id
+        );
+        ensure!(
+            seen_chain_ids.insert(chain.chain_id),
+            "Avalanche chain {} is configured more than once; one config per chain covers \
+             every address on it",
+            chain.chain_id
+        );
+    }
+    Ok(())
+}
+
+/// The log filter for one chain: every Teleporter Messenger deployment
+/// configured on it, and the full Teleporter event set.
+///
+/// The forward streams and the retry replay build their filter here, from the
+/// same address list, deliberately. They used to be two constructions, and a
+/// replay narrower than the forward path re-scans a recorded hole against the
+/// wrong addresses, finds nothing, and resolves a hole that was never fixed —
+/// the ledger reporting a repair that did not happen.
+///
+/// Rejects an empty address list rather than passing it to `Filter::address`,
+/// where it degrades to "match every address on the chain" — a filter that
+/// silently succeeds while pulling in unrelated contracts' logs.
+fn teleporter_log_filter(contract_addresses: &[Address]) -> Result<Filter> {
+    ensure!(
+        !contract_addresses.is_empty(),
+        "no configured Avalanche contract addresses"
+    );
+
+    Ok(Filter::new()
+        .address(contract_addresses.to_vec())
+        .events(ITeleporterMessenger::ITeleporterMessengerEvents::SIGNATURES))
+}
+
+#[async_trait]
+impl RangeProcessor for AvalancheRangeProcessor {
+    fn bridge_id(&self) -> i32 {
+        self.bridge_id
+    }
+
+    fn chain_ids(&self) -> Vec<i64> {
+        self.chains.iter().map(|c| c.chain_id).collect()
+    }
+
+    fn provider(&self, chain_id: i64) -> Option<DynProvider<Ethereum>> {
+        self.chain_config(chain_id).map(|c| c.provider.clone())
+    }
+
+    fn log_filter(&self, chain_id: i64) -> Result<Filter> {
+        let chain = self
+            .chain_config(chain_id)
+            .ok_or_else(|| anyhow!("no configured Avalanche chain for chain_id {chain_id}"))?;
+
+        teleporter_log_filter(&chain.contract_addresses)
+    }
+
+    fn batch_size(&self) -> u64 {
+        self.batch_size
+    }
+
+    async fn process(&self, chain_id: i64, batch: &LogBatch) -> Result<(), BatchError> {
+        let provider = self
+            .provider(chain_id)
+            .ok_or_else(|| anyhow!("no provider configured for chain_id {chain_id}"))?;
+
+        let ctx = BatchProcessContext {
+            bridge_id: self.bridge_id,
+            receipt_concurrency: self.receipt_concurrency.max(1) as usize,
+            chain_ids: &self.chain_ids,
+            home_chain: self.home_chain,
+            process_unknown_chains: self.process_unknown_chains,
+            reconstruct_incoming_ictt_transfers: self.reconstruct_incoming_ictt_transfers,
+            blockchain_id_resolver: &self.blockchain_id_resolver,
+            buffer: &self.buffer,
+        };
+
+        process_batch(&batch.logs, chain_id, &ctx, &provider).await?;
+        tracing::debug!(bridge_id = self.bridge_id, chain_id, "processed log batch");
         Ok(())
     }
 }
@@ -379,8 +501,14 @@ impl CrosschainIndexer for AvalancheIndexer {
 
             if let Err(err) = this.run().await {
                 error_count.fetch_add(1, Ordering::Relaxed);
-                tracing::error!(err = ?err, bridge_id, "Avalanche indexer task stopped with error");
-                *state.write() = CrosschainIndexerState::Failed(format!("{err:#}"));
+                // Redact once and use the same string for both sinks. The log
+                // needs it as much as the state does: a transport error carries
+                // the request URL in its cause chain, which `?err` renders in
+                // full, so logging the raw error here would leak a `query`/`path`
+                // API key to stdout even though the state below is redacted.
+                let redacted = redact_urls(&format!("{err:#}"));
+                tracing::error!(err = %redacted, bridge_id, "Avalanche indexer task stopped with error");
+                *state.write() = CrosschainIndexerState::Failed(redacted);
             }
             // On clean exit without error, the guard will set state to Idle
         });
@@ -449,21 +577,37 @@ impl CrosschainIndexer for AvalancheIndexer {
 ///    - at least one endpoint must equal `home_chain`
 fn should_process_message(
     source_chain_id: i64,
-    dest_chain_id: i64,
+    dest_chain_id: Option<i64>,
     chain_ids: &HashSet<i64>,
     process_unknown_chains: bool,
     home_chain: Option<i64>,
 ) -> bool {
     let source = chain_ids.contains(&source_chain_id);
-    let dest = chain_ids.contains(&dest_chain_id);
+    let dest = dest_chain_id.is_some_and(|id| chain_ids.contains(&id));
     let passes_chain_filter = (source && dest) || ((source || dest) && process_unknown_chains);
 
     let passes_home_chain_filter = match home_chain {
         None => true,
-        Some(chain_id) => source_chain_id == chain_id || dest_chain_id == chain_id,
+        Some(chain_id) => source_chain_id == chain_id || dest_chain_id == Some(chain_id),
     };
 
     passes_chain_filter && passes_home_chain_filter
+}
+
+/// Metric label for a destination resolution outcome. A closed set —
+/// `AVALANCHE_DESTINATION_RESOLUTION_TOTAL` documents why it must stay one.
+///
+/// Deliberately snake_case, and deliberately not
+/// `UnresolvedReason::as_str()`: that one is display text served to API
+/// clients and may be reworded, while these labels are a PromQL dimension
+/// that dashboards and alerts match on. The two are the same concept with
+/// opposite stability requirements — keep them apart.
+fn resolution_outcome_label(resolution: &Resolution) -> &'static str {
+    match resolution {
+        Resolution::Resolved(_) => "resolved",
+        Resolution::Unresolved(UnresolvedReason::UnknownIdentifier) => "unknown_identifier",
+        Resolution::Unresolved(UnresolvedReason::NoChainId) => "no_chain_id",
+    }
 }
 
 /// Extract the indexer message key from a Teleporter `messageID`.
@@ -489,6 +633,8 @@ struct BatchProcessContext<'a> {
     reconstruct_incoming_ictt_transfers: bool,
     blockchain_id_resolver: &'a BlockchainIdResolver,
     buffer: &'a Arc<MessageBuffer<Message>>,
+    /// Concurrent receipt + block fetches inside one batch.
+    receipt_concurrency: usize,
 }
 
 /// Process a batch of logs for a single chain.
@@ -496,7 +642,7 @@ struct BatchProcessContext<'a> {
 /// Logs are grouped by transaction hash so we can fetch the full receipt
 /// (including non-Teleporter logs) and block timestamp once per tx.
 async fn process_batch(
-    batch: Vec<Log>,
+    batch: &[Log],
     chain_id: i64,
     ctx: &BatchProcessContext<'_>,
     provider: &DynProvider<Ethereum>,
@@ -528,7 +674,7 @@ async fn process_batch(
             let logs = receipt.inner.logs().to_vec();
             Ok::<(B256, (Vec<Log>, Block)), anyhow::Error>((hash, (logs, block)))
         })
-        .buffer_unordered(25)
+        .buffer_unordered(ctx.receipt_concurrency.max(1))
         .try_collect()
         .await?;
 
@@ -896,15 +1042,26 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
     let (key, message_id_bytes) = parse_message_key(&event.messageID, ctx.bridge_id)
         .context("failed to parse message key")?;
 
+    let destination_blockchain_id: [u8; 32] = event.destinationBlockchainID.0;
     let dst_chain_hex = event.destinationBlockchainID.as_slice();
-    let dst_chain_id = ctx
+    let destination_hex = hex::encode_prefixed(dst_chain_hex);
+
+    let resolution = ctx
         .blockchain_id_resolver
-        .resolve(dst_chain_hex, ctx.process_unknown_chains)
+        .resolve_destination(dst_chain_hex, ctx.process_unknown_chains)
         .await?;
 
-    let destination_hex = hex::encode_prefixed(event.destinationBlockchainID.as_slice());
+    metrics::AVALANCHE_DESTINATION_RESOLUTION_TOTAL
+        .with_label_values(&[
+            &ctx.bridge_id.to_string(),
+            resolution_outcome_label(&resolution),
+        ])
+        .inc();
 
-    let destination_chain_id = dst_chain_id;
+    let destination_chain_id = match resolution {
+        Resolution::Resolved(id) => Some(id),
+        Resolution::Unresolved(_) => None,
+    };
 
     if !should_process_message(
         ctx.chain_id,
@@ -917,7 +1074,7 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
             message_id = %hex::encode(message_id_bytes),
             destination_blockchain_id = %destination_hex,
             source_chain_id = ctx.chain_id,
-            destination_chain_id,
+            destination_chain_id = ?destination_chain_id,
             block_number = ctx.block_number,
             transaction_hash = %transaction_hash,
             log_index,
@@ -927,6 +1084,19 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
             "skipping SendCrossChainMessage: filtered by bridge chain policy"
         );
         return Ok(());
+    }
+
+    if let Resolution::Unresolved(reason) = resolution {
+        tracing::warn!(
+            bridge_id = ctx.bridge_id,
+            source_chain_id = ctx.chain_id,
+            block_number = ctx.block_number,
+            transaction_hash = %transaction_hash,
+            destination_blockchain_id = %destination_hex,
+            network = ?ctx.blockchain_id_resolver.network(),
+            reason = ?reason,
+            "accepted send with unresolved destination"
+        );
     }
 
     let chain_id = u64::try_from(ctx.chain_id).context("chain_id out of range")?;
@@ -959,6 +1129,21 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
                 destination_chain_id,
             });
             msg.transfer = transfer;
+            msg.unresolved_destination = match resolution {
+                Resolution::Unresolved(reason) => Some(UnresolvedDestination {
+                    reason: reason.as_str().to_owned(),
+                    protocol: UnresolvedDestinationProtocol::AvalancheIcm(
+                        AvalancheIcmDestination {
+                            blockchain_id: destination_hex.clone(),
+                            blockchain_id_cb58: blockchain_id_to_cb58(&destination_blockchain_id),
+                            network: ctx.blockchain_id_resolver.network(),
+                        },
+                    ),
+                }),
+                // Re-observing the same send with a now-resolved destination
+                // clears a stale marker directly in the buffer.
+                Resolution::Resolved(_) => None,
+            };
             Ok(())
         })
         .await?;
@@ -971,7 +1156,7 @@ async fn handle_send_cross_chain_message(ctx: LogHandleContext<'_>) -> Result<()
         log_index,
         signature = %topic0,
         destination_blockchain_id = %destination_hex,
-        destination_chain_id,
+        destination_chain_id = ?destination_chain_id,
         "processed SendCrossChainMessage"
     );
 
@@ -999,7 +1184,7 @@ fn parse_execution_outcome_log(
                             block_number,
                             block_timestamp,
                             source_chain_id,
-                            destination_chain_id,
+                            destination_chain_id: Some(destination_chain_id),
                         })
                     }),
                 ITeleporterMessenger::MessageExecutionFailed::SIGNATURE_HASH => log
@@ -1013,7 +1198,7 @@ fn parse_execution_outcome_log(
                                 block_number,
                                 block_timestamp,
                                 source_chain_id,
-                                destination_chain_id,
+                                destination_chain_id: Some(destination_chain_id),
                             }
                             .into(),
                         )
@@ -1053,7 +1238,7 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
 
     if !should_process_message(
         source_chain_id,
-        ctx.chain_id,
+        Some(ctx.chain_id),
         ctx.chain_ids,
         ctx.process_unknown_chains,
         ctx.home_chain,
@@ -1119,7 +1304,7 @@ async fn handle_receive_cross_chain_message(ctx: LogHandleContext<'_>) -> Result
                 block_number: ctx.block_number,
                 block_timestamp: ctx.block_timestamp,
                 source_chain_id,
-                destination_chain_id,
+                destination_chain_id: Some(destination_chain_id),
             });
             // Clear a source-side-less arm restored from the cold tier while
             // the kill switch was on: without this, an entry offloaded to
@@ -1179,7 +1364,7 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
 
     if !should_process_message(
         source_chain_id,
-        ctx.chain_id,
+        Some(ctx.chain_id),
         ctx.chain_ids,
         ctx.process_unknown_chains,
         ctx.home_chain,
@@ -1219,7 +1404,7 @@ async fn handle_message_executed(ctx: LogHandleContext<'_>) -> Result<()> {
                 block_number: ctx.block_number,
                 block_timestamp: ctx.block_timestamp,
                 source_chain_id,
-                destination_chain_id,
+                destination_chain_id: Some(destination_chain_id),
             }));
             // Call unconditionally: parse_receiver_ictt_logs also enforces the
             // batched-receipt invariants (multiple/mismatched receiver logs in
@@ -1282,7 +1467,7 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
 
     if !should_process_message(
         source_chain_id,
-        ctx.chain_id,
+        Some(ctx.chain_id),
         ctx.chain_ids,
         ctx.process_unknown_chains,
         ctx.home_chain,
@@ -1323,7 +1508,7 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
                         block_number: ctx.block_number,
                         block_timestamp: ctx.block_timestamp,
                         source_chain_id,
-                        destination_chain_id,
+                        destination_chain_id: Some(destination_chain_id),
                     }
                     .into(),
                 ));
@@ -1357,15 +1542,21 @@ async fn handle_message_execution_failed(ctx: LogHandleContext<'_>) -> Result<()
 
 #[cfg(test)]
 mod tests {
-    use super::{gate_receiver_ictt_arm, metrics, should_process_message};
-    use crate::indexer::avalanche::{abi::ITokenTransferrer, types::TokenTransfer};
+    use super::{
+        Resolution, gate_receiver_ictt_arm, metrics, resolution_outcome_label,
+        should_process_message,
+    };
+    use crate::{
+        indexer::avalanche::{abi::ITokenTransferrer, types::TokenTransfer},
+        protocol_metadata::UnresolvedReason,
+    };
     use alloy::primitives::{Address, U256};
     use rstest::rstest;
     use std::collections::HashSet;
 
     struct ShouldProcessMessageCase {
         source_chain_id: i64,
-        destination_chain_id: i64,
+        destination_chain_id: Option<i64>,
         process_unknown_chains: bool,
         home_chain: Option<i64>,
         expected: bool,
@@ -1374,128 +1565,173 @@ mod tests {
     #[rstest]
     #[case::process_unknown_false_no_home_known_to_known(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 2,
+        destination_chain_id: Some(2),
         process_unknown_chains: false,
         home_chain: None,
         expected: true,
     })]
     #[case::process_unknown_false_no_home_known_to_unknown(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 999,
+        destination_chain_id: Some(999),
         process_unknown_chains: false,
         home_chain: None,
         expected: false,
     })]
     #[case::process_unknown_false_no_home_unknown_to_known(ShouldProcessMessageCase {
         source_chain_id: 999,
-        destination_chain_id: 2,
+        destination_chain_id: Some(2),
         process_unknown_chains: false,
         home_chain: None,
         expected: false,
     })]
     #[case::process_unknown_false_no_home_unknown_to_unknown(ShouldProcessMessageCase {
         source_chain_id: 999,
-        destination_chain_id: 1000,
+        destination_chain_id: Some(1000),
         process_unknown_chains: false,
         home_chain: None,
         expected: false,
     })]
     #[case::process_unknown_false_home_known_and_not_home(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 2,
+        destination_chain_id: Some(2),
         process_unknown_chains: false,
         home_chain: Some(1),
         expected: true,
     })]
     #[case::process_unknown_false_home_known_to_known_not_home(ShouldProcessMessageCase {
         source_chain_id: 2,
-        destination_chain_id: 3,
+        destination_chain_id: Some(3),
         process_unknown_chains: false,
         home_chain: Some(1),
         expected: false,
     })]
     #[case::process_unknown_false_home_known_to_unknown(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 999,
+        destination_chain_id: Some(999),
         process_unknown_chains: false,
         home_chain: Some(1),
         expected: false,
     })]
     #[case::process_unknown_false_home_unknown_to_home(ShouldProcessMessageCase {
         source_chain_id: 999,
-        destination_chain_id: 1,
+        destination_chain_id: Some(1),
         process_unknown_chains: false,
         home_chain: Some(1),
         expected: false,
     })]
     #[case::process_unknown_true_no_home_known_to_known(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 2,
+        destination_chain_id: Some(2),
         process_unknown_chains: true,
         home_chain: None,
         expected: true,
     })]
     #[case::process_unknown_true_no_home_known_to_unknown(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 999,
+        destination_chain_id: Some(999),
         process_unknown_chains: true,
         home_chain: None,
         expected: true,
     })]
     #[case::process_unknown_true_no_home_unknown_to_known(ShouldProcessMessageCase {
         source_chain_id: 999,
-        destination_chain_id: 2,
+        destination_chain_id: Some(2),
         process_unknown_chains: true,
         home_chain: None,
         expected: true,
     })]
     #[case::process_unknown_true_no_home_unknown_to_unknown(ShouldProcessMessageCase {
         source_chain_id: 999,
-        destination_chain_id: 1000,
+        destination_chain_id: Some(1000),
         process_unknown_chains: true,
         home_chain: None,
         expected: false,
     })]
     #[case::process_unknown_true_home_known_to_known_including_home(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 2,
+        destination_chain_id: Some(2),
         process_unknown_chains: true,
         home_chain: Some(1),
         expected: true,
     })]
     #[case::process_unknown_true_home_known_to_unknown_with_home_src(ShouldProcessMessageCase {
         source_chain_id: 1,
-        destination_chain_id: 999,
+        destination_chain_id: Some(999),
         process_unknown_chains: true,
         home_chain: Some(1),
         expected: true,
     })]
     #[case::process_unknown_true_home_unknown_to_home(ShouldProcessMessageCase {
         source_chain_id: 999,
-        destination_chain_id: 1,
+        destination_chain_id: Some(1),
         process_unknown_chains: true,
         home_chain: Some(1),
         expected: true,
     })]
     #[case::process_unknown_true_home_known_to_known_without_home(ShouldProcessMessageCase {
         source_chain_id: 2,
-        destination_chain_id: 3,
+        destination_chain_id: Some(3),
         process_unknown_chains: true,
         home_chain: Some(1),
         expected: false,
     })]
     #[case::process_unknown_true_home_known_to_unknown_without_home(ShouldProcessMessageCase {
         source_chain_id: 2,
-        destination_chain_id: 999,
+        destination_chain_id: Some(999),
         process_unknown_chains: true,
         home_chain: Some(1),
         expected: false,
     })]
     #[case::process_unknown_true_home_unknown_to_unknown(ShouldProcessMessageCase {
         source_chain_id: 999,
-        destination_chain_id: 1000,
+        destination_chain_id: Some(1000),
         process_unknown_chains: true,
         home_chain: Some(1),
+        expected: false,
+    })]
+    // Unresolved destination (`None`) is a known-source, unknown-destination
+    // send — it must follow the exact same one-known/one-unknown policy as a
+    // numeric unknown chain id, not bypass it.
+    #[case::unresolved_destination_process_unknown_false_no_home(ShouldProcessMessageCase {
+        source_chain_id: 1,
+        destination_chain_id: None,
+        process_unknown_chains: false,
+        home_chain: None,
+        expected: false,
+    })]
+    #[case::unresolved_destination_process_unknown_true_no_home(ShouldProcessMessageCase {
+        source_chain_id: 1,
+        destination_chain_id: None,
+        process_unknown_chains: true,
+        home_chain: None,
+        expected: true,
+    })]
+    #[case::unresolved_destination_process_unknown_false_home_is_source(ShouldProcessMessageCase {
+        source_chain_id: 1,
+        destination_chain_id: None,
+        process_unknown_chains: false,
+        home_chain: Some(1),
+        expected: false,
+    })]
+    #[case::unresolved_destination_process_unknown_true_home_is_source(ShouldProcessMessageCase {
+        source_chain_id: 1,
+        destination_chain_id: None,
+        process_unknown_chains: true,
+        home_chain: Some(1),
+        expected: true,
+    })]
+    #[case::unresolved_destination_process_unknown_false_home_is_other(ShouldProcessMessageCase {
+        source_chain_id: 1,
+        destination_chain_id: None,
+        process_unknown_chains: false,
+        home_chain: Some(2),
+        expected: false,
+    })]
+    #[case::unresolved_destination_process_unknown_true_home_is_other(ShouldProcessMessageCase {
+        source_chain_id: 1,
+        destination_chain_id: None,
+        process_unknown_chains: true,
+        home_chain: Some(2),
         expected: false,
     })]
     fn should_process_message_cases(
@@ -1518,6 +1754,22 @@ mod tests {
                 home_chain
             ),
             expected
+        );
+    }
+
+    #[test]
+    fn resolution_outcome_label_covers_every_variant() {
+        assert_eq!(
+            resolution_outcome_label(&Resolution::Resolved(43114)),
+            "resolved"
+        );
+        assert_eq!(
+            resolution_outcome_label(&Resolution::Unresolved(UnresolvedReason::UnknownIdentifier)),
+            "unknown_identifier"
+        );
+        assert_eq!(
+            resolution_outcome_label(&Resolution::Unresolved(UnresolvedReason::NoChainId)),
+            "no_chain_id"
         );
     }
 
@@ -1611,5 +1863,149 @@ mod tests {
             0,
             "skipped_disabled must only count a suppression that actually dropped an arm"
         );
+    }
+
+    mod chain_config_validation {
+        use alloy::{
+            primitives::Address,
+            providers::{Provider, ProviderBuilder},
+        };
+
+        use super::super::{AvalancheChainConfig, validate_chain_configs};
+
+        fn chain(chain_id: i64, contract_addresses: Vec<Address>) -> AvalancheChainConfig {
+            AvalancheChainConfig {
+                chain_id,
+                // Never dialed: validation does not touch the provider.
+                provider: ProviderBuilder::new()
+                    .connect_http("http://127.0.0.1:1".parse().unwrap())
+                    .erased(),
+                contract_addresses,
+                start_block: 1,
+            }
+        }
+
+        #[test]
+        fn accepts_one_config_per_chain_with_addresses() {
+            let chains = vec![
+                chain(1, vec![Address::from([0xAA; 20])]),
+                chain(
+                    2,
+                    vec![Address::from([0xBB; 20]), Address::from([0xCC; 20])],
+                ),
+            ];
+
+            assert!(validate_chain_configs(&chains).is_ok());
+        }
+
+        /// `Filter::address(vec![])` matches every address on the chain, so an
+        /// empty list is not "scan nothing" but "scan everything".
+        #[test]
+        fn rejects_a_chain_with_no_contract_address() {
+            let chains = vec![chain(43114, Vec::new())];
+
+            let err = validate_chain_configs(&chains).expect_err("empty address list rejected");
+
+            assert!(
+                err.to_string().contains("43114"),
+                "the error must name the offending chain: {err}"
+            );
+        }
+
+        /// Two configs for one chain are two streams over one
+        /// `(bridge_id, chain_id)` checkpoint — whichever finishes catch-up
+        /// first publishes a floor for the pair, and the other never rescans
+        /// what it had left.
+        #[test]
+        fn rejects_the_same_chain_configured_twice() {
+            let chains = vec![
+                chain(43114, vec![Address::from([0xAA; 20])]),
+                chain(43114, vec![Address::from([0xBB; 20])]),
+            ];
+
+            let err = validate_chain_configs(&chains).expect_err("duplicate chain rejected");
+
+            assert!(
+                err.to_string().contains("configured more than once"),
+                "unexpected error: {err}"
+            );
+        }
+    }
+
+    /// A chain with several Teleporter deployments must replay against all of
+    /// their addresses. A replay narrower than the forward scan re-fetches a
+    /// recorded hole against the wrong contract, finds nothing, and resolves
+    /// the hole as if fixed.
+    ///
+    /// Since both paths now build the filter through `teleporter_log_filter`
+    /// from the same `contract_addresses`, this pins that the config-to-filter
+    /// step keeps every address rather than collapsing to one.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn log_filter_covers_every_configured_contract_address_for_a_chain_with_several() {
+        use super::{AvalancheChainConfig, AvalancheRangeProcessor, Message};
+        use crate::{
+            MessageBufferSettings,
+            indexer::{
+                avalanche::blockchain_id_resolver::BlockchainIdResolver,
+                range_driver::RangeProcessor,
+            },
+            message_buffer::MessageBuffer,
+            test_utils::init_db,
+        };
+        use alloy::providers::{Provider, ProviderBuilder};
+        use std::{sync::Arc, time::Duration};
+
+        let db = init_db("avalanche_log_filter_multi_contract_address").await;
+        let interchain_db = crate::InterchainDatabase::new(db.client());
+
+        const CHAIN_ID: i64 = 43114;
+        let address_a = Address::from([0xAA; 20]);
+        let address_b = Address::from([0xBB; 20]);
+        // Never dialed: `log_filter` does not touch the provider.
+        let dummy_provider = ProviderBuilder::new()
+            .connect_http("http://127.0.0.1:1".parse().unwrap())
+            .erased();
+
+        let chains = vec![AvalancheChainConfig {
+            chain_id: CHAIN_ID,
+            provider: dummy_provider,
+            contract_addresses: vec![address_a, address_b],
+            start_block: 0,
+        }];
+
+        let processor = AvalancheRangeProcessor {
+            bridge_id: 1,
+            chains: chains.clone(),
+            chain_ids: Arc::new(chains.iter().map(|c| c.chain_id).collect()),
+            home_chain: None,
+            process_unknown_chains: false,
+            reconstruct_incoming_ictt_transfers: true,
+            blockchain_id_resolver: Arc::new(BlockchainIdResolver::new(
+                Default::default(),
+                interchain_db.clone(),
+            )),
+            buffer: MessageBuffer::<Message>::new(
+                interchain_db,
+                MessageBufferSettings {
+                    hot_ttl: Duration::from_secs(60),
+                    maintenance_interval: Duration::from_secs(60),
+                },
+            ),
+            batch_size: 1000,
+            receipt_concurrency: 25,
+        };
+
+        let filter = processor
+            .log_filter(CHAIN_ID)
+            .expect("a configured chain must yield a filter");
+
+        assert_eq!(
+            filter.address.len(),
+            2,
+            "the filter must cover every configured contract address, not just the first"
+        );
+        assert!(filter.address.contains(&address_a));
+        assert!(filter.address.contains(&address_b));
     }
 }

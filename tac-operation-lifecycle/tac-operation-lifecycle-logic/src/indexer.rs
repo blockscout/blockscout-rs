@@ -7,20 +7,30 @@ use crate::{
 };
 use anyhow::Error;
 use client::{
-    models::profiling::{OperationType, StageType},
+    models::profiling::{LegacyOperationType, ProfilingResponse, SourceOperationData, StageType},
+    settings::StageProfilingMode,
     Client,
 };
 use futures::{
     stream::{select, select_with_strategy, BoxStream, PollNext},
     StreamExt,
 };
-use std::{cmp::max, collections::HashMap, fmt, str::FromStr, sync::Arc, time::Duration};
+use std::{
+    cmp::max,
+    collections::{HashMap, HashSet},
+    fmt,
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
+};
 use tac_operation_lifecycle_entity::{interval, operation, sea_orm_active_enums::StatusEnum};
 use tokio::{task::JoinHandle, time};
 use tracing::{instrument, Instrument};
 use uuid::Uuid;
 
 use crate::client;
+
+const V2_BACKFILL_MIN_IDLE_INTERVAL: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone)]
 pub struct Job {
@@ -47,35 +57,35 @@ impl IndexerJob {
     }
 }
 
-impl OperationType {
+impl LegacyOperationType {
     pub fn to_id(&self) -> i32 {
         match self {
-            OperationType::Pending => 1,
-            OperationType::TonTacTon => 2,
-            OperationType::TacTon => 3,
-            OperationType::TonTac => 4,
-            OperationType::Rollback => 5,
-            OperationType::Unknown => 6,
-            OperationType::InsufficientFee => 7,
-            OperationType::ErrorType => 0,
+            LegacyOperationType::Pending => 1,
+            LegacyOperationType::TonTacTon => 2,
+            LegacyOperationType::TacTon => 3,
+            LegacyOperationType::TonTac => 4,
+            LegacyOperationType::Rollback => 5,
+            LegacyOperationType::Unknown => 6,
+            LegacyOperationType::InsufficientFee => 7,
+            LegacyOperationType::ErrorType => 0,
         }
     }
 
     pub fn is_finalized(&self) -> bool {
         match self {
-            OperationType::Pending | OperationType::Unknown | OperationType::InsufficientFee => {
-                false
-            }
-            OperationType::TonTacTon
-            | OperationType::TacTon
-            | OperationType::TonTac
-            | OperationType::Rollback
-            | OperationType::ErrorType => true,
+            LegacyOperationType::Pending
+            | LegacyOperationType::Unknown
+            | LegacyOperationType::InsufficientFee => false,
+            LegacyOperationType::TonTacTon
+            | LegacyOperationType::TacTon
+            | LegacyOperationType::TonTac
+            | LegacyOperationType::Rollback
+            | LegacyOperationType::ErrorType => true,
         }
     }
 }
 
-impl fmt::Display for OperationType {
+impl fmt::Display for LegacyOperationType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // SCREAMING_SNAKE_CASE
         let s = serde_json::to_string(self)
@@ -87,11 +97,11 @@ impl fmt::Display for OperationType {
     }
 }
 
-impl FromStr for OperationType {
+impl FromStr for LegacyOperationType {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(serde_json::from_str(&format!("\"{s}\"")).unwrap_or(OperationType::ErrorType))
+        Ok(serde_json::from_str(&format!("\"{s}\"")).unwrap_or(LegacyOperationType::ErrorType))
     }
 }
 
@@ -522,72 +532,45 @@ impl Indexer {
         let op_ids: Vec<&str> = jobs.iter().map(|j| j.operation.id.as_str()).collect();
 
         match self.client.get_operations_stages(op_ids.clone()).await {
-            Ok(operations_map) => {
-                let mut processed_operations = 0;
-                let mut completed_operations = 0;
-                let forever_pending_operation_cap = (chrono::Utc::now()
-                    - self.settings.forever_pending_operations_age_sec)
-                    .timestamp();
-                for (op_id, operation_data) in operations_map.iter() {
-                    // Find an associated operation in the input operations vector
-                    match jobs.iter().find(|j| &j.operation.id == op_id) {
-                        Some(job) => {
-                            let new_status = if operation_data.operation_type.is_finalized() {
-                                // The case when operation has a finalized status
-                                // otherwise they will be catched by operation stream
-                                StatusEnum::Completed
-                            } else if (operation_data.operation_type == OperationType::Pending
-                                || operation_data.operation_type == OperationType::InsufficientFee)
-                                && job.operation.timestamp.and_utc().timestamp()
-                                    < forever_pending_operation_cap
-                            {
-                                // NOTE: The API returns INSUFFICIENT-FEE operations as PENDING,
-                                // so the comparison above is a bit redundant.
-                                // It is included to avoid ambiguity and to support possible API changes.
-                                tracing::warn!(
-                                    op_id =? job.operation.id,
-                                    op_timestamp =? job.operation.timestamp,
-                                    "Forever pending operation has been found"
-                                );
-                                // The operations whitch remains PENDING after forever_pending_operations_age_sec
-                                // are considered to be forever pending. We shouldn't recheck them anymore
-                                StatusEnum::Completed
-                            } else {
-                                StatusEnum::Pending
-                            };
-
-                            if let Err(e) = self
-                                .database
-                                .set_operation_data(&job.operation, operation_data, &new_status)
-                                .await
-                            {
-                                tracing::error!(
-                                    operation_id =? job.operation.id,
-                                    err =? e,
-                                    "Failed to store operation data into the database"
-                                );
-                            }
-
-                            processed_operations += 1;
-                            if new_status == StatusEnum::Completed {
-                                completed_operations += 1;
+            Ok(response) => {
+                let mut values: HashMap<String, SourceOperationData> = match response {
+                    ProfilingResponse::V1(values) => values
+                        .into_iter()
+                        .map(|(id, data)| (id, SourceOperationData::V1(data)))
+                        .collect(),
+                    ProfilingResponse::V2(values) => {
+                        let mut tagged: HashMap<_, _> = values
+                            .into_iter()
+                            .map(|(id, data)| (id, SourceOperationData::V2(data)))
+                            .collect();
+                        if self.client.stage_profiling_mode() == StageProfilingMode::PreferV2 {
+                            let omitted: Vec<_> = op_ids
+                                .iter()
+                                .copied()
+                                .filter(|id| !tagged.contains_key(*id))
+                                .collect();
+                            if !omitted.is_empty() {
+                                let omitted: HashSet<_> = omitted.into_iter().collect();
+                                match self
+                                    .client
+                                    .get_operations_stages_v1(omitted.iter().copied().collect())
+                                    .await
+                                {
+                                    Ok(v1) => {
+                                        Self::merge_v1_recovery_results(&mut tagged, &omitted, v1)
+                                    }
+                                    Err(error) => tracing::warn!(
+                                        %error,
+                                        "Failed to recover IDs omitted by Stage Profiler v2"
+                                    ),
+                                }
                             }
                         }
-                        None => {
-                            tracing::error!(
-                                operation_id =? op_id,
-                                "Stage profiling response contains unknown operation. Skipping..."
-                            );
-                        }
+                        tagged
                     }
-                }
-
-                tracing::info!(
-                    processed =? processed_operations,
-                    completed =? completed_operations,
-                    "Successfully processed operations: [{}]",
-                    op_ids.join(", ")
-                );
+                };
+                self.persist_operation_results(&jobs, &op_ids, &mut values)
+                    .await;
             }
             Err(e) => {
                 tracing::error!(
@@ -612,12 +595,291 @@ impl Indexer {
         }
     }
 
+    fn merge_v1_recovery_results(
+        tagged: &mut HashMap<String, SourceOperationData>,
+        omitted: &HashSet<&str>,
+        v1: HashMap<String, client::models::profiling::V1OperationData>,
+    ) {
+        for (id, data) in v1 {
+            if omitted.contains(id.as_str()) {
+                tagged.insert(id, SourceOperationData::V1(data));
+            } else {
+                tracing::warn!(
+                    operation_id = %id,
+                    "Stage Profiler v1 recovery returned a non-omitted operation; skipping"
+                );
+            }
+        }
+    }
+
+    async fn persist_operation_results(
+        &self,
+        jobs: &[&OperationJob],
+        requested_ids: &[&str],
+        values: &mut HashMap<String, SourceOperationData>,
+    ) {
+        let requested: HashSet<_> = requested_ids.iter().copied().collect();
+        for extra in values.keys().filter(|id| !requested.contains(id.as_str())) {
+            tracing::error!(
+                operation_id = %extra,
+                "Stage profiling response contains unknown operation; skipping"
+            );
+        }
+
+        let mut processed = 0usize;
+        let mut completed = 0usize;
+        for job in jobs {
+            let Some(operation_data) = values.remove(&job.operation.id) else {
+                tracing::warn!(
+                    operation_id = %job.operation.id,
+                    "Stage profiling response omitted requested operation"
+                );
+                self.retry_operation(&job.operation).await;
+                continue;
+            };
+            let new_status =
+                Self::operation_work_status(&self.settings, &job.operation, &operation_data);
+            if let Err(error) = self
+                .database
+                .set_operation_data(&job.operation, &operation_data, &new_status)
+                .await
+            {
+                tracing::error!(
+                    operation_id = %job.operation.id,
+                    %error,
+                    "Failed to store operation data"
+                );
+                self.retry_operation(&job.operation).await;
+                continue;
+            }
+            processed += 1;
+            completed += usize::from(new_status == StatusEnum::Completed);
+        }
+        tracing::info!(
+            processed,
+            completed,
+            "Successfully processed operations: [{}]",
+            requested_ids.join(", ")
+        );
+    }
+
+    fn operation_work_status(
+        settings: &IndexerSettings,
+        operation: &operation::Model,
+        data: &SourceOperationData,
+    ) -> StatusEnum {
+        let cap = (chrono::Utc::now() - settings.forever_pending_operations_age_sec).timestamp();
+        let age_capped = operation.timestamp.and_utc().timestamp() < cap;
+        match data {
+            SourceOperationData::V2(data) if data.finalized => StatusEnum::Completed,
+            SourceOperationData::V2(data) if age_capped => {
+                tracing::warn!(
+                    operation_id = %operation.id,
+                    route = %data.operation_type,
+                    op_status = ?data.status,
+                    finalized = data.finalized,
+                    rollback = data.rollback,
+                    technical_status = "completed",
+                    "Forever-pending operation reached the local polling stop"
+                );
+                StatusEnum::Completed
+            }
+            SourceOperationData::V2(_) => StatusEnum::Pending,
+            SourceOperationData::V1(data) => {
+                let operation_type =
+                    crate::lifecycle::derive_v1_source_type(&data.operation_type, &data.stages);
+                if operation_type.is_finalized() {
+                    return StatusEnum::Completed;
+                }
+                if age_capped
+                    && matches!(
+                        operation_type,
+                        LegacyOperationType::Pending | LegacyOperationType::InsufficientFee
+                    )
+                {
+                    tracing::warn!(
+                        operation_id = %operation.id,
+                        op_type = %operation_type,
+                        technical_status = "completed",
+                        "Forever-pending operation reached the local polling stop"
+                    );
+                    StatusEnum::Completed
+                } else {
+                    StatusEnum::Pending
+                }
+            }
+        }
+    }
+
+    fn should_report_v2_backfill_convergence(
+        convergence_reported: &mut bool,
+        remaining: u64,
+    ) -> bool {
+        if remaining == 0 {
+            let should_report = !*convergence_reported;
+            *convergence_reported = true;
+            should_report
+        } else {
+            *convergence_reported = false;
+            false
+        }
+    }
+
+    fn v2_backfill_idle_interval(settings: &IndexerSettings) -> Duration {
+        settings.retry_interval.max(V2_BACKFILL_MIN_IDLE_INTERVAL)
+    }
+
+    /// Backoff applied to every operation retry, scaled by the attempt number so
+    /// a permanently failing row backs off instead of hammering upstream every
+    /// five seconds. Used by both the technical retry path and the v2 backfill
+    /// worker, which cannot reach `retry_operation` because it runs detached.
+    fn retry_delay_sec(operation: &operation::Model) -> i64 {
+        5 * i64::from(operation.retry_count.saturating_add(1))
+    }
+
+    async fn retry_operation(&self, operation: &operation::Model) {
+        let _ = self
+            .database
+            .set_operation_retry(operation, Self::retry_delay_sec(operation))
+            .await;
+    }
+
+    fn create_v2_backfill_thread(&self) -> Option<JoinHandle<()>> {
+        if self.client.stage_profiling_mode() == StageProfilingMode::V1Only {
+            return None;
+        }
+        let database = self.database.clone();
+        let client = self.client.clone();
+        let settings = self.settings.clone();
+        Some(tokio::spawn(async move {
+            tracing::info!("Stage Profiler v2 re-profiling worker started");
+            let mut convergence_reported = false;
+            loop {
+                if !client.v2_available_for_direct_request() {
+                    tracing::debug!("V2 re-profiling paused while circuit is open");
+                    time::sleep(
+                        settings
+                            .operations_loop_delay_ms
+                            .max(Duration::from_secs(1)),
+                    )
+                    .await;
+                    continue;
+                }
+                match database
+                    .query_v1_operations_for_backfill(settings.operations_query_batch)
+                    .await
+                {
+                    Ok(operations) if operations.is_empty() => {
+                        client.release_v2_probe();
+                        if let Ok(remaining) = database.count_v1_operations_for_backfill().await {
+                            // Rows waiting for technical retry are not claimable here, so they
+                            // must not hold back the convergence report; surface them instead.
+                            let awaiting_retry = database
+                                .count_v1_operations_awaiting_retry()
+                                .await
+                                .unwrap_or_default();
+                            if Self::should_report_v2_backfill_convergence(
+                                &mut convergence_reported,
+                                remaining,
+                            ) {
+                                tracing::info!(
+                                    awaiting_retry,
+                                    "V2 re-profiling queue is converged"
+                                );
+                            } else if remaining > 0 {
+                                tracing::debug!(
+                                    remaining,
+                                    awaiting_retry,
+                                    "V2 re-profiling has no currently claimable operations"
+                                );
+                            }
+                        }
+                        time::sleep(Self::v2_backfill_idle_interval(&settings)).await;
+                        continue;
+                    }
+                    Ok(operations) => {
+                        convergence_reported = false;
+                        let ids: Vec<_> = operations.iter().map(|op| op.id.as_str()).collect();
+                        match client.get_operations_stages_v2(ids).await {
+                            Ok(mut response) => {
+                                for operation in operations {
+                                    match response.remove(&operation.id) {
+                                        Some(data) => {
+                                            let source = SourceOperationData::V2(data);
+                                            let status = Self::operation_work_status(
+                                                &settings, &operation, &source,
+                                            );
+                                            if let Err(error) = database
+                                                .set_operation_data(&operation, &source, &status)
+                                                .await
+                                            {
+                                                tracing::error!(
+                                                    operation_id = %operation.id,
+                                                    %error,
+                                                    "Failed to store re-profiled operation"
+                                                );
+                                                let _ = database
+                                                    .set_operation_retry(
+                                                        &operation,
+                                                        Self::retry_delay_sec(&operation),
+                                                    )
+                                                    .await;
+                                            }
+                                        }
+                                        None => {
+                                            tracing::warn!(
+                                                operation_id = %operation.id,
+                                                "V2 backfill response omitted requested operation"
+                                            );
+                                            let _ = database
+                                                .set_operation_retry(
+                                                    &operation,
+                                                    Self::retry_delay_sec(&operation),
+                                                )
+                                                .await;
+                                        }
+                                    }
+                                }
+                            }
+                            Err(error) => {
+                                tracing::warn!(%error, "V2 re-profiling batch failed");
+                                for operation in operations {
+                                    let _ = database
+                                        .set_operation_retry(
+                                            &operation,
+                                            Self::retry_delay_sec(&operation),
+                                        )
+                                        .await;
+                                }
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        client.release_v2_probe();
+                        tracing::error!(%error, "Unable to claim V2 re-profiling batch");
+                    }
+                }
+                time::sleep(
+                    settings
+                        .operations_loop_delay_ms
+                        .max(Duration::from_secs(1)),
+                )
+                .await;
+            }
+        }))
+    }
+
     fn prio_left(_: &mut ()) -> PollNext {
         PollNext::Left
     }
 
     #[instrument(name = "indexer", skip_all, level = "info")]
     pub async fn start(&self) -> anyhow::Result<()> {
+        if !self.settings.enabled {
+            tracing::warn!("Indexer disabled by configuration");
+            return Ok(());
+        }
+
         tracing::info!("Initializing TAC indexer");
 
         self.ensure_stages_types_exist().await?;
@@ -650,6 +912,8 @@ impl Indexer {
                 "Found and reset operations in 'processing' state"
             );
         }
+
+        let _v2_backfill_thread = self.create_v2_backfill_thread();
 
         // Start generating realtime intervals in the separated thread;
         let initial_realtime_boundary = self.database.get_watermark().await?;
@@ -724,5 +988,161 @@ impl Indexer {
         realtime_thread.await?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::client::models::profiling::{
+        OperationRoute, OperationStatus, V1OperationData, V2OperationData,
+    };
+
+    fn operation(timestamp: chrono::NaiveDateTime) -> operation::Model {
+        operation::Model {
+            id: "operation".to_string(),
+            op_type: None,
+            profiling_version: None,
+            op_status: None,
+            error_reason: None,
+            finalized: None,
+            rollback: None,
+            timestamp,
+            next_retry: None,
+            status: StatusEnum::Pending,
+            retry_count: 0,
+            inserted_at: timestamp,
+            updated_at: timestamp,
+            sender_address: None,
+            sender_blockchain: None,
+        }
+    }
+
+    fn v1_data() -> V1OperationData {
+        V1OperationData {
+            operation_type: LegacyOperationType::Pending,
+            meta_info: None,
+            stages: HashMap::new(),
+        }
+    }
+
+    fn v2_data(finalized: bool) -> V2OperationData {
+        V2OperationData {
+            operation_type: OperationRoute::TonTac,
+            status: Some(OperationStatus::Failed),
+            finalized,
+            rollback: true,
+            meta_info: None,
+            stages: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn v1_partial_recovery_cannot_overwrite_v2_result() {
+        let mut tagged = HashMap::from([
+            (
+                "v2-operation".to_string(),
+                SourceOperationData::V2(v2_data(false)),
+            ),
+            (
+                "other-operation".to_string(),
+                SourceOperationData::V2(v2_data(true)),
+            ),
+        ]);
+        let omitted = HashSet::from(["missing-operation"]);
+        let v1 = HashMap::from([
+            ("v2-operation".to_string(), v1_data()),
+            ("missing-operation".to_string(), v1_data()),
+        ]);
+
+        Indexer::merge_v1_recovery_results(&mut tagged, &omitted, v1);
+
+        assert!(matches!(
+            tagged.get("v2-operation"),
+            Some(SourceOperationData::V2(_))
+        ));
+        assert!(matches!(
+            tagged.get("missing-operation"),
+            Some(SourceOperationData::V1(_))
+        ));
+        assert_eq!(tagged.len(), 3);
+    }
+
+    #[test]
+    fn v2_work_status_uses_finalized_and_preserves_forever_pending_semantics() {
+        let settings = IndexerSettings {
+            forever_pending_operations_age_sec: Duration::from_secs(60),
+            ..Default::default()
+        };
+        let recent = operation(chrono::Utc::now().naive_utc());
+        let old = operation((chrono::Utc::now() - chrono::Duration::minutes(2)).naive_utc());
+
+        assert_eq!(
+            Indexer::operation_work_status(
+                &settings,
+                &recent,
+                &SourceOperationData::V2(v2_data(false))
+            ),
+            StatusEnum::Pending
+        );
+        assert_eq!(
+            Indexer::operation_work_status(
+                &settings,
+                &recent,
+                &SourceOperationData::V2(v2_data(true))
+            ),
+            StatusEnum::Completed
+        );
+        assert_eq!(
+            Indexer::operation_work_status(
+                &settings,
+                &old,
+                &SourceOperationData::V2(v2_data(false))
+            ),
+            StatusEnum::Completed
+        );
+    }
+
+    #[test]
+    fn backfill_convergence_is_reported_once_per_transition() {
+        let mut convergence_reported = false;
+
+        assert!(Indexer::should_report_v2_backfill_convergence(
+            &mut convergence_reported,
+            0
+        ));
+        assert!(!Indexer::should_report_v2_backfill_convergence(
+            &mut convergence_reported,
+            0
+        ));
+        assert!(!Indexer::should_report_v2_backfill_convergence(
+            &mut convergence_reported,
+            1
+        ));
+        assert!(Indexer::should_report_v2_backfill_convergence(
+            &mut convergence_reported,
+            0
+        ));
+    }
+
+    #[test]
+    fn empty_backfill_queue_uses_a_bounded_idle_interval() {
+        let fast_settings = IndexerSettings {
+            retry_interval: Duration::from_secs(1),
+            ..Default::default()
+        };
+        let slow_settings = IndexerSettings {
+            retry_interval: Duration::from_secs(120),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            Indexer::v2_backfill_idle_interval(&fast_settings),
+            Duration::from_secs(60)
+        );
+        assert_eq!(
+            Indexer::v2_backfill_idle_interval(&slow_settings),
+            Duration::from_secs(120)
+        );
     }
 }

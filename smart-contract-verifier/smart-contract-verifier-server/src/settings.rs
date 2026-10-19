@@ -7,8 +7,10 @@ use blockscout_service_launcher::{
 };
 use cron::Schedule;
 use serde::Deserialize;
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{serde_as, DisplayFromStr, PickFirst};
 use smart_contract_verifier::{
+    DockerCompilerExecutorSettings, NativeCompilerExecutor,
+    DEFAULT_COMPILER_EXECUTION_TIMEOUT_SECS, DEFAULT_COMPILER_MAX_OUTPUT_BYTES,
     DEFAULT_ERA_SOLIDITY_COMPILER_LIST, DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST,
     DEFAULT_VYPER_COMPILER_LIST, DEFAULT_ZKSOLC_COMPILER_LIST,
 };
@@ -16,6 +18,7 @@ use std::{
     num::{NonZeroU32, NonZeroUsize},
     path::PathBuf,
     str::FromStr,
+    time::Duration,
 };
 use url::Url;
 
@@ -167,6 +170,7 @@ impl Default for ZksyncSoliditySettings {
 #[serde(default, deny_unknown_fields)]
 pub struct CompilersSettings {
     pub max_threads: NonZeroUsize,
+    pub execution: CompilerExecutionSettings,
 }
 
 impl Default for CompilersSettings {
@@ -175,7 +179,35 @@ impl Default for CompilersSettings {
             tracing::warn!("cannot get number of CPU cores: {}", e);
             NonZeroUsize::new(8).unwrap()
         });
-        Self { max_threads }
+        Self {
+            max_threads,
+            execution: CompilerExecutionSettings::Disabled,
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum CompilerExecutionSettings {
+    /// Compiler-backed endpoints cannot start in this mode.
+    Disabled,
+    /// Explicit development/test escape hatch. Compilers execute on the service host.
+    Native {
+        #[serde(default = "default_compiler_execution_timeout_seconds")]
+        #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
+        execution_timeout_seconds: u64,
+        #[serde(default = "default_compiler_max_output_bytes")]
+        #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
+        max_output_bytes: usize,
+    },
+    /// One fresh, locked-down container per compiler invocation on an SSH Docker host.
+    Docker(DockerCompilerExecutorSettings),
+}
+
+impl Settings {
+    pub(crate) fn compiler_endpoints_enabled(&self) -> bool {
+        self.solidity.enabled || self.vyper.enabled || self.zksync_solidity.enabled
     }
 }
 
@@ -189,6 +221,30 @@ impl ConfigSettings for Settings {
                 return Err(anyhow!("for s3 fetcher settings at least one of `region` or `endpoint` should be defined"));
             }
         };
+
+        match &self.compilers.execution {
+            CompilerExecutionSettings::Disabled if self.compiler_endpoints_enabled() => {
+                return Err(anyhow!(
+                    "compiler execution is disabled while a compiler-backed endpoint is enabled; \
+                     set SMART_CONTRACT_VERIFIER__COMPILERS__EXECUTION__TYPE to `docker` \
+                     (production) or `native` (local development only), or disable the \
+                     solidity, vyper and zksync_solidity endpoints"
+                ));
+            }
+            CompilerExecutionSettings::Docker(docker) => {
+                docker.validate().map_err(anyhow::Error::new)?
+            }
+            CompilerExecutionSettings::Native {
+                execution_timeout_seconds,
+                max_output_bytes,
+            } => {
+                NativeCompilerExecutor::new(
+                    Duration::from_secs(*execution_timeout_seconds),
+                    *max_output_bytes,
+                )?;
+            }
+            CompilerExecutionSettings::Disabled => {}
+        }
 
         Ok(())
     }
@@ -208,4 +264,135 @@ fn default_list_fetcher(list_url: &str) -> FetcherSettings {
 
 fn schedule_every_hour() -> Schedule {
     Schedule::from_str("0 0 * * * * *").unwrap()
+}
+
+fn default_compiler_execution_timeout_seconds() -> u64 {
+    DEFAULT_COMPILER_EXECUTION_TIMEOUT_SECS
+}
+
+fn default_compiler_max_output_bytes() -> usize {
+    DEFAULT_COMPILER_MAX_OUTPUT_BYTES
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compiler_endpoints_fail_closed_by_default() {
+        let settings = Settings::default();
+        assert!(ConfigSettings::validate(&settings).is_err());
+    }
+
+    #[test]
+    fn disabled_execution_is_allowed_without_compiler_endpoints() {
+        let mut settings = Settings::default();
+        settings.solidity.enabled = false;
+        settings.vyper.enabled = false;
+        settings.zksync_solidity.enabled = false;
+        ConfigSettings::validate(&settings).unwrap();
+    }
+
+    #[test]
+    fn native_execution_must_be_explicit() {
+        let mut settings = Settings::default();
+        settings.compilers.execution = CompilerExecutionSettings::Native {
+            execution_timeout_seconds: default_compiler_execution_timeout_seconds(),
+            max_output_bytes: default_compiler_max_output_bytes(),
+        };
+        ConfigSettings::validate(&settings).unwrap();
+    }
+
+    #[test]
+    fn native_execution_deserializes_with_defaults() {
+        let settings: Settings = serde_json::from_value(serde_json::json!({
+            "compilers": {
+                "execution": {
+                    "type": "native"
+                }
+            }
+        }))
+        .unwrap();
+
+        assert!(matches!(
+            settings.compilers.execution,
+            CompilerExecutionSettings::Native {
+                execution_timeout_seconds: 600,
+                max_output_bytes: 268_435_456,
+            }
+        ));
+        ConfigSettings::validate(&settings).unwrap();
+    }
+
+    #[test]
+    fn native_execution_rejects_zero_limits() {
+        let mut settings = Settings::default();
+        settings.compilers.execution = CompilerExecutionSettings::Native {
+            execution_timeout_seconds: 0,
+            max_output_bytes: 1,
+        };
+        assert!(ConfigSettings::validate(&settings).is_err());
+
+        settings.compilers.execution = CompilerExecutionSettings::Native {
+            execution_timeout_seconds: 1,
+            max_output_bytes: 0,
+        };
+        assert!(ConfigSettings::validate(&settings).is_err());
+    }
+
+    #[test]
+    fn docker_execution_rejects_unpinned_images() {
+        let settings: Settings = serde_json::from_value(serde_json::json!({
+            "compilers": {
+                "execution": {
+                    "type": "docker",
+                    "addr": "ssh://compiler-runner@example.org",
+                    "runner_image": "compiler-runner:latest"
+                }
+            }
+        }))
+        .unwrap();
+        assert!(ConfigSettings::validate(&settings).is_err());
+    }
+
+    #[test]
+    fn docker_execution_deserializes_with_safe_defaults() {
+        let settings: Settings = serde_json::from_value(serde_json::json!({
+            "compilers": {
+                "execution": {
+                    "type": "docker",
+                    "addr": "ssh://compiler-runner@example.org",
+                    "runner_image": format!("compiler-runner@sha256:{}", "0".repeat(64))
+                }
+            }
+        }))
+        .unwrap();
+
+        let CompilerExecutionSettings::Docker(docker) = &settings.compilers.execution else {
+            panic!("expected Docker execution settings");
+        };
+        assert_eq!(docker.platform, "linux/amd64");
+        assert_eq!(docker.connect_timeout_seconds, 30);
+        assert_eq!(docker.api_timeout_seconds, 30);
+        assert_eq!(docker.pids_limit, 1024);
+        ConfigSettings::validate(&settings).unwrap();
+    }
+
+    #[test]
+    fn docker_execution_rejects_the_removed_second_concurrency_limit() {
+        let error = serde_json::from_value::<Settings>(serde_json::json!({
+            "compilers": {
+                "execution": {
+                    "type": "docker",
+                    "addr": "ssh://compiler-runner@example.org",
+                    "runner_image": format!("compiler-runner@sha256:{}", "0".repeat(64)),
+                    "max_concurrent_jobs": 8
+                }
+            }
+        }))
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("max_concurrent_jobs"), "{error}");
+    }
 }

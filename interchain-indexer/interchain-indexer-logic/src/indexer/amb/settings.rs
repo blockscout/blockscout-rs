@@ -3,6 +3,8 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
+use crate::indexer::failure_ledger::settings::FailureRetrySettings;
+
 #[serde_as]
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -22,6 +24,8 @@ pub struct AmbIndexerSettings {
     #[serde(default = "default_clock_skew_tolerance")]
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub clock_skew_tolerance: Duration,
+    #[serde(default)]
+    pub failure_retry: FailureRetrySettings,
 }
 
 impl Default for AmbIndexerSettings {
@@ -31,6 +35,7 @@ impl Default for AmbIndexerSettings {
             batch_size: default_batch_size(),
             receipt_concurrency: default_receipt_concurrency(),
             clock_skew_tolerance: default_clock_skew_tolerance(),
+            failure_retry: FailureRetrySettings::default(),
         }
     }
 }

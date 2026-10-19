@@ -13,9 +13,9 @@ use stats::{
     ChartProperties,
     counters::{
         ArbitrumNewOperationalTxns24h, ArbitrumTotalOperationalTxns,
-        ArbitrumYesterdayOperationalTxns, NewZetachainCrossChainTxns24h,
+        ArbitrumYesterdayOperationalTxns, FilecoinChainFees24h, NewZetachainCrossChainTxns24h,
         OpStackNewOperationalTxns24h, OpStackTotalOperationalTxns, OpStackYesterdayOperationalTxns,
-        PendingZetachainCrossChainTxns, TotalZetachainCrossChainTxns,
+        PendingZetachainCrossChainTxns, TotalZetachainCrossChainTxns, TxnsFee24h,
     },
     indexing_status::BlockscoutIndexingStatus,
     lines::{
@@ -85,21 +85,44 @@ pub struct Settings {
     /// Enable EIP-7702 charts
     pub enable_all_eip_7702: bool,
     /// Enable the Filecoin-specific API surface: `filecoinChainFeesGrowth`
-    /// is enabled under its own id, and the public `txnsFee` id is
-    /// force-enabled and served with the `filecoinNewChainFees`
-    /// implementation (chain-wide fees); `filecoinNewChainFees` is never
-    /// exposed as a public chart id.
+    /// is enabled under its own id; the public `txnsFee` id is force-enabled
+    /// and served with the `filecoinNewChainFees` implementation (chain-wide
+    /// fees), and the public `txnsFee24h` id is force-enabled and served
+    /// with the `filecoinChainFees24h` implementation (24h burn + tips);
+    /// under this flag, `filecoinNewChainFees` and `filecoinChainFees24h`
+    /// are never exposed as public chart ids.
     pub enable_all_filecoin: bool,
     /// Filter by chain ids for multichain mode.
-    /// TODO: recalculate statistics data when multichain_filter has been changed
-    ///       most likely it's need to implement in conjunction with 3D charts
+    /// TODO: recalculate statistics data when multichain_filter has been changed.
+    ///       Interchain solves the equivalent problem with a filter fingerprint
+    ///       stored alongside the chart data
+    ///       (`stats::charts::db_interaction::filters::interchain::filter_fingerprint`);
+    ///       copy that pattern here. Multichain has no such mechanism yet.
     #[serde_as(as = "Option<StringWithSeparator<CommaSeparator, u64>>")]
     pub multichain_filter: Option<Vec<u64>>,
-    /// Set the primary chain_id for Interchain mode
-    /// If the primary chain set, send/receive counters and charts will be built around it
-    /// TODO: recalculate statistics data when interchain_primary_id has been changed
-    ///       most likely it's need to implement in conjunction with 3D charts
+    /// DEPRECATED: use `STATS__INTERCHAIN_FILTER__HOME_CHAIN_ID`.
+    ///
+    /// Still honoured, and treated as exactly that value. Setting both to
+    /// different values is a startup error.
     pub interchain_primary_id: Option<u64>,
+    /// Read filter applied to the interchain indexer DB in `Interchain` mode.
+    /// Mirrors the indexer's own read API parameters, so a stats deployment and
+    /// the equivalent API request return the same subset.
+    ///
+    /// Changing any of these values (or `interchain_primary_id`) is detected
+    /// automatically: the filter fingerprint stored in
+    /// `chart_data.min_blockscout_block` forces a clear-and-rebuild of every
+    /// interchain chart on the next update.
+    pub interchain_filter: InterchainFilterSettings,
+    /// Base URL of the interchain indexer's HTTP API, used in `Interchain` mode
+    /// to read `GET /api/v1/status/indexing`. When a `(bridge, chain)` pair
+    /// relevant to the configured interchain filter is still catching up, every
+    /// interchain chart is recomputed from the indexer's current earliest data
+    /// instead of only moving forward, so history the indexer backfills is
+    /// picked up. Optional: with no URL the check is disabled and charts still
+    /// pick up history that extends backwards, but not interior gaps. Ignored
+    /// outside `Interchain` mode.
+    pub interchain_indexer_api_url: Option<url::Url>,
     #[serde_as(as = "DisplayFromStr")]
     pub default_schedule: Schedule,
     pub force_update_on_start: Option<bool>, // None = no update
@@ -123,6 +146,64 @@ pub struct Settings {
     pub metrics: MetricsSettings,
     pub jaeger: JaegerSettings,
     pub tracing: TracingSettings,
+}
+
+/// The interchain read filter, as the operator configures it.
+///
+/// Every field mirrors an `interchain-indexer` read-API parameter of the same
+/// name, including its default, so that a stats deployment and the equivalent API
+/// request describe the same subset of rows. Only meaningful in
+/// [`Mode::Interchain`]; setting any field in another mode is a startup error.
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct InterchainFilterSettings {
+    /// Focal chain. Equivalent to the indexer API's `home_chain_id`.
+    /// With a counterparty set, keeps
+    /// `(src = home AND dst IN cp) OR (dst = home AND src IN cp)`;
+    /// alone, keeps `src = home OR dst = home`.
+    pub home_chain_id: Option<u64>,
+    /// Counterparties of the focal chain, comma-separated (e.g. `10,137`).
+    /// Note: **without** `home_chain_id` this means "both endpoints inside the
+    /// set" (`src IN set AND dst IN set`), a conjunction — not a focal OR.
+    #[serde_as(as = "Option<StringWithSeparator<CommaSeparator, u64>>")]
+    pub counterparty_chain_ids: Option<Vec<u64>>,
+    /// Additional restriction on the source chain, comma-separated. Applied as a
+    /// separate AND term, never folded into the focal OR.
+    #[serde_as(as = "Option<StringWithSeparator<CommaSeparator, u64>>")]
+    pub src_chain_ids: Option<Vec<u64>>,
+    /// Additional restriction on the destination chain, comma-separated. Applied
+    /// as a separate AND term. A message with no known destination is excluded by
+    /// this term, because `dst IN (...)` is NULL for a NULL destination.
+    #[serde_as(as = "Option<StringWithSeparator<CommaSeparator, u64>>")]
+    pub dst_chain_ids: Option<Vec<u64>>,
+    /// Restriction on the indexer's bridge ids, comma-separated.
+    #[serde_as(as = "Option<StringWithSeparator<CommaSeparator, u32>>")]
+    pub bridge_ids: Option<Vec<u32>>,
+    /// Mirrors the indexer API flag of the same name, including its default.
+    /// `false` keeps only rows the row's own bridge could have fully observed —
+    /// in particular it excludes every message with no known destination. Set
+    /// `true` to count everything the indexer stored.
+    pub include_unindexed_chains: bool,
+}
+
+// Written out rather than derived — and yes, `derive(Default)` would produce the
+// identical impl. `include_unindexed_chains: false` is a *restrictive* default
+// copied from the indexer API, not an incidental "zero value", and the one place a
+// reader looks to confirm that is this impl. The generated env-docs table takes its
+// default column from here too.
+#[allow(clippy::derivable_impls)]
+impl Default for InterchainFilterSettings {
+    fn default() -> Self {
+        Self {
+            home_chain_id: None,
+            counterparty_chain_ids: None,
+            src_chain_ids: None,
+            dst_chain_ids: None,
+            bridge_ids: None,
+            include_unindexed_chains: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -215,6 +296,8 @@ impl Default for Settings {
             enable_all_filecoin: false,
             multichain_filter: Default::default(),
             interchain_primary_id: Default::default(),
+            interchain_filter: Default::default(),
+            interchain_indexer_api_url: None,
             create_database: Default::default(),
             run_migrations: Default::default(),
             metrics: Default::default(),
@@ -269,28 +352,74 @@ pub fn handle_disable_internal_transactions(
     }
 }
 
+/// Finds the entry served under `id` in either config section. Chart ids are
+/// unique across counters and line charts *among enabled entries* only —
+/// `RuntimeSetup::build_charts_info` drops disabled entries before its
+/// collision check — so a duplicate id with a disabled side reaches here and
+/// the `lines` probe below wins. That preference is not something an operator
+/// can predict from the config alone, so the ambiguous case is warned about
+/// (naming both sides and their `enabled` states) instead of being resolved
+/// silently.
+fn find_chart_settings_mut<'a>(
+    charts: &'a mut config::charts::Config<AllChartSettings>,
+    id: &str,
+) -> Option<&'a mut AllChartSettings> {
+    match (charts.lines.get_mut(id), charts.counters.get_mut(id)) {
+        (Some(line_settings), Some(counter_settings)) => {
+            warn!(
+                "Chart id '{id}' is served by an entry in both config sections: \
+                line charts (enabled: {}) and counters (enabled: {}). \
+                Chart ids must be unique across both sections; the line chart \
+                entry is selected here, which may not be the intended one. \
+                Rename or remove one of the two entries.",
+                line_settings.enabled, counter_settings.enabled,
+            );
+            Some(line_settings)
+        }
+        (Some(settings), _) => Some(settings),
+        (_, Some(settings)) => Some(settings),
+        _ => None,
+    }
+}
+
 fn enable_charts(
     to_enable: &[&str],
     charts: &mut config::charts::Config<AllChartSettings>,
     charts_name_for_logs: &str,
 ) {
     for enable_key in to_enable {
-        let settings = match (
-            charts.lines.get_mut(*enable_key),
-            charts.counters.get_mut(*enable_key),
-        ) {
-            (Some(settings), _) => settings,
-            (_, Some(settings)) => settings,
-            _ => {
-                warn!(
-                    "Could not enable '{charts_name_for_logs}'-specific chart {enable_key}: \
-                    chart not found in settings. \
-                    This should not be a problem for running the service.",
-                );
-                continue;
-            }
+        let Some(settings) = find_chart_settings_mut(charts, enable_key) else {
+            warn!(
+                "Could not enable '{charts_name_for_logs}'-specific chart {enable_key}: \
+                chart not found in settings. \
+                This should not be a problem for running the service.",
+            );
+            continue;
         };
         settings.enabled = true;
+    }
+}
+
+/// Sets `implementation` on the entry served under `public_id`, unless the
+/// operator already configured one — an explicit operator-provided mapping
+/// wins over a flag. Looks the entry up in both sections via
+/// [`find_chart_settings_mut`]; warns and continues when neither holds it.
+fn set_default_implementation(
+    charts: &mut config::charts::Config<AllChartSettings>,
+    public_id: &str,
+    implementation_id: String,
+    charts_name_for_logs: &str,
+) {
+    let Some(settings) = find_chart_settings_mut(charts, public_id) else {
+        warn!(
+            "Could not remap '{charts_name_for_logs}'-specific chart {public_id}: \
+            chart not found in settings. \
+            Nothing will be served under this public id; the service starts without it.",
+        );
+        return;
+    };
+    if settings.implementation.is_none() {
+        settings.implementation = Some(implementation_id);
     }
 }
 
@@ -354,30 +483,48 @@ pub fn handle_enable_all_eip_7702(
 /// `filecoinChainFeesGrowth` under its own id and force-enables the public
 /// `txnsFee` id, serving it with the `filecoinNewChainFees` implementation
 /// (chain-wide REV-style fees) unless an explicit `implementation` is already
-/// configured. `filecoinNewChainFees` is never exposed as a public chart id.
-/// The intermediate charts (`burnActorBalance`, `fevmFeeTips`) stay
-/// disabled — hidden from the API — and are updated transitively as
-/// dependencies of the public charts.
+/// configured. Likewise force-enables the public `txnsFee24h` id, serving it
+/// with the `filecoinChainFees24h` implementation (the 24h burn + tips
+/// counter) unless an explicit `implementation` is already configured.
+/// Under this flag, `filecoinNewChainFees` and `filecoinChainFees24h` are
+/// never exposed as public chart ids. Both have `layout.json` slots and may
+/// be explicitly enabled standalone only while this flag is off: the flag
+/// makes each of them a remap target, and a remap target that is also
+/// enabled under its own id is rejected at startup
+/// (`RuntimeSetup::validate_implementation_mappings`). The intermediate
+/// charts (`burnActorBalance`,
+/// `fevmFeeTips`) stay disabled — hidden from the API — and are updated
+/// transitively as dependencies of the public charts.
 pub fn handle_enable_all_filecoin(
     enable_all: bool,
     charts: &mut config::charts::Config<AllChartSettings>,
 ) {
     if enable_all {
-        // force-enabling `txnsFee` keeps the single-env-var promise even for
-        // configs that disable the entry; `enable_charts` warns and continues
-        // if an entry is absent
+        // force-enabling `txnsFee`/`txnsFee24h` keeps the single-env-var
+        // promise even for configs that disable the entry; `enable_charts`
+        // warns and continues if an entry is absent
         enable_charts(
-            &[FilecoinChainFeesGrowth::key().name(), TxnsFee::key().name()],
+            &[
+                FilecoinChainFeesGrowth::key().name(),
+                TxnsFee::key().name(),
+                TxnsFee24h::key().name(),
+            ],
             charts,
             "filecoin",
         );
         // config keys are camelCase at this point (post config load)
-        if let Some(txns_fee) = charts.lines.get_mut(TxnsFee::key().name()) {
-            // an explicit operator-provided mapping wins over the flag
-            if txns_fee.implementation.is_none() {
-                txns_fee.implementation = Some(FilecoinNewChainFees::key().into_name());
-            }
-        }
+        set_default_implementation(
+            charts,
+            TxnsFee::key().name(),
+            FilecoinNewChainFees::key().into_name(),
+            "filecoin",
+        );
+        set_default_implementation(
+            charts,
+            TxnsFee24h::key().name(),
+            FilecoinChainFees24h::key().into_name(),
+            "filecoin",
+        );
     }
 }
 
@@ -462,6 +609,39 @@ pub struct StartConditionSettings {
     pub internal_transactions_ratio: ToggleableThreshold,
     pub user_ops_past_indexing_finished: ToggleableCheck,
     pub zetachain_indexed_until_today: ToggleableOptionalCheck,
+    /// Interchain mode only, and **off by default**.
+    ///
+    /// When enabled, the service waits before its first chart update until every
+    /// `(bridge, chain)` pair relevant to `interchain_filter` reports at least
+    /// this much catch-up progress, as a **ratio** in `0.0..=1.0` (`0.95` = 95%),
+    /// matching `blocks_ratio` and `internal_transactions_ratio` above. Progress
+    /// is aggregated as the **minimum** over the relevant pairs, so the slowest
+    /// pair decides.
+    ///
+    /// The indexer's `catchup_progress_percent` is the share of the configured
+    /// block range that has been **scanned**, *not* the share of data that is
+    /// present: a range scanned but failed downstream still counts as scanned.
+    /// Read `0.95` as "95% of blocks scanned", never as "95% of the data is
+    /// there".
+    ///
+    /// While the service waits, `/api/v1/update-status` reports
+    /// `WAITING_FOR_STARTING_CONDITION` and no chart has any data. A pair with no
+    /// checkpoint row yet, or whose realtime cursor is still below its configured
+    /// start block, reports 0% — so a single stuck pair holds the whole service
+    /// at "no data" indefinitely. That is why this is opt-in; leaving it disabled
+    /// is the supported configuration, and the per-cycle catch-up check
+    /// (`interchain_indexer_api_url`) then keeps chart history tracking the
+    /// indexer without ever withholding data.
+    ///
+    /// This threshold gates the **start**; the per-cycle catch-up verdict governs
+    /// **rebuilds after** the start. The two are independent, and they resolve an
+    /// unreachable API in opposite directions on purpose — see
+    /// `check_interchain_status`.
+    ///
+    /// **Requires `interchain_indexer_api_url`.** Enabling this without a URL is
+    /// a startup error, not a warning: an ungated start that looks gated is worse
+    /// than a refusal to boot.
+    pub interchain_catchup_min_progress: ToggleableThreshold,
     pub check_period_secs: u32,
 }
 
@@ -473,6 +653,16 @@ impl Default for StartConditionSettings {
             internal_transactions_ratio: ToggleableThreshold::default(),
             user_ops_past_indexing_finished: ToggleableCheck::default(),
             zetachain_indexed_until_today: ToggleableOptionalCheck::default(),
+            // written out on purpose. `ToggleableThreshold::default()` is
+            // `Self::enabled(0.98)` (see below) — *enabled* and 0.98 — so
+            // deriving this default would turn the check on for every existing
+            // interchain deployment, none of which has the indexer API URL
+            // set, so they would all hit the enabled-without-source `bail!` on
+            // upgrade. The value matches `blocks_ratio`'s 0.98 deliberately:
+            // there is no reason to carry two different-but-close defaults, and
+            // it means `__ENABLED=true` alone yields a sensible threshold rather
+            // than the useless 0.0 a bare `disabled()` would give.
+            interchain_catchup_min_progress: ToggleableThreshold::disabled().set_threshold(0.98),
             check_period_secs: 5,
         }
     }
@@ -487,6 +677,19 @@ impl StartConditionSettings {
     }
     pub fn zetachain_checks_enabled(&self) -> bool {
         self.zetachain_indexed_until_today.enabled.unwrap_or(false)
+    }
+    /// Whether the interchain catch-up start check participates in the wait.
+    ///
+    /// `validate_interchain_filter` `bail!`s when this is enabled without
+    /// `interchain_indexer_api_url`, so by the time the aggregator runs,
+    /// `interchain_checks_enabled() == true` implies a configured source. That is
+    /// why this takes no argument even though `decisions.md` Q11 words the
+    /// requirement as "must also require the API URL to be configured":
+    /// `StartConditionSettings` cannot see the URL, and normalising the
+    /// invariant at startup is cleaner than giving one of four sibling helpers a
+    /// different signature.
+    pub fn interchain_checks_enabled(&self) -> bool {
+        self.interchain_catchup_min_progress.enabled
     }
 }
 
@@ -574,6 +777,151 @@ mod tests {
             },
         )
         .unwrap()
+    }
+
+    /// Under Q11 the default *value* is aligned with `blocks_ratio` at `0.98`,
+    /// so the threshold alone no longer distinguishes the correct default from
+    /// the bug this test exists to catch (turning the check on by default). The
+    /// **pair** must be asserted.
+    #[test]
+    fn interchain_catchup_gate_is_disabled_by_default() {
+        assert_eq!(
+            StartConditionSettings::default().interchain_catchup_min_progress,
+            ToggleableThreshold::disabled().set_threshold(0.98)
+        );
+    }
+
+    #[test]
+    fn interchain_catchup_gate_stays_disabled_with_no_envs() {
+        check_envs_parsed_to(
+            "START_SETTINGS",
+            std::collections::HashMap::new(),
+            StartConditionSettings::default(),
+        )
+        .unwrap();
+    }
+
+    /// Pins the toggleable-threshold "partial env sets `enabled`" behaviour
+    /// (parity with `STATS__CONDITIONAL_START__BLOCKS_RATIO__*`, not a bug):
+    /// setting only `…__ENABLED=true` yields the written-out `0.98` threshold,
+    /// and setting only `…__THRESHOLD` alone flips `enabled` to `true`.
+    #[test]
+    fn interchain_catchup_gate_partial_env_inherits_the_toggleable_default() {
+        check_envs_parsed_to(
+            "START_SETTINGS",
+            [(
+                "START_SETTINGS__INTERCHAIN_CATCHUP_MIN_PROGRESS__ENABLED".to_owned(),
+                "true".to_owned(),
+            )]
+            .into(),
+            StartConditionSettings {
+                interchain_catchup_min_progress: ToggleableThreshold::enabled(0.98),
+                ..StartConditionSettings::default()
+            },
+        )
+        .unwrap();
+
+        check_envs_parsed_to(
+            "START_SETTINGS",
+            [(
+                "START_SETTINGS__INTERCHAIN_CATCHUP_MIN_PROGRESS__THRESHOLD".to_owned(),
+                "0.95".to_owned(),
+            )]
+            .into(),
+            StartConditionSettings {
+                interchain_catchup_min_progress: ToggleableThreshold::enabled(0.95),
+                ..StartConditionSettings::default()
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn interchain_checks_enabled_follows_the_threshold_toggle() {
+        assert!(
+            !StartConditionSettings {
+                interchain_catchup_min_progress: ToggleableThreshold::disabled(),
+                ..StartConditionSettings::default()
+            }
+            .interchain_checks_enabled()
+        );
+        assert!(
+            StartConditionSettings {
+                interchain_catchup_min_progress: ToggleableThreshold::enabled(0.9),
+                ..StartConditionSettings::default()
+            }
+            .interchain_checks_enabled()
+        );
+    }
+
+    fn interchain_filter_envs_parse_to(
+        env_values: impl IntoIterator<Item = (&'static str, &'static str)>,
+        expected: InterchainFilterSettings,
+    ) -> anyhow::Result<()> {
+        check_envs_parsed_to(
+            "INTERCHAIN_FILTER",
+            env_values
+                .into_iter()
+                .map(|(k, v)| (format!("INTERCHAIN_FILTER__{k}"), v.to_owned()))
+                .collect(),
+            expected,
+        )
+    }
+
+    #[test]
+    fn interchain_filter_defaults_to_no_dimensions_and_the_horizon_enabled() {
+        interchain_filter_envs_parse_to([], InterchainFilterSettings::default()).unwrap();
+        assert!(!InterchainFilterSettings::default().include_unindexed_chains);
+    }
+
+    #[test]
+    fn interchain_filter_parses_csv_lists_and_scalars() {
+        interchain_filter_envs_parse_to(
+            [
+                ("HOME_CHAIN_ID", "1"),
+                ("COUNTERPARTY_CHAIN_IDS", "10,137"),
+                ("SRC_CHAIN_IDS", "1"),
+                ("DST_CHAIN_IDS", "137,10,137"),
+                ("BRIDGE_IDS", "7,3"),
+                ("INCLUDE_UNINDEXED_CHAINS", "true"),
+            ],
+            InterchainFilterSettings {
+                home_chain_id: Some(1),
+                counterparty_chain_ids: Some(vec![10, 137]),
+                src_chain_ids: Some(vec![1]),
+                // parsing is verbatim: de-duplication and sorting happen in
+                // `build_interchain_filter_config`, not here
+                dst_chain_ids: Some(vec![137, 10, 137]),
+                bridge_ids: Some(vec![7, 3]),
+                include_unindexed_chains: true,
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn interchain_filter_rejects_out_of_range_ids() {
+        let too_big_for_u64 = format!("{}0", u64::MAX);
+        check_envs_parsed_to(
+            "INTERCHAIN_FILTER",
+            [(
+                "INTERCHAIN_FILTER__COUNTERPARTY_CHAIN_IDS".to_owned(),
+                too_big_for_u64,
+            )]
+            .into(),
+            InterchainFilterSettings::default(),
+        )
+        .unwrap_err();
+        check_envs_parsed_to(
+            "INTERCHAIN_FILTER",
+            [(
+                "INTERCHAIN_FILTER__BRIDGE_IDS".to_owned(),
+                format!("{}", u64::from(u32::MAX) + 1),
+            )]
+            .into(),
+            InterchainFilterSettings::default(),
+        )
+        .unwrap_err();
     }
 
     #[test]
@@ -715,7 +1063,12 @@ mod tests {
             ..Default::default()
         };
         config::charts::Config {
-            counters: Default::default(),
+            counters: [
+                (FilecoinChainFees24h::key().into_name(), disabled.clone()),
+                (TxnsFee24h::key().into_name(), txns_fee_settings.clone()),
+            ]
+            .into_iter()
+            .collect(),
             lines: [
                 (FilecoinChainFeesGrowth::key().into_name(), disabled.clone()),
                 (FilecoinNewChainFees::key().into_name(), disabled),
@@ -724,6 +1077,47 @@ mod tests {
             .into_iter()
             .collect(),
         }
+    }
+
+    /// The one property the four Filecoin flag tests cannot express: the
+    /// remap helper locates the public entry **regardless of which section
+    /// holds it**. This is the assertion that fails on the classic
+    /// copy-paste mistake the helper exists to prevent — a new remap block
+    /// hard-coding the wrong map (lines vs counters), which at HEAD before
+    /// the helper would silently set nothing.
+    #[test]
+    fn set_default_implementation_finds_entry_in_either_section() {
+        let mut charts = filecoin_charts_config(config::types::AllChartSettings::default());
+
+        // a line-chart id and a counter id, through the same call
+        set_default_implementation(
+            &mut charts,
+            TxnsFee::key().name(),
+            "someImpl".into(),
+            "test",
+        );
+        set_default_implementation(
+            &mut charts,
+            TxnsFee24h::key().name(),
+            "someOtherImpl".into(),
+            "test",
+        );
+        assert_eq!(
+            charts.lines[TxnsFee::key().name()]
+                .implementation
+                .as_deref(),
+            Some("someImpl")
+        );
+        assert_eq!(
+            charts.counters[TxnsFee24h::key().name()]
+                .implementation
+                .as_deref(),
+            Some("someOtherImpl")
+        );
+
+        // an id present in neither section warns and continues — no panic,
+        // no change
+        set_default_implementation(&mut charts, "absentChart", "ignored".into(), "test");
     }
 
     #[test]
@@ -744,6 +1138,15 @@ mod tests {
         );
         // the implementation must never become a public id
         assert!(!charts.lines[FilecoinNewChainFees::key().name()].enabled);
+
+        let txns_fee_24h = &charts.counters[TxnsFee24h::key().name()];
+        assert!(txns_fee_24h.enabled);
+        assert_eq!(
+            txns_fee_24h.implementation,
+            Some(FilecoinChainFees24h::key().into_name())
+        );
+        // the implementation must never become a public id
+        assert!(!charts.counters[FilecoinChainFees24h::key().name()].enabled);
     }
 
     #[test]
@@ -760,6 +1163,13 @@ mod tests {
         assert_eq!(
             txns_fee.implementation,
             Some(FilecoinNewChainFees::key().into_name())
+        );
+
+        let txns_fee_24h = &charts.counters[TxnsFee24h::key().name()];
+        assert!(txns_fee_24h.enabled);
+        assert_eq!(
+            txns_fee_24h.implementation,
+            Some(FilecoinChainFees24h::key().into_name())
         );
     }
 
@@ -780,6 +1190,14 @@ mod tests {
             txns_fee.implementation.as_deref(),
             Some("someOtherImplementation")
         );
+
+        let txns_fee_24h = &charts.counters[TxnsFee24h::key().name()];
+        // enablement is still forced, the operator-provided mapping wins
+        assert!(txns_fee_24h.enabled);
+        assert_eq!(
+            txns_fee_24h.implementation.as_deref(),
+            Some("someOtherImplementation")
+        );
     }
 
     #[test]
@@ -796,6 +1214,29 @@ mod tests {
         let txns_fee = &charts.lines[TxnsFee::key().name()];
         assert!(txns_fee.enabled);
         assert_eq!(txns_fee.implementation, None);
+
+        assert!(!charts.counters[FilecoinChainFees24h::key().name()].enabled);
+        let txns_fee_24h = &charts.counters[TxnsFee24h::key().name()];
+        assert!(txns_fee_24h.enabled);
+        assert_eq!(txns_fee_24h.implementation, None);
+    }
+
+    // a duplicate id with one side disabled survives
+    // `RuntimeSetup::build_charts_info`, so this preference is observable in a
+    // running service; pin that the line chart entry is the one acted upon
+    #[test]
+    fn duplicate_id_across_sections_resolves_to_the_line_chart_entry() {
+        let disabled = config::types::AllChartSettings::default();
+        let id = "some_duplicated_id".to_owned();
+        let mut charts = config::charts::Config {
+            counters: [(id.clone(), disabled.clone())].into_iter().collect(),
+            lines: [(id.clone(), disabled.clone())].into_iter().collect(),
+        };
+
+        enable_charts(&[&id], &mut charts, "test");
+
+        assert!(charts.lines[&id].enabled);
+        assert!(!charts.counters[&id].enabled);
     }
 
     #[test]

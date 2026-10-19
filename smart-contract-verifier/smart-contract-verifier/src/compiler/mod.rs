@@ -8,6 +8,17 @@ mod fetcher_versions;
 mod version_compact;
 mod version_detailed;
 
+#[cfg(test)]
+mod docker_executor_tests;
+
+pub use compiler_runner::{
+    set_metrics_namespace as set_compiler_runner_metrics_namespace, CommandArgument,
+    CompilerExecutor, CompilerInvocation, ConcurrencyLimitedCompilerExecutor,
+    DockerCompilerExecutor, DockerCompilerExecutorSettings, ExecutionError, ExecutionOutput,
+    JobFile, NativeCompilerExecutor,
+    DEFAULT_EXECUTION_TIMEOUT_SECS as DEFAULT_COMPILER_EXECUTION_TIMEOUT_SECS,
+    DEFAULT_MAX_OUTPUT_BYTES as DEFAULT_COMPILER_MAX_OUTPUT_BYTES,
+};
 pub use download_cache::DownloadCache;
 pub use fetcher::{Fetcher, FileValidator, Version};
 pub use fetcher_list::ListFetcher;

@@ -35,14 +35,14 @@ jobs:
         with:
           working-directory: visualizer
 
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
-          node-version: 16
+          node-version: '22.x'
 
+      # Pinned exactly: the test suite compares rendered SVGs byte for byte,
+      # so any sol2uml change has to come with regenerated samples.
       - name: Install sol2uml
-        run: |
-          npm install phantom
-          npm link sol2uml@2.1 --only=production
+        run: npm install -g sol2uml@2.5.26
 
       - name: Unit tests
         run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --all-features --lib --bins -- --nocapture

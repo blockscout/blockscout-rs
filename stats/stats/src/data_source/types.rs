@@ -6,7 +6,7 @@ use std::{
 };
 
 use blockscout_db::entity::migrations_status;
-use chrono::Utc;
+use chrono::{NaiveDateTime, Utc};
 use sea_orm::{
     DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryOrder, Statement, TryGetable,
 };
@@ -14,7 +14,11 @@ use tokio::sync::Mutex;
 use tracing::warn;
 
 use crate::{
-    ChartKey, counters::TxnsStatsValue, mode::Mode, types::new_txns::NewTxnsCombinedPoint,
+    ChartKey,
+    charts::db_interaction::filters::interchain::InterchainFilter,
+    counters::{FilecoinChainFees24hValue, TxnsStatsValue},
+    mode::Mode,
+    types::new_txns::NewTxnsCombinedPoint,
 };
 
 #[derive(Clone)]
@@ -24,8 +28,9 @@ pub struct UpdateParameters<'a> {
     pub mode: Mode,
     /// Chain IDs to filter by in MultichainAggregator mode
     pub multichain_filter: Option<Vec<u64>>,
-    /// If the primary chain set, send/receive counters and charts will be built around it
-    pub interchain_primary_id: Option<u64>,
+    /// Read filter applied to the interchain indexer DB, fully resolved for this
+    /// update cycle (operator configuration + the observability horizon).
+    pub interchain_filter: InterchainFilter,
     /// Indexer database (blockscout, multichain, or interchain)
     pub indexer_db: &'a DatabaseConnection,
     pub indexer_applied_migrations: IndexerMigrations,
@@ -46,7 +51,7 @@ impl<'a> UpdateParameters<'a> {
     /// Query parameters are just a subset of the update parameters,
     /// which is why there are a few fields that are not applicable to query parameters.
     /// Build parameters for reading stored chart data. Filter fields like
-    /// `multichain_filter` and `interchain_primary_id` are not used when reading.
+    /// `multichain_filter` and `interchain_filter` are not used when reading.
     pub fn query_parameters(
         db: &'a DatabaseConnection,
         indexer: &'a DatabaseConnection,
@@ -58,8 +63,9 @@ impl<'a> UpdateParameters<'a> {
         Self {
             stats_db: db,
             mode,
-            multichain_filter: None,     // only used when updating the DB
-            interchain_primary_id: None, // only used when updating the DB
+            multichain_filter: None, // only used when updating the DB
+            // only used when updating the DB
+            interchain_filter: InterchainFilter::default(),
             indexer_db: indexer,
             indexer_applied_migrations,
             second_indexer_db: second_indexer,
@@ -88,7 +94,7 @@ impl<'a> UpdateParameters<'a> {
             stats_db: db,
             mode: Mode::Blockscout,
             multichain_filter: None,
-            interchain_primary_id: None,
+            interchain_filter: InterchainFilter::default(),
             indexer_db: indexer,
             indexer_applied_migrations: IndexerMigrations::latest(),
             second_indexer_db: None,
@@ -125,7 +131,9 @@ pub struct UpdateContext<'a> {
     pub stats_db: &'a DatabaseConnection,
     pub mode: Mode,
     pub multichain_filter: Option<Vec<u64>>,
-    pub interchain_primary_id: Option<u64>,
+    /// Read filter applied to the interchain indexer DB, fully resolved for this
+    /// update cycle (operator configuration + the observability horizon).
+    pub interchain_filter: InterchainFilter,
     /// Indexer database (blockscout, multichain, or interchain depending on mode)
     pub indexer_db: &'a DatabaseConnection,
     pub indexer_applied_migrations: IndexerMigrations,
@@ -145,7 +153,7 @@ impl<'a> UpdateContext<'a> {
             stats_db: value.stats_db,
             mode: value.mode,
             multichain_filter: value.multichain_filter,
-            interchain_primary_id: value.interchain_primary_id,
+            interchain_filter: value.interchain_filter,
             indexer_db: value.indexer_db,
             indexer_applied_migrations: value.indexer_applied_migrations,
             second_indexer_db: value.second_indexer_db,
@@ -260,7 +268,9 @@ impl IndexerMigrations {
 pub enum CacheValue {
     ValueString(String),
     ValueOptionF64(Option<f64>),
+    ValueOptionNaiveDateTime(Option<NaiveDateTime>),
     ValueTxnsStats(TxnsStatsValue),
+    ValueFilecoinChainFees24h(FilecoinChainFees24hValue),
     ValueNewTxnsCombined(NewTxnsCombinedPoint),
     VecTxnWindow(Vec<NewTxnsCombinedPoint>),
 }
@@ -293,11 +303,13 @@ macro_rules! impl_cacheable {
 }
 
 impl_cacheable!(TxnsStatsValue, ValueTxnsStats);
+impl_cacheable!(FilecoinChainFees24hValue, ValueFilecoinChainFees24h);
 impl_cacheable!(NewTxnsCombinedPoint, ValueNewTxnsCombined);
 impl_cacheable!(Vec<NewTxnsCombinedPoint>, VecTxnWindow);
 // for testing
 impl_cacheable!(String, ValueString);
 impl_cacheable!(Option<f64>, ValueOptionF64);
+impl_cacheable!(Option<NaiveDateTime>, ValueOptionNaiveDateTime);
 
 // To allow using the scalar(?) types in context requiring
 // `FromQueryResult`
