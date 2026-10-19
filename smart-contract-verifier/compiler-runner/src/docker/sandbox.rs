@@ -715,16 +715,20 @@ fn job_lifetime_seconds(
     )
 }
 
-/// One anchored pattern per host. Host names are validated to hold only letters, digits, dots and
-/// hyphens, so the dot is the only character that needs escaping.
+/// One anchored pattern per host, matched against the whole request target. The target of a
+/// `CONNECT` is `host:port`, while a plain request's is an absolute URL, which no pattern matches.
+/// Host names are validated to hold only letters, digits, dots and hyphens, so the dot is the only
+/// character that needs escaping.
 fn proxy_filter(hosts: &[String]) -> String {
     hosts
         .iter()
-        .map(|host| format!("^{}$\n", host.replace('.', "\\.")))
+        .map(|host| format!("^{}:443$\n", host.replace('.', "\\.")))
         .collect()
 }
 
-/// Refuses every host the filter does not list and every `CONNECT` port but 443.
+/// Lets through only `CONNECT` requests to port 443 of a listed host. `ConnectPort` alone limits
+/// `CONNECT` only, so the filter is applied to the request target (`FilterURLs`) rather than to
+/// the host: a plain `GET http://host:port/` would otherwise reach any port of a listed host.
 fn proxy_configuration() -> String {
     [
         format!("Port {PROXY_PORT}"),
@@ -734,7 +738,7 @@ fn proxy_configuration() -> String {
         "DisableViaHeader Yes".to_string(),
         "FilterDefaultDeny Yes".to_string(),
         "FilterExtended On".to_string(),
-        "FilterURLs Off".to_string(),
+        "FilterURLs On".to_string(),
         format!("Filter \"{PROXY_FILTER_PATH}\""),
         "ConnectPort 443".to_string(),
         String::new(),
@@ -1120,14 +1124,14 @@ mod tests {
 
         assert_eq!(
             proxy_filter(&job.egress_hosts),
-            "^github\\.com$\n^static\\.crates\\.io$\n"
+            "^github\\.com:443$\n^static\\.crates\\.io:443$\n"
         );
         let configuration = proxy_configuration();
         for line in [
             "Port 3128",
             "FilterDefaultDeny Yes",
             "FilterExtended On",
-            "FilterURLs Off",
+            "FilterURLs On",
             "Filter \"/tmp/tinyproxy-filter\"",
             "ConnectPort 443",
         ] {
@@ -1468,10 +1472,19 @@ mod tests {
                 exec 3>&-
                 echo "$line" | cut -d' ' -f2
             }
+            get() {
+                exec 3<>/dev/tcp/egress-proxy/3128 || return 1
+                printf 'GET %s HTTP/1.1\r\nHost: github.com\r\n\r\n' "$1" >&3
+                read -r -t 20 line <&3
+                exec 3>&-
+                echo "$line" | cut -d' ' -f2
+            }
             echo "listed=$(probe github.com 443)"
             echo "unlisted=$(probe example.com 443)"
             echo "lookalike=$(probe github.com.example.com 443)"
             echo "other-port=$(probe github.com 22)"
+            echo "plain=$(get http://github.com/)"
+            echo "plain-other-port=$(get http://github.com:22/)"
             if getent hosts example.com >/dev/null; then echo dns=open; else echo dns=closed; fi
             if timeout 5 bash -c 'exec 3<>/dev/tcp/1.1.1.1/443' 2>/dev/null; then
                 echo direct=open
@@ -1509,7 +1522,8 @@ mod tests {
         let output = executor.run_sandbox_job(job).await.unwrap();
         assert_eq!(
             String::from_utf8_lossy(&output.steps[0].stdout),
-            "listed=200\nunlisted=403\nlookalike=403\nother-port=403\ndns=closed\ndirect=closed\n\
+            "listed=200\nunlisted=403\nlookalike=403\nother-port=403\nplain=403\n\
+             plain-other-port=403\ndns=closed\ndirect=closed\n\
              proxy=http://egress-proxy:3128\n"
         );
         assert_eq!(output.steps[1].stdout, Bytes::from_static(b"offline\n"));
