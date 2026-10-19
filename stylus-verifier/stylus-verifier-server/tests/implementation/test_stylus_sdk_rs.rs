@@ -43,6 +43,14 @@ mod verify_github_repository {
         ))
         .await
     }
+
+    // A contract on Arbitrum One deployed with 0.10.7 and Rust 1.97.1. From 0.10 the build runs
+    // at the project's workspace root, which here is the repository root with a member crate.
+    #[tokio::test]
+    #[ignore = "requires STYLUS_VERIFIER_TEST_SANDBOX"]
+    async fn zero_ten_from_the_workspace_root() {
+        test("verify_github_repository_vess_contract_0.10.7").await
+    }
 }
 
 mod list_cargo_stylus_versions {
