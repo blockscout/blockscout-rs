@@ -71,6 +71,9 @@ pub struct SandboxSession {
     resources: SandboxResources,
     holder_id: String,
     steps_run: usize,
+    /// The last step's container until it is removed. A step that timed out may still be
+    /// running, so nothing else starts in the session while this is set.
+    unremoved_step: Option<String>,
     observation: Option<metrics::JobObservation>,
 }
 
@@ -136,6 +139,7 @@ impl DockerCompilerExecutor {
                 resources,
                 holder_id,
                 steps_run: 0,
+                unremoved_step: None,
                 observation: Some(observation),
             }),
             Err(error) => {
@@ -489,6 +493,7 @@ impl SandboxSession {
         &mut self,
         step: &SandboxStep,
     ) -> Result<ExecutionOutput, ExecutionError> {
+        self.remove_last_step().await?;
         step.validate(&validate_volumes(&self.spec.volumes)?)?;
         if step.network == SandboxNetwork::Egress && self.spec.egress_hosts.is_empty() {
             return Err(ExecutionError::InvalidInvocation(format!(
@@ -514,6 +519,7 @@ impl SandboxSession {
                 &mut self.resources,
             )
             .await?;
+        self.unremoved_step = Some(container_id.clone());
         let output = executor
             .run_created_container_within(
                 &container_id,
@@ -524,13 +530,29 @@ impl SandboxSession {
                     max_output_bytes: step.limits.max_output_bytes,
                 },
             )
-            .await?;
-        // A finished step must not keep its mounts or memory while the next one runs.
-        if let Err(error) = self.resources.remove_container(&container_id).await {
+            .await;
+        // Whatever the outcome, the step must not keep running, or keep its mounts or memory,
+        // beside what comes next. A timeout leaves it running, so it is removed here, and the
+        // next call tries again if this fails.
+        if let Err(error) = self.remove_last_step().await {
             tracing::warn!(container_id, error = ?error, "failed to remove sandbox step");
         }
+        let output = output?;
         output.ensure_success(&step.name)?;
         Ok(output)
+    }
+
+    async fn remove_last_step(&mut self) -> Result<(), ExecutionError> {
+        let Some(container_id) = self.unremoved_step.take() else {
+            return Ok(());
+        };
+        if let Err(error) = self.resources.remove_container(&container_id).await {
+            self.unremoved_step = Some(container_id);
+            return Err(ExecutionError::Infrastructure(
+                error.context("remove the previous sandbox step"),
+            ));
+        }
+        Ok(())
     }
 
     /// Reads a file, or every regular file under a directory, from one of the volumes.
@@ -539,6 +561,7 @@ impl SandboxSession {
         output: &SandboxOutput,
     ) -> Result<Vec<SandboxFile>, ExecutionError> {
         let result = async {
+            self.remove_last_step().await?;
             output.validate(&validate_volumes(&self.spec.volumes)?)?;
             self.executor
                 .read_sandbox_output(&self.holder_id, output)
@@ -1385,6 +1408,28 @@ mod tests {
         assert_eq!(
             session.read_output(&output("result")).await.unwrap()[0].content,
             Bytes::from_static(b"second\n")
+        );
+
+        // A step that runs out of time is stopped and removed before anything else starts.
+        let mut stuck = step(
+            "stuck",
+            "echo started > /data/stuck; sleep 600",
+            vec![mount("data", "/data", false)],
+        );
+        stuck.limits.timeout_seconds = 3;
+        assert!(matches!(
+            session.run_step(&stuck).await,
+            Err(ExecutionError::Timeout { seconds: 3 })
+        ));
+        let steps_left = leftover_sandbox_objects(&docker)
+            .await
+            .into_iter()
+            .filter(|name| name.contains("-step-"))
+            .collect::<Vec<_>>();
+        assert_eq!(steps_left, Vec::<String>::new());
+        assert_eq!(
+            session.read_output(&output("stuck")).await.unwrap()[0].content,
+            Bytes::from_static(b"started\n")
         );
 
         // A step that could outlive the sandbox is refused, as is egress without listed hosts.
