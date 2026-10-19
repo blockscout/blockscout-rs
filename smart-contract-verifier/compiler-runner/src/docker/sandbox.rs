@@ -246,7 +246,14 @@ impl DockerCompilerExecutor {
         let mounts = step
             .mounts
             .iter()
-            .map(|mount| plan.mount(&mount.volume, mount.path.clone(), mount.read_only))
+            .map(|mount| {
+                let mut docker_mount =
+                    plan.mount(&mount.volume, mount.path.clone(), mount.read_only);
+                if let Some(options) = docker_mount.volume_options.as_mut() {
+                    options.subpath = mount.subpath.clone();
+                }
+                docker_mount
+            })
             .collect();
         let limits = ContainerLimits {
             memory_bytes: i64::try_from(step.limits.memory_bytes).unwrap_or(i64::MAX),
@@ -988,6 +995,7 @@ mod tests {
             volume: volume.to_string(),
             path: path.to_string(),
             read_only,
+            subpath: None,
         }
     }
 
@@ -1015,6 +1023,25 @@ mod tests {
             outputs: Vec::new(),
             egress_hosts: Vec::new(),
         }
+    }
+
+    #[test]
+    fn step_mounts_carry_their_subpath() {
+        let executor = executor();
+        let mut job = two_volume_job();
+        job.steps[1].mounts[0].subpath = Some("repo/contracts".to_string());
+        let plan = JobPlan::new(600).unwrap();
+        let mounts = executor
+            .step_config(&job.steps[1], &plan)
+            .host_config
+            .unwrap()
+            .mounts
+            .unwrap();
+        let subpaths: Vec<_> = mounts
+            .iter()
+            .map(|mount| mount.volume_options.as_ref().unwrap().subpath.as_deref())
+            .collect();
+        assert_eq!(subpaths, [Some("repo/contracts"), None]);
     }
 
     #[test]
@@ -1449,6 +1476,68 @@ mod tests {
             session.run_step(&online).await,
             Err(ExecutionError::InvalidInvocation(_))
         ));
+
+        session.finish().await;
+        assert_eq!(
+            leftover_sandbox_objects(&docker).await,
+            Vec::<String>::new()
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a test Docker host"]
+    async fn docker_sandbox_mounts_a_directory_of_a_volume() {
+        let _exclusive = LOCAL_DOCKER.lock().await;
+        let (executor, docker, runner_image) = test_host();
+        let image = step_image(&runner_image);
+        let step = |name: &str, script: &str, mounts| SandboxStep {
+            image: image.clone(),
+            ..step(name, script, mounts)
+        };
+        let subpath = |subpath: &str| SandboxMount {
+            subpath: Some(subpath.to_string()),
+            ..mount("data", "/sub", true)
+        };
+
+        let mut session = executor
+            .start_sandbox(SandboxSpec {
+                volumes: vec![volume("data", 8 << 20)],
+                egress_hosts: Vec::new(),
+                lifetime_seconds: 120,
+            })
+            .await
+            .unwrap();
+        session
+            .run_step(&step(
+                "write",
+                "mkdir -p /data/repo/project && echo inside > /data/repo/project/file \
+                 && ln -s / /data/repo/escape",
+                vec![mount("data", "/data", false)],
+            ))
+            .await
+            .unwrap();
+
+        // The directory, not the volume, is what the step sees.
+        let output = session
+            .run_step(&step(
+                "read",
+                "cat /sub/file && ls /sub",
+                vec![subpath("repo/project")],
+            ))
+            .await
+            .unwrap();
+        assert_eq!(output.stdout, Bytes::from_static(b"inside\nfile\n"));
+
+        // A symlink must not lead out of the volume: Docker refuses the mount, or resolves the
+        // link inside the volume, where `/` is the volume's root.
+        match session
+            .run_step(&step("escape", "ls /sub", vec![subpath("repo/escape")]))
+            .await
+        {
+            Ok(output) => assert_eq!(output.stdout, Bytes::from_static(b"repo\n")),
+            Err(ExecutionError::Infrastructure(_)) => {}
+            Err(other) => panic!("unexpected error: {other:?}"),
+        }
 
         session.finish().await;
         assert_eq!(

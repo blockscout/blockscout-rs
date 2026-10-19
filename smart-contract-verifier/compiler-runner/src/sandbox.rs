@@ -33,6 +33,9 @@ pub struct SandboxMount {
     /// there when that outer mount is read-only.
     pub path: String,
     pub read_only: bool,
+    /// A directory inside the volume to mount instead of the whole volume, relative to its root.
+    /// Docker refuses one that a symlink leads out of the volume.
+    pub subpath: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -257,6 +260,13 @@ impl SandboxStep {
                     "step {step} needs a normalized absolute mount path below the root"
                 )));
             }
+            if let Some(subpath) = &mount.subpath {
+                if !is_normal_relative_path(subpath) {
+                    return Err(invalid(format!(
+                        "step {step} needs a normalized subpath relative to the volume"
+                    )));
+                }
+            }
             // `/tmp` is the step's private home directory.
             if Path::new(&mount.path).starts_with("/tmp") {
                 return Err(invalid(format!("step {step} must not mount over /tmp")));
@@ -389,6 +399,7 @@ pub(crate) mod tests {
                         volume: "source".to_string(),
                         path: "/source".to_string(),
                         read_only: false,
+                        subpath: None,
                     }],
                     limits: limits(),
                 },
@@ -404,11 +415,13 @@ pub(crate) mod tests {
                             volume: "source".to_string(),
                             path: "/source".to_string(),
                             read_only: true,
+                            subpath: None,
                         },
                         SandboxMount {
                             volume: "build".to_string(),
                             path: "/source/project/target".to_string(),
                             read_only: false,
+                            subpath: None,
                         },
                     ],
                     limits: limits(),
@@ -483,6 +496,21 @@ pub(crate) mod tests {
         let mount = twice.steps[0].mounts[0].clone();
         twice.steps[0].mounts.push(mount);
         assert!(rejected(&twice).contains("twice"));
+    }
+
+    #[test]
+    fn mount_subpaths_stay_inside_their_volume() {
+        for subpath in ["", "/repo", "../x", "repo/../..", "repo/"] {
+            let mut job = job();
+            job.steps[0].mounts[0].subpath = Some(subpath.to_string());
+            assert!(
+                rejected(&job).contains("subpath"),
+                "subpath {subpath:?} was accepted"
+            );
+        }
+        let mut job = job();
+        job.steps[0].mounts[0].subpath = Some("repo/contracts".to_string());
+        job.validate().unwrap();
     }
 
     #[test]
