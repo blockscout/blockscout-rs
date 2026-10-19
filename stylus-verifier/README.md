@@ -14,7 +14,10 @@ read-only container:
 2. **fetch** the dependencies with `cargo fetch --locked`, sources read-only, same network limits.
    It runs outside the project directory with the image's toolchain, so the repository's
    `.cargo/config.toml` and `rust-toolchain.toml` cannot make it run anything.
-3. **build** with `cargo stylus get-initcode`, without any network.
+3. **build** with `cargo stylus get-initcode`, without any network. The output depends on the
+   path it is built at, so the build runs where cargo-stylus's own reproducible build does: at
+   `/source`, which holds the project before cargo-stylus 0.10 and its workspace root from 0.10
+   on.
 4. **export the ABI** with `cargo stylus export-abi`, without any network.
 
 The service then reads the deployment transaction from the request's `rpc_endpoint` and compares
@@ -31,7 +34,7 @@ Settings live under `sandbox` (`STYLUS_VERIFIER__SANDBOX__...` in the environmen
 | `docker.key_path` | SSH private key. The host key must already be in `known_hosts`. |
 | `docker.runner_image` | Digest-pinned runner image, present on the host. It holds the sandbox's volumes and runs its egress proxy. Required. |
 | `docker.runtime` | Optional container runtime, such as `runsc`. Recommended: the steps run code from the submitted project. |
-| `verifier.images` | List of `{ cargo_stylus_version, toolchain, image }`. Each image is digest-pinned, present on the host, and holds that cargo-stylus version, that Rust toolchain with the `wasm32-unknown-unknown` target and `rust-src`, and `git`. A cargo-stylus version is supported when it has at least one image; it needs `cargo stylus get-initcode`, which exists from 0.5.12. In the environment the list is a JSON string. |
+| `verifier.images` | List of `{ image, cargo_stylus_versions, toolchains }`. Each image is digest-pinned, present on the host, and holds those cargo-stylus versions (the build picks one with `CARGO_STYLUS_VERSION`), those Rust toolchains with the `wasm32-unknown-unknown` target and `rust-src`, and `git`. `stylus-verifier/cargo-stylus.Dockerfile` builds such an image. A cargo-stylus version is supported when an image holds it; it needs `cargo stylus get-initcode`, which exists from 0.5.12. In the environment the list is a JSON string. |
 | `verifier.max_concurrent_verifications` | Builds running at once; default 2. |
 | `verifier.allow_private_rpc_endpoints` | Accept RPC endpoints on private addresses; default `false`. |
 | `verifier.job.*` | Volume sizes, memory limits and timeouts of the steps, and `egress_hosts`. A step's memory limit also covers what it writes to its volumes. |

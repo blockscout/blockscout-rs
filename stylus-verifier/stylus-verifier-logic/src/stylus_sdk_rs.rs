@@ -2,7 +2,7 @@
 
 use crate::{
     deployment,
-    job::{clone_exit, JobSettings},
+    job::{self, clone_exit, JobSettings},
 };
 use alloy_json_abi::JsonAbi;
 use anyhow::{anyhow, Context};
@@ -67,7 +67,7 @@ pub enum Error {
     RepositoryNotFound(String),
     #[error("commit hash not found: {0}")]
     CommitNotFound(String),
-    #[error("rust-toolchain.toml file not found in project directory")]
+    #[error("rust-toolchain.toml file not found in the project directory or above it")]
     ToolchainNotFound,
     #[error("rust-toolchain.toml content is not valid: {0}")]
     InvalidToolchain(String),
@@ -77,21 +77,23 @@ pub enum Error {
     Internal(#[from] anyhow::Error),
 }
 
-/// A pinned image holding one cargo-stylus version and one Rust toolchain, with the wasm target.
+/// A pinned image holding cargo-stylus versions and Rust toolchains, each toolchain with the
+/// wasm target and rust-src, and `git`. A build runs the cargo-stylus version that
+/// `CARGO_STYLUS_VERSION` names, with the toolchain the project's `rust-toolchain.toml` names.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ToolImage {
-    pub cargo_stylus_version: Version,
-    pub toolchain: Version,
     pub image: String,
+    pub cargo_stylus_versions: Vec<Version>,
+    pub toolchains: Vec<Version>,
 }
 
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct VerifierSettings {
-    /// A cargo-stylus version is supported when at least one image carries it. An environment
-    /// variable can hold the list as a JSON string.
+    /// A cargo-stylus version is supported when an image carries it. An environment variable can
+    /// hold the list as a JSON string.
     #[serde_as(as = "PickFirst<(_, JsonString)>")]
     pub images: Vec<ToolImage>,
     /// Builds are heavy; requests beyond this wait.
@@ -133,6 +135,16 @@ impl Verifier {
             .sandbox()
             .validate()
             .context("invalid sandbox settings")?;
+        if let Some(image) = settings
+            .images
+            .iter()
+            .find(|image| image.cargo_stylus_versions.is_empty() || image.toolchains.is_empty())
+        {
+            anyhow::bail!(
+                "image {} needs at least one cargo-stylus version and one toolchain",
+                image.image
+            );
+        }
         Ok(Self {
             admission: Semaphore::new(settings.max_concurrent_verifications.get()),
             executor,
@@ -145,7 +157,7 @@ impl Verifier {
             .settings
             .images
             .iter()
-            .map(|image| image.cargo_stylus_version.clone())
+            .flat_map(|image| image.cargo_stylus_versions.iter().cloned())
             .collect();
         versions.into_iter().collect()
     }
@@ -161,7 +173,11 @@ impl Verifier {
             .settings
             .images
             .iter()
-            .filter(|image| image.cargo_stylus_version == request.cargo_stylus_version)
+            .filter(|image| {
+                image
+                    .cargo_stylus_versions
+                    .contains(&request.cargo_stylus_version)
+            })
             .collect();
         if images.is_empty() {
             return Err(Error::BadRequest(format!(
@@ -197,6 +213,7 @@ impl Verifier {
             .build_in_sandbox(
                 &mut session,
                 &images,
+                &request.cargo_stylus_version,
                 &repository_url,
                 &request.commit,
                 &path_prefix,
@@ -228,37 +245,19 @@ impl Verifier {
         &self,
         session: &mut SandboxSession,
         images: &[&ToolImage],
+        cargo_stylus_version: &Version,
         repository_url: &str,
         commit: &str,
         path_prefix: &str,
     ) -> Result<Built, Error> {
         let job = &self.settings.job;
         // Every image of the version has git; the toolchain is not known before the clone.
-        session
+        let cloned = session
             .run_step(&job.clone_step(&images[0].image, repository_url, commit, path_prefix))
             .await
             .map_err(|error| clone_error(error, repository_url, commit))?;
-
-        let toolchain_file = read_text(
-            session,
-            &job.manifest_output(path_prefix, TOOLCHAIN_FILE_NAME),
-        )
-        .await?;
-        let toolchain = validate_toolchain_channel(&parse_toolchain_channel(&toolchain_file)?)?;
-        let image = images
-            .iter()
-            .find(|image| image.toolchain == toolchain)
-            .ok_or_else(|| {
-                let available: Vec<_> = images
-                    .iter()
-                    .map(|image| image.toolchain.to_string())
-                    .collect();
-                Error::InvalidToolchain(format!(
-                    "toolchain {toolchain} is not available for cargo-stylus {}; available: {}",
-                    images[0].cargo_stylus_version,
-                    available.join(", ")
-                ))
-            })?;
+        let toolchain_directories =
+            job::toolchain_directories(&String::from_utf8_lossy(&cloned.stdout));
         let package_file = read_text(
             session,
             &job.manifest_output(path_prefix, PACKAGE_FILE_NAME),
@@ -266,12 +265,59 @@ impl Verifier {
         .await?;
         let package_name = parse_package_name(&package_file)?;
 
+        let root = if job::builds_from_workspace_root(cargo_stylus_version) {
+            // Any toolchain of the image can read the manifests.
+            let located = session
+                .run_step(&job.locate_step(&images[0].image, &images[0].toolchains[0], path_prefix))
+                .await
+                .map_err(build_error)?;
+            let workspace_root =
+                job::workspace_root(&String::from_utf8_lossy(&located.stdout), path_prefix)
+                    .ok_or_else(|| {
+                        Error::BadRequest(
+                            "the project's workspace root is not inside the repository".to_string(),
+                        )
+                    })?;
+            job::BuildRoot::workspace(workspace_root, package_name.clone())
+        } else {
+            job::BuildRoot::project(path_prefix)
+        };
+
+        let toolchain_directory = root
+            .toolchain_directory(&toolchain_directories)
+            .ok_or(Error::ToolchainNotFound)?;
+        let toolchain_file = read_text(
+            session,
+            &job.manifest_output(toolchain_directory, TOOLCHAIN_FILE_NAME),
+        )
+        .await?;
+        let toolchain = validate_toolchain_channel(&parse_toolchain_channel(&toolchain_file)?)?;
+        let tools = images
+            .iter()
+            .find(|image| image.toolchains.contains(&toolchain))
+            .map(|image| job::Tools {
+                image: image.image.clone(),
+                cargo_stylus_version: cargo_stylus_version.clone(),
+                toolchain: toolchain.clone(),
+            })
+            .ok_or_else(|| {
+                let available: BTreeSet<_> = images
+                    .iter()
+                    .flat_map(|image| image.toolchains.iter().map(ToString::to_string))
+                    .collect();
+                Error::InvalidToolchain(format!(
+                    "toolchain {toolchain} is not available for cargo-stylus \
+                     {cargo_stylus_version}; available: {}",
+                    available.into_iter().collect::<Vec<_>>().join(", ")
+                ))
+            })?;
+
         session
-            .run_step(&job.fetch_step(&image.image, &image.toolchain.to_string(), path_prefix))
+            .run_step(&job.fetch_step(&tools, path_prefix))
             .await
             .map_err(build_error)?;
         session
-            .run_step(&job.build_step(&image.image, path_prefix))
+            .run_step(&job.build_step(&tools, &root))
             .await
             .map_err(build_error)?;
         let initcode = read_text(session, &job.initcode_output()).await?;
@@ -279,10 +325,7 @@ impl Verifier {
             .map_err(|error| anyhow!("the build wrote initcode that is not hex: {error}"))?;
 
         // As before, a contract whose ABI cannot be exported is still verified.
-        let exported = match session
-            .run_step(&job.export_abi_step(&image.image, path_prefix))
-            .await
-        {
+        let exported = match session.run_step(&job.export_abi_step(&tools, &root)).await {
             Ok(output) => process_export_abi_output(&String::from_utf8_lossy(&output.stdout))?,
             Err(
                 ExecutionError::CompilerFailed { .. }

@@ -19,7 +19,11 @@ async fn sandbox_metrics_are_exported_with_the_service_prefix() {
         },
         "verifier": {
             "images": [
-                { "cargo_stylus_version": "0.6.2", "toolchain": "1.80.0", "image": image("tools") },
+                {
+                    "image": image("tools"),
+                    "cargo_stylus_versions": ["0.6.2"],
+                    "toolchains": ["1.80.0"],
+                },
             ],
         },
     }))
