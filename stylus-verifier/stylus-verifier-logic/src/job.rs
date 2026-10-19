@@ -3,8 +3,8 @@
 //! The sandbox steps of one verification.
 //!
 //! Everything from the request reaches a step as a positional argument of a fixed script, never
-//! as part of the script text. The clone step runs nothing from the repository; the later steps
-//! do, and they see the sources read-only.
+//! as part of the script text. The clone and fetch steps, which have network, run nothing from
+//! the repository; the build steps do, offline, and they see the sources read-only.
 
 use compiler_runner::{
     SandboxLimits, SandboxMount, SandboxNetwork, SandboxOutput, SandboxSpec, SandboxStep,
@@ -53,7 +53,12 @@ else
     mkdir "$project/target" || exit 69
 fi
 "#;
-const FETCH_SCRIPT: &str = r#"cd "/source/repo${1:+/$1}" && exec cargo fetch --locked"#;
+/// Run from `/`, outside the repository: cargo and rustup look for their configuration from the
+/// working directory up, so the repository's `.cargo/config.toml` and `rust-toolchain.toml`,
+/// which can name programs to run, are not read. A dependency source the repository configures
+/// there is therefore not fetched, and such a project fails to build offline.
+const FETCH_SCRIPT: &str =
+    r#"exec cargo fetch --locked --manifest-path "/source/repo${1:+/$1}/Cargo.toml""#;
 const BUILD_SCRIPT: &str =
     r#"cd "/source/repo${1:+/$1}" && exec cargo stylus get-initcode --output /out/initcode"#;
 const EXPORT_ABI_SCRIPT: &str = r#"cd "/source/repo${1:+/$1}" && exec cargo stylus export-abi"#;
@@ -170,12 +175,19 @@ impl JobSettings {
         }
     }
 
-    pub(crate) fn fetch_step(&self, image: &str, path_prefix: &str) -> SandboxStep {
+    /// Has network, so it must run nothing from the repository: see [`FETCH_SCRIPT`]. The
+    /// toolchain is the image's, named outright rather than taken from the repository.
+    pub(crate) fn fetch_step(
+        &self,
+        image: &str,
+        toolchain: &str,
+        path_prefix: &str,
+    ) -> SandboxStep {
         SandboxStep {
             name: "fetch".to_string(),
             image: image.to_string(),
             command: script(FETCH_SCRIPT, &[path_prefix]),
-            env: Vec::new(),
+            env: vec![("RUSTUP_TOOLCHAIN".to_string(), toolchain.to_string())],
             working_dir: "/".to_string(),
             network: SandboxNetwork::Egress,
             mounts: vec![
@@ -300,6 +312,19 @@ mod tests {
     }
 
     #[test]
+    fn fetch_step_reads_no_configuration_from_the_repository() {
+        let step = JobSettings::default().fetch_step(IMAGE, "1.80.0", "a/b");
+        assert_eq!(step.working_dir, "/");
+        assert!(!FETCH_SCRIPT.contains("cd "));
+        assert!(FETCH_SCRIPT.contains("--manifest-path"));
+        assert_eq!(step.command[4..], ["a/b"]);
+        assert_eq!(
+            step.env,
+            [("RUSTUP_TOOLCHAIN".to_string(), "1.80.0".to_string())]
+        );
+    }
+
+    #[test]
     fn only_the_clone_step_can_write_to_the_sources() {
         let settings = JobSettings::default();
         let writable_source = |step: &SandboxStep| {
@@ -309,7 +334,7 @@ mod tests {
         };
         assert!(writable_source(&settings.clone_step(IMAGE, "u", "c", "p")));
         for step in [
-            settings.fetch_step(IMAGE, "p"),
+            settings.fetch_step(IMAGE, "1.80.0", "p"),
             settings.build_step(IMAGE, "p"),
             settings.export_abi_step(IMAGE, "p"),
         ] {
@@ -325,7 +350,7 @@ mod tests {
             SandboxNetwork::Egress
         );
         assert_eq!(
-            settings.fetch_step(IMAGE, "p").network,
+            settings.fetch_step(IMAGE, "1.80.0", "p").network,
             SandboxNetwork::Egress
         );
         for step in [

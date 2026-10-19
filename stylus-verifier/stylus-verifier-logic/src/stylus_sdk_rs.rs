@@ -267,7 +267,7 @@ impl Verifier {
         let package_name = parse_package_name(&package_file)?;
 
         session
-            .run_step(&job.fetch_step(&image.image, path_prefix))
+            .run_step(&job.fetch_step(&image.image, &image.toolchain.to_string(), path_prefix))
             .await
             .map_err(build_error)?;
         session
