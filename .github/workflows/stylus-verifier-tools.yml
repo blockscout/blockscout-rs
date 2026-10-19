@@ -4,11 +4,11 @@ on:
       - 'main'
     paths:
       - .github/workflows/stylus-verifier-tools.yml
-      - stylus-verifier/cargo-stylus.Dockerfile
+      - docker/stylus-verifier-cargo-stylus.Dockerfile
   pull_request:
     paths:
       - .github/workflows/stylus-verifier-tools.yml
-      - stylus-verifier/cargo-stylus.Dockerfile
+      - docker/stylus-verifier-cargo-stylus.Dockerfile
   workflow_dispatch:
 
 name: Build (stylus-verifier cargo-stylus image)
@@ -16,7 +16,7 @@ name: Build (stylus-verifier cargo-stylus image)
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: blockscout/stylus-verifier-cargo-stylus
-  DOCKERFILE: stylus-verifier/cargo-stylus.Dockerfile
+  DOCKERFILE: docker/stylus-verifier-cargo-stylus.Dockerfile
 
 permissions:
   contents: read
@@ -52,7 +52,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
-          context: stylus-verifier
+          context: docker
           file: ${{ env.DOCKERFILE }}
           platforms: linux/amd64
           push: ${{ env.PUSH == 'true' }}
