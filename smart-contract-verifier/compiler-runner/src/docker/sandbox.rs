@@ -1259,6 +1259,38 @@ mod tests {
 
     /// Steps need a digest-pinned image with a shell; the runner image serves unless
     /// `SCV_TEST_LOCAL_DOCKER_STEP_IMAGE` names another one.
+    /// The Docker host of the sandbox tests, with a client for checking what is left on it: the
+    /// remote host named by `SCV_TEST_DOCKER_ADDR` over SSH, with `SCV_TEST_DOCKER_RUNNER_IMAGE`
+    /// and optionally `SCV_TEST_DOCKER_KEY_PATH` and `SCV_TEST_DOCKER_PLATFORM`, or else this
+    /// machine's daemon with `SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE`.
+    fn test_host() -> (DockerCompilerExecutor, Docker, String) {
+        let Ok(addr) = std::env::var("SCV_TEST_DOCKER_ADDR") else {
+            let docker = Docker::connect_with_defaults().unwrap();
+            let runner_image = std::env::var("SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE").unwrap();
+            return (local_executor(&docker, &runner_image), docker, runner_image);
+        };
+        let mut settings = settings();
+        settings.addr = addr;
+        settings.key_path = std::env::var_os("SCV_TEST_DOCKER_KEY_PATH").map(Into::into);
+        settings.runner_image = std::env::var("SCV_TEST_DOCKER_RUNNER_IMAGE").unwrap();
+        if let Ok(platform) = std::env::var("SCV_TEST_DOCKER_PLATFORM") {
+            settings.platform = platform;
+        }
+        let docker = Docker::connect_with_ssh(
+            &settings.addr,
+            120,
+            bollard::API_DEFAULT_VERSION,
+            std::env::var("SCV_TEST_DOCKER_KEY_PATH").ok(),
+        )
+        .unwrap();
+        let runner_image = settings.runner_image.clone();
+        (
+            DockerCompilerExecutor::new(settings).unwrap(),
+            docker,
+            runner_image,
+        )
+    }
+
     fn step_image(runner_image: &str) -> String {
         std::env::var("SCV_TEST_LOCAL_DOCKER_STEP_IMAGE")
             .unwrap_or_else(|_| runner_image.to_string())
@@ -1307,12 +1339,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE"]
-    async fn local_docker_sandbox_session_chooses_steps_as_it_goes() {
+    #[ignore = "requires a test Docker host"]
+    async fn docker_sandbox_session_chooses_steps_as_it_goes() {
         let _exclusive = LOCAL_DOCKER.lock().await;
-        let docker = Docker::connect_with_defaults().unwrap();
-        let runner_image = std::env::var("SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE").unwrap();
-        let executor = local_executor(&docker, &runner_image);
+        let (executor, docker, runner_image) = test_host();
         let image = step_image(&runner_image);
         let step = |name: &str, script: &str, mounts| SandboxStep {
             image: image.clone(),
@@ -1380,12 +1410,10 @@ mod tests {
 
     /// Needs a runner image that ships tinyproxy, and reaches github.com.
     #[tokio::test]
-    #[ignore = "requires SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE and network access"]
-    async fn local_docker_sandbox_egress_is_limited_to_listed_hosts() {
+    #[ignore = "requires a test Docker host and network access"]
+    async fn docker_sandbox_egress_is_limited_to_listed_hosts() {
         let _exclusive = LOCAL_DOCKER.lock().await;
-        let docker = Docker::connect_with_defaults().unwrap();
-        let runner_image = std::env::var("SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE").unwrap();
-        let executor = local_executor(&docker, &runner_image);
+        let (executor, docker, runner_image) = test_host();
         let image = step_image(&runner_image);
         let script = r#"
             probe() {
@@ -1399,6 +1427,7 @@ mod tests {
             echo "unlisted=$(probe example.com 443)"
             echo "lookalike=$(probe github.com.example.com 443)"
             echo "other-port=$(probe github.com 22)"
+            if getent hosts example.com >/dev/null; then echo dns=open; else echo dns=closed; fi
             if timeout 5 bash -c 'exec 3<>/dev/tcp/1.1.1.1/443' 2>/dev/null; then
                 echo direct=open
             else
@@ -1435,7 +1464,7 @@ mod tests {
         let output = executor.run_sandbox_job(job).await.unwrap();
         assert_eq!(
             String::from_utf8_lossy(&output.steps[0].stdout),
-            "listed=200\nunlisted=403\nlookalike=403\nother-port=403\ndirect=closed\n\
+            "listed=200\nunlisted=403\nlookalike=403\nother-port=403\ndns=closed\ndirect=closed\n\
              proxy=http://egress-proxy:3128\n"
         );
         assert_eq!(output.steps[1].stdout, Bytes::from_static(b"offline\n"));
@@ -1446,12 +1475,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE"]
-    async fn local_docker_sandbox_job_round_trip() {
+    #[ignore = "requires a test Docker host"]
+    async fn docker_sandbox_job_round_trip() {
         let _exclusive = LOCAL_DOCKER.lock().await;
-        let docker = Docker::connect_with_defaults().unwrap();
-        let runner_image = std::env::var("SCV_TEST_LOCAL_DOCKER_RUNNER_IMAGE").unwrap();
-        let executor = local_executor(&docker, &runner_image);
+        let (executor, docker, runner_image) = test_host();
         let image = step_image(&runner_image);
         let step = |name: &str, script: &str, mounts| SandboxStep {
             image: image.clone(),
