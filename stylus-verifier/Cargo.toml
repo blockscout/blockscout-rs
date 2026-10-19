@@ -12,21 +12,21 @@ stylus-verifier-proto = { path = "stylus-verifier-proto" }
 stylus-verifier-server = { path = "stylus-verifier-server" }
 
 alloy-json-abi = { version = "0.8.3" }
-actix-prost = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
-actix-prost-build = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
-actix-prost-macros = { git = "https://github.com/blockscout/actix-prost", rev = "4cbba2a" }
+actix-prost = { version = "0.3.0" }
+actix-prost-build = { version = "0.3.0" }
+actix-prost-macros = { version = "0.3.0" }
 actix-web = { version = "4" }
 anyhow = { version = "1.0.87" }
 async-trait = { version = "0.1.82" }
 blockscout-display-bytes = { version = "1.1.0" }
-blockscout-service-launcher = { version = "0.13.1" }
+blockscout-service-launcher = { version = "0.21.0" }
 # Until the sandbox runner is on main; then: { git = "https://github.com/blockscout/blockscout-rs", rev = "<revision>" }
 compiler-runner = { path = "../smart-contract-verifier/compiler-runner" }
 bytes = { version = "1.7.1" }
 futures-util = { version = "0.3.30" }
 pretty_assertions = { version = "1.4.0" }
-prost = { version = "0.11" }
-prost-build = { version = "0.11" }
+prost = { version = "0.14" }
+prost-build = { version = "0.14" }
 reqwest = { version = "0.12.7" }
 rstest = { version = "0.26.1" }
 semver = { version = "1.0.23" }
@@ -36,7 +36,8 @@ serde_with = { version = "3.9" }
 thiserror = { version = "1.0.63" }
 tokio = { version = "1.40.0" }
 toml = { version = "0.8.19" }
-tonic = { version = "0.8" }
-tonic-build = { version = "0.8" }
+tonic = { version = "0.14" }
+tonic-prost = { version = "0.14" }
+tonic-prost-build = { version = "0.14" }
 tracing = { version = "0.1.40" }
 url = { version = "2.5.2" }
