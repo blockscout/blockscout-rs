@@ -6,12 +6,16 @@ on:
       - 'stylus-verifier/v*'
     paths:
       - stylus-verifier/**
+      # Built by stylus-verifier-tools.yml; the service does not use it.
+      - '!stylus-verifier/cargo-stylus.Dockerfile'
       - .github/workflows/stylus-verifier.yml
       - .github/workflows/_*.yml
       - .github/actions/**
   pull_request:
     paths:
       - stylus-verifier/**
+      # Built by stylus-verifier-tools.yml; the service does not use it.
+      - '!stylus-verifier/cargo-stylus.Dockerfile'
       - .github/workflows/stylus-verifier.yml
       - .github/workflows/_*.yml
       - .github/actions/**
