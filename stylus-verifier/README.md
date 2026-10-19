@@ -57,14 +57,12 @@ just start-postgres
 just run
 ```
 
-## Troubleshooting
+## Tests
 
-1. Invalid tonic version
+The ignored integration tests verify real projects. They need a sandbox host and run with its
+`sandbox` settings as JSON:
 
+```bash
+STYLUS_VERIFIER_TEST_SANDBOX='{"docker": {...}, "verifier": {...}}' \
+    cargo test -p stylus-verifier-server --test implementation -- --ignored --test-threads=1
 ```
-`Router` and `Router` have similar names, but are actually distinct types
-```
-
-To fix this error you need to change tonic version of `tonic` in `blockscout-service-launcer` to `0.8`
-
-For now you can only change in `Cargo.lock`

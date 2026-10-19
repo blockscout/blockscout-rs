@@ -43,8 +43,9 @@ jobs:
         run: cargo test --locked --workspace --all-features --doc
         if: success() || failure()
 
+      # The ignored tests build real projects and need a sandbox Docker host; see the README.
       - name: Integration tests
-        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture --include-ignored
+        run: RUST_BACKTRACE=1 RUST_LOG=info cargo test --locked --workspace --test '*' -- --nocapture
         if: success() || failure()
 
   lint:
