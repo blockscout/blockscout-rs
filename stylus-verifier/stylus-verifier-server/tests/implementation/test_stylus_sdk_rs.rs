@@ -28,33 +28,28 @@ mod verify_github_repository {
         test_case.check_verify_response(response);
     }
 
-    #[tokio::test]
-    async fn stylus_hello_world_0_5_0() {
-        test("verify_github_repository_stylus_hello_world_0.5.0").await
-    }
-
+    // Verification compares the output of `cargo stylus get-initcode`, which exists from 0.5.12.
     #[tokio::test]
     #[rstest::rstest]
-    #[case::zero_five_zero("0.5.0")]
-    #[case::zero_five_one("0.5.1")]
-    #[case::zero_five_two("0.5.2")]
-    #[case::zero_five_three("0.5.3")]
-    #[case::zero_five_five("0.5.5")]
-    #[case::zero_five_six("0.5.6")]
-    #[case::zero_five_seven("0.5.7")]
-    #[case::zero_five_eight("0.5.8")]
-    #[case::zero_five_ten("0.5.10")]
-    #[case::zero_five_eleven("0.5.11")]
     #[case::zero_five_twelve("0.5.12")]
     #[case::zero_six_zero("0.6.0")]
     #[case::zero_six_one("0.6.1")]
     #[case::zero_six_two("0.6.2")]
     #[case::zero_six_three("0.6.3")]
+    #[ignore = "requires STYLUS_VERIFIER_TEST_SANDBOX"]
     async fn with_prefix(#[case] stylus_version: &str) {
         test(&format!(
             "verify_github_repository_single_call_with_prefix_{stylus_version}"
         ))
         .await
+    }
+
+    // A contract on Arbitrum One deployed with 0.10.7 and Rust 1.97.1. From 0.10 the build runs
+    // at the project's workspace root, which here is the repository root with a member crate.
+    #[tokio::test]
+    #[ignore = "requires STYLUS_VERIFIER_TEST_SANDBOX"]
+    async fn zero_ten_from_the_workspace_root() {
+        test("verify_github_repository_vess_contract_0.10.7").await
     }
 }
 
@@ -107,15 +102,16 @@ mod failure {
     }
 
     #[tokio::test]
+    #[ignore = "requires STYLUS_VERIFIER_TEST_SANDBOX"]
     async fn no_match() {
         let mut test_case: VerifyGithubRepositoryTestCase =
             VerifyGithubRepositoryTestCase::from_file(
-                "verify_github_repository_stylus_hello_world_0.5.0",
+                "verify_github_repository_single_call_with_prefix_0.6.2",
             );
 
         let server = crate::start_server().await;
 
-        // The hash corresponds to contract where a new line was added inside the line 1 of `src/lib.rs`
+        // The deployment of a different contract.
         test_case.deployment_transaction = blockscout_display_bytes::decode_hex(
             "0xa82f7281a601dc1227f9c6ac7a934189e28b5678f3d48749ae7726f7f9effc11",
         )
@@ -127,11 +123,11 @@ mod failure {
             &test_case.to_request(),
         )
         .await;
-        assert_failure(response, "Prelude mismatch");
+        assert_failure(response, "does not match the deployment transaction");
     }
 
     #[tokio::test]
-    async fn invalid_commit_hash() {
+    async fn malformed_commit_hash() {
         let mut test_case: VerifyGithubRepositoryTestCase =
             VerifyGithubRepositoryTestCase::from_file(
                 "verify_github_repository_stylus_hello_world_0.5.0",
@@ -148,6 +144,17 @@ mod failure {
         )
         .await;
         assert_failure(response, "commit hash not found");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires STYLUS_VERIFIER_TEST_SANDBOX"]
+    async fn unknown_commit_hash() {
+        let mut test_case: VerifyGithubRepositoryTestCase =
+            VerifyGithubRepositoryTestCase::from_file(
+                "verify_github_repository_single_call_with_prefix_0.6.2",
+            );
+
+        let server = crate::start_server().await;
 
         // commit hash does not exist for the given repository
         test_case.commit = "0000001".to_string();
@@ -161,10 +168,11 @@ mod failure {
     }
 
     #[tokio::test]
-    async fn invalid_github_repository() {
+    #[ignore = "requires STYLUS_VERIFIER_TEST_SANDBOX"]
+    async fn unknown_github_repository() {
         let mut test_case: VerifyGithubRepositoryTestCase =
             VerifyGithubRepositoryTestCase::from_file(
-                "verify_github_repository_stylus_hello_world_0.5.0",
+                "verify_github_repository_single_call_with_prefix_0.6.2",
             );
 
         let server = crate::start_server().await;
@@ -179,6 +187,16 @@ mod failure {
         )
         .await;
         assert_failure(response, "repository not found");
+    }
+
+    #[tokio::test]
+    async fn not_a_github_repository() {
+        let mut test_case: VerifyGithubRepositoryTestCase =
+            VerifyGithubRepositoryTestCase::from_file(
+                "verify_github_repository_stylus_hello_world_0.5.0",
+            );
+
+        let server = crate::start_server().await;
 
         // url is not a github url
         test_case.repository_url =
@@ -192,17 +210,21 @@ mod failure {
         assert_failure(response, "url is not a github repository");
     }
 
+    // `OffchainLabs/stylus-hello-world` had no rust-toolchain.toml at this commit.
     #[tokio::test]
+    #[ignore = "requires STYLUS_VERIFIER_TEST_SANDBOX"]
     async fn no_rust_toolchain_specified() {
         let mut test_case: VerifyGithubRepositoryTestCase =
             VerifyGithubRepositoryTestCase::from_file(
-                "verify_github_repository_stylus_hello_world_0.5.0",
+                "verify_github_repository_single_call_with_prefix_0.6.2",
             );
 
         let server = crate::start_server().await;
 
-        // repository does not exist
+        test_case.repository_url =
+            Url::parse("https://github.com/OffchainLabs/stylus-hello-world").unwrap();
         test_case.commit = "c8b9294f3b59051ff90fc941f8737c926f24ce7c".to_string();
+        test_case.path_prefix = String::new();
         let response: VerifyResponse = blockscout_service_launcher::test_server::send_post_request(
             &server.base_url,
             VERIFY_GITHUB_REPOSITORY_ROUTE,
@@ -210,17 +232,6 @@ mod failure {
         )
         .await;
         assert_failure(response, "rust-toolchain.toml");
-
-        // url is not a github url
-        test_case.repository_url =
-            Url::parse("https://gitlab.com/OffchainLabs/stylus-hello-world").unwrap();
-        let response: VerifyResponse = blockscout_service_launcher::test_server::send_post_request(
-            &server.base_url,
-            VERIFY_GITHUB_REPOSITORY_ROUTE,
-            &test_case.to_request(),
-        )
-        .await;
-        assert_failure(response, "url is not a github repository");
     }
 }
 

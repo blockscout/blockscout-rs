@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use crate::settings::DockerApiSettings;
+use crate::settings::SandboxSettings;
+use anyhow::Context;
 use async_trait::async_trait;
-use stylus_verifier_logic::stylus_sdk_rs;
+use stylus_verifier_logic::{stylus_sdk_rs, DockerCompilerExecutor};
 use stylus_verifier_proto::blockscout::stylus_verifier::v1::{
     stylus_sdk_rs_verifier_server::StylusSdkRsVerifier, verify_response, CargoStylusVersion,
     CargoStylusVersions, ListCargoStylusVersionsRequest, VerificationFailure,
@@ -11,39 +12,26 @@ use stylus_verifier_proto::blockscout::stylus_verifier::v1::{
 use tonic::{Request, Response, Status};
 
 pub struct StylusSdkRsVerifierService {
-    docker_client: stylus_sdk_rs::Docker,
-    supported_cargo_stylus_versions: Vec<semver::Version>,
+    verifier: stylus_sdk_rs::Verifier,
 }
 
 impl StylusSdkRsVerifierService {
-    pub async fn new(docker_api_settings: DockerApiSettings) -> Self {
-        Self {
-            docker_client: stylus_sdk_rs::docker_connect(&docker_api_settings.addr)
-                .await
-                .expect("failed to connect to docker daemon"),
-            // TODO: to be automatically retrieved from the dockerhub registry
-            supported_cargo_stylus_versions: vec![
-                semver::Version::new(0, 5, 0),
-                semver::Version::new(0, 5, 1),
-                semver::Version::new(0, 5, 2),
-                semver::Version::new(0, 5, 3),
-                semver::Version::new(0, 5, 5),
-                semver::Version::new(0, 5, 6),
-                semver::Version::new(0, 5, 7),
-                semver::Version::new(0, 5, 8),
-                semver::Version::new(0, 5, 10),
-                semver::Version::new(0, 5, 11),
-                semver::Version::new(0, 5, 12),
-                semver::Version::new(0, 6, 0),
-                semver::Version::new(0, 6, 1),
-                semver::Version::new(0, 6, 2),
-                semver::Version::new(0, 6, 3),
-            ],
-        }
+    /// Checks the settings only; the Docker host is first contacted by a verification.
+    pub fn new(settings: SandboxSettings) -> anyhow::Result<Self> {
+        let docker = settings
+            .docker
+            .context("sandbox.docker settings are required")?;
+        let executor =
+            DockerCompilerExecutor::new(docker).context("invalid sandbox.docker settings")?;
+        Ok(Self {
+            verifier: stylus_sdk_rs::Verifier::new(executor, settings.verifier)?,
+        })
     }
 
     fn is_cargo_stylus_version_supported(&self, version: &semver::Version) -> bool {
-        self.supported_cargo_stylus_versions.contains(version)
+        self.verifier
+            .supported_cargo_stylus_versions()
+            .contains(version)
     }
 }
 
@@ -66,7 +54,7 @@ impl StylusSdkRsVerifier for StylusSdkRsVerifierService {
             )));
         }
 
-        let result = stylus_sdk_rs::verify_github_repository(&self.docker_client, request).await;
+        let result = self.verifier.verify_github_repository(request).await;
         process_verify_result(result)
     }
 
@@ -75,7 +63,8 @@ impl StylusSdkRsVerifier for StylusSdkRsVerifierService {
         _request: Request<ListCargoStylusVersionsRequest>,
     ) -> Result<Response<CargoStylusVersions>, Status> {
         let versions = self
-            .supported_cargo_stylus_versions
+            .verifier
+            .supported_cargo_stylus_versions()
             .iter()
             .map(|version| CargoStylusVersion {
                 version: format!("v{version}"),
@@ -120,7 +109,11 @@ fn process_error(error: stylus_sdk_rs::Error) -> Result<Response<VerifyResponse>
         stylus_sdk_rs::Error::BadRequest(_) => {
             return Err(Status::invalid_argument(error.to_string()));
         }
-        stylus_sdk_rs::Error::Internal(_) => return Err(Status::internal(error.to_string())),
+        // The cause can name the Docker host; it is logged and kept out of the response.
+        stylus_sdk_rs::Error::Internal(_) => {
+            tracing::error!(err = error.to_string(), "internal error");
+            return Err(Status::internal("internal error"));
+        }
     };
 
     Ok(Response::new(VerifyResponse {

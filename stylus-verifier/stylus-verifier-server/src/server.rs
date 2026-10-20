@@ -4,7 +4,11 @@ use crate::{
     services::{health::HealthService, stylus_sdk_rs_verifier::StylusSdkRsVerifierService},
     settings::Settings,
 };
-use blockscout_service_launcher::{launcher, launcher::LaunchSettings, tracing};
+use blockscout_service_launcher::{
+    launcher,
+    launcher::{ConfigSettings, LaunchSettings},
+    tracing,
+};
 use std::sync::Arc;
 use stylus_verifier_proto::{
     blockscout::stylus_verifier::v1::{
@@ -42,13 +46,14 @@ impl launcher::HttpRouter for Router {
 }
 
 pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
+    // Programmatically built settings bypass `Settings::build`, so enforce the same checks here.
+    ConfigSettings::validate(&settings)?;
     tracing::init_logs(SERVICE_NAME, &settings.tracing, &settings.jaeger)?;
+    // The sandbox runner registers its metrics on first use, under the prefix set here.
+    stylus_verifier_logic::set_metrics_namespace(SERVICE_NAME)?;
 
     let health = Arc::new(HealthService::default());
-    let stylus_sdk_rs_verifier =
-        Arc::new(StylusSdkRsVerifierService::new(settings.docker_api).await);
-
-    // TODO: init services here
+    let stylus_sdk_rs_verifier = Arc::new(StylusSdkRsVerifierService::new(settings.sandbox)?);
 
     let router = Router {
         health,
@@ -62,7 +67,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         service_name: SERVICE_NAME.to_string(),
         server: settings.server,
         metrics: settings.metrics,
+        graceful_shutdown: Default::default(),
     };
 
-    launcher::launch(&launch_settings, http_router, grpc_router).await
+    launcher::launch(launch_settings, http_router, grpc_router).await
 }

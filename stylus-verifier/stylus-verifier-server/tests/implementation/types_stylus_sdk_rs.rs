@@ -21,9 +21,10 @@ pub struct VerifyGithubRepositoryTestCase {
     pub commit: String,
     pub path_prefix: String,
 
-    #[serde_as(as = "serde_with::json::JsonString")]
-    pub expected_abi: serde_json::Value,
-    pub expected_contract_name: String,
+    /// Absent for a contract whose ABI export prints nothing.
+    #[serde_as(as = "Option<serde_with::json::JsonString>")]
+    pub expected_abi: Option<serde_json::Value>,
+    pub expected_contract_name: Option<String>,
     pub expected_files: BTreeMap<String, String>,
     pub expected_package_name: String,
 }
@@ -55,10 +56,9 @@ impl VerifyGithubRepositoryTestCase {
             serde_json::from_str::<serde_json::Value>(&abi)
                 .expect("invalid abi: cannot parse as json value")
         });
-        assert_eq!(Some(&self.expected_abi), abi.as_ref(), "invalid abi");
+        assert_eq!(self.expected_abi, abi, "invalid abi");
         assert_eq!(
-            Some(&self.expected_contract_name),
-            success.contract_name.as_ref(),
+            self.expected_contract_name, success.contract_name,
             "invalid contract name"
         );
         assert_eq!(self.expected_files, success.files, "invalid files");

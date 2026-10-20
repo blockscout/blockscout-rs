@@ -5,7 +5,7 @@ use blockscout_service_launcher::{
     tracing::{JaegerSettings, TracingSettings},
 };
 use serde::Deserialize;
-use url::Url;
+use stylus_verifier_logic::{stylus_sdk_rs::VerifierSettings, DockerCompilerExecutorSettings};
 
 #[derive(Debug, Default, Deserialize, Clone, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
@@ -14,23 +14,27 @@ pub struct Settings {
     pub metrics: MetricsSettings,
     pub tracing: TracingSettings,
     pub jaeger: JaegerSettings,
-    pub docker_api: DockerApiSettings,
+    pub sandbox: SandboxSettings,
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+/// Where and how submitted projects are built. They are never built on this machine.
+#[derive(Debug, Default, Deserialize, Clone, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
-pub struct DockerApiSettings {
-    pub addr: Url,
-}
-
-impl Default for DockerApiSettings {
-    fn default() -> Self {
-        Self {
-            addr: Url::parse("unix:///var/run/docker.sock").expect("default docker api url"),
-        }
-    }
+pub struct SandboxSettings {
+    /// The dedicated Docker host, reached over SSH. Required.
+    pub docker: Option<DockerCompilerExecutorSettings>,
+    pub verifier: VerifierSettings,
 }
 
 impl ConfigSettings for Settings {
     const SERVICE_NAME: &'static str = "STYLUS_VERIFIER";
+
+    fn validate(&self) -> anyhow::Result<()> {
+        if self.sandbox.docker.is_none() {
+            anyhow::bail!(
+                "sandbox.docker settings are required: projects are built on a remote Docker host"
+            );
+        }
+        Ok(())
+    }
 }
