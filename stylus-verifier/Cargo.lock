@@ -864,6 +864,7 @@ dependencies = [
 [[package]]
 name = "compiler-runner"
 version = "0.1.0"
+source = "git+https://github.com/blockscout/blockscout-rs?rev=53fcbd1#53fcbd1a28049db84d46fdd94771e0bd11e5c467"
 dependencies = [
  "anyhow",
  "async-trait",
