@@ -335,6 +335,7 @@ impl Verifier {
             Err(error) => return Err(internal(error)),
         };
         let (contract_name, abi) = exported.unzip();
+        let contract_name = contract_name_or_package(contract_name, &package_name);
 
         let sources = session
             .read_output(&job.sources_output(path_prefix))
@@ -571,6 +572,12 @@ fn parse_package_name(package_file_contents: &str) -> Result<String, Error> {
     Ok(package_name.to_string())
 }
 
+/// The contract name comes from the exported ABI, which some contracts do not print; explorers
+/// need a name, so the package's stands in.
+fn contract_name_or_package(contract_name: Option<String>, package_name: &str) -> Option<String> {
+    contract_name.or_else(|| Some(package_name.to_string()))
+}
+
 /// The project's manifests and Rust sources, keyed by their path inside the project.
 fn source_files(files: Vec<SandboxFile>) -> BTreeMap<String, String> {
     files
@@ -765,6 +772,18 @@ mod tests {
         assert_eq!(
             validate_toolchain_channel("1.80.0").unwrap(),
             Version::new(1, 80, 0)
+        );
+    }
+
+    #[test]
+    fn package_name_stands_in_for_a_missing_contract_name() {
+        assert_eq!(
+            contract_name_or_package(Some("SingleCall".to_string()), "stylus-single-call"),
+            Some("SingleCall".to_string())
+        );
+        assert_eq!(
+            contract_name_or_package(None, "vess_contract"),
+            Some("vess_contract".to_string())
         );
     }
 
