@@ -88,13 +88,17 @@ const FETCH_SCRIPT: &str =
 const LOCATE_SCRIPT: &str = r#"exec cargo locate-project --workspace --message-format plain \
     --manifest-path "/source/repo${1:+/$1}/Cargo.toml""#;
 /// `$1` is the contract to build, or empty when the directory holds only the project.
+///
+/// The build runs in the repository, whose `.cargo/config.toml` can define a `stylus` alias that
+/// `cargo stylus` would follow, so cargo-stylus is run by its path in the tool image, the way cargo
+/// runs an external subcommand.
 const BUILD_SCRIPT: &str = r#"
 if [ -n "$1" ]; then set -- --contract "$1"; else set --; fi
-exec cargo stylus get-initcode "$@" --output /out/initcode
+exec /usr/local/cargo/bin/cargo-stylus stylus get-initcode "$@" --output /out/initcode
 "#;
 const EXPORT_ABI_SCRIPT: &str = r#"
 if [ -n "$1" ]; then set -- --contract "$1"; else set --; fi
-exec cargo stylus export-abi "$@"
+exec /usr/local/cargo/bin/cargo-stylus stylus export-abi "$@"
 "#;
 
 /// The image a verification builds with, and the cargo-stylus version and toolchain it uses there.
@@ -485,6 +489,14 @@ mod tests {
             step.env,
             [("RUSTUP_TOOLCHAIN".to_string(), "1.80.0".to_string())]
         );
+    }
+
+    #[test]
+    fn build_steps_run_cargo_stylus_by_path_not_through_cargo() {
+        for script in [BUILD_SCRIPT, EXPORT_ABI_SCRIPT] {
+            assert!(!script.contains("cargo stylus"), "{script}");
+            assert!(script.contains("exec /usr/local/cargo/bin/cargo-stylus stylus "));
+        }
     }
 
     #[test]
