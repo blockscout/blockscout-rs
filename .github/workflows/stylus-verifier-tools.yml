@@ -1,0 +1,82 @@
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - .github/workflows/stylus-verifier-tools.yml
+      - docker/stylus-verifier-cargo-stylus.Dockerfile
+  pull_request:
+    paths:
+      - .github/workflows/stylus-verifier-tools.yml
+      - docker/stylus-verifier-cargo-stylus.Dockerfile
+  workflow_dispatch:
+
+name: Build (stylus-verifier cargo-stylus image)
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: blockscout/stylus-verifier-cargo-stylus
+  DOCKERFILE: docker/stylus-verifier-cargo-stylus.Dockerfile
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build_and_push:
+    name: Build and push
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      PUSH: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # The image is several gigabytes; the runner's preinstalled toolchains are not needed.
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: docker
+          file: ${{ env.DOCKERFILE }}
+          platforms: linux/amd64
+          push: ${{ env.PUSH == 'true' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:build-cache
+          cache-to: ${{ env.PUSH == 'true' && format('type=registry,ref={0}/{1}:build-cache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
+
+      # Deployments pin the digest, so a later push under the same tag does not change them.
+      - name: Summary
+        if: steps.build.outputs.digest != '' && env.PUSH == 'true'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          list() {
+            sed -n "s/^ARG $1=\"\(.*\)\"$/\1/p" "$DOCKERFILE" | tr ' ' '\n' | sed 's/.*/"&"/' | paste -sd, -
+          }
+          {
+            echo "### ${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+            echo
+            echo "Entry for \`sandbox.verifier.images\`:"
+            echo
+            echo '```json'
+            echo "{ \"image\": \"${REGISTRY}/${IMAGE_NAME}@${DIGEST}\", \"cargo_stylus_versions\": [$(list CARGO_STYLUS_VERSIONS)], \"toolchains\": [$(list RUST_TOOLCHAINS)] }"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
