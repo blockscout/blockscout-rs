@@ -5,7 +5,7 @@
   "repository_url": "https://github.com/ohmictech/vess-contract",
   "commit": "379da22e6781a1196de9e994be649a8173f3b0ce",
   "path_prefix": "",
-  "expected_contract_name": null,
+  "expected_contract_name": "vess_contract",
   "expected_package_name": "vess_contract",
   "expected_abi": null,
   "expected_files": {
