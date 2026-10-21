@@ -25,6 +25,7 @@ impl PrimaryNameRecordTable {
     ) -> Result<Vec<DomainWithAddress>, DbErr> {
         let table_name = Self::table_name();
         let queries = NonEmpty::collect(protocols.into_iter().map(|p| {
+            let schema = &p.subgraph_schema;
             sea_query::Query::select()
                 .expr(Expr::cust("domain_id as id"))
                 .expr(Expr::cust("domain_name"))
@@ -35,6 +36,19 @@ impl PrimaryNameRecordTable {
                 .and_where(Expr::cust("domain_id is not null"))
                 .and_where(Expr::cust("domain_name is not null"))
                 .and_where(Expr::cust(DOMAIN_BLOCK_RANGE_WHERE_CLAUSE))
+                .and_where(Expr::cust(format!(
+                    r#"EXISTS (
+                        SELECT 1
+                        FROM {schema}.domain AS active_domain
+                        WHERE active_domain.id = {schema}.{table_name}.domain_id
+                          AND active_domain.resolved_address = {schema}.{table_name}.resolved_address
+                          AND active_domain.block_range @> 2147483647
+                          AND (
+                            active_domain.expiry_date IS NULL
+                            OR to_timestamp(active_domain.expiry_date) > now()
+                          )
+                    )"#
+                )))
                 .to_owned()
         }))
         .expect("protocols is nonempty");

@@ -139,6 +139,16 @@
       "subgraph_path": "../subgraphs/infinityname-subgraph",
       "subgraph_name": "infinityname-soneium-subgraph",
       "network": "soneium-mainnet"
+    },
+    "gwei": {
+      "subgraph_path": "../subgraphs/gwei-subgraph",
+      "subgraph_name": "gwei-subgraph",
+      "network": "mainnet"
+    },
+    "gwei-sepolia": {
+      "subgraph_path": "../subgraphs/gwei-subgraph",
+      "subgraph_name": "gwei-sepolia-subgraph",
+      "network": "sepolia"
     }
   }
 }
