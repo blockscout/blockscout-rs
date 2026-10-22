@@ -13,7 +13,7 @@ use tokio::{sync::Mutex, time::sleep};
 use tracing::instrument;
 
 use crate::{
-    celestia, eigenda,
+    beacon, celestia, eigenda,
     s3_storage::S3Storage,
     settings::{DASettings, IndexerSettings},
 };
@@ -22,6 +22,7 @@ use crate::{
 pub enum Job {
     Celestia(celestia::job::CelestiaJob),
     EigenDA(eigenda::job::EigenDAJob),
+    Beacon(beacon::job::BeaconJob),
 }
 
 #[async_trait]
@@ -50,6 +51,11 @@ impl Indexer {
             ),
             DASettings::EigenDA(settings) => {
                 Box::new(eigenda::da::EigenDA::new(db.clone(), s3_storage.clone(), settings).await?)
+            }
+            DASettings::Beacon(settings) => {
+                let s3_storage = s3_storage
+                    .ok_or(anyhow::anyhow!("s3 storage is required for Beacon indexer"))?;
+                Box::new(beacon::da::BeaconDA::new(db.clone(), s3_storage, settings).await?)
             }
         };
         Ok(Self {
