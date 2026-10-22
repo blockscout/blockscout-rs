@@ -86,6 +86,10 @@ pub struct ProtocolSettings {
     #[serde(default)]
     pub address_resolve_technique: AddressResolveTechnique,
     #[serde(default)]
+    pub forward_resolution_grace_period_seconds: u64,
+    #[serde(default)]
+    pub primary_name_record_requires_active_owner: bool,
+    #[serde(default)]
     pub meta: ProtocolSettingsMeta,
     #[serde(default, rename = "specific")]
     pub protocol_specific: ProtocolSettingsSpecific,
@@ -163,6 +167,69 @@ impl Settings {
             },
             replica_database: Default::default(),
             swagger_path: default_swagger_path(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod rensa_config_tests {
+    use super::*;
+
+    #[test]
+    fn production_rensa_config_parses_without_an_ens_registry() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../config/prod.json")).unwrap();
+        let reader = &config["subgraphs_reader"];
+        let protocol: ProtocolSettings =
+            serde_json::from_value(reader["protocols"]["rensa"].clone()).unwrap();
+        let network: NetworkSettings =
+            serde_json::from_value(reader["networks"]["4663"].clone()).unwrap();
+
+        assert_eq!(protocol.network_id, 4663);
+        assert_eq!(protocol.subgraph_name, "rensa-subgraph");
+        assert_eq!(protocol.tld_list.head, Tld::new("rns"));
+        assert_eq!(protocol.forward_resolution_grace_period_seconds, 7_776_000);
+        assert!(protocol.primary_name_record_requires_active_owner);
+        assert_eq!(
+            protocol.address_resolve_technique,
+            AddressResolveTechnique::PrimaryNameRecord
+        );
+        assert_eq!(network.use_protocols, vec!["rensa".to_string()]);
+        match protocol.protocol_specific.0 {
+            ProtocolSpecific::EnsLike(ens) => {
+                assert_eq!(
+                    ens.native_token_contract,
+                    Some(
+                        "0x08ed77b2ec313c7ad5ce23747b07d483071485f9"
+                            .parse()
+                            .unwrap()
+                    )
+                );
+                assert!(ens.registry_contract.is_none());
+                assert!(!ens.try_offchain_resolve);
+            }
+            _ => panic!("Rensa must use the BENS index-hashing codec only"),
+        }
+    }
+
+    #[test]
+    fn legacy_protocol_config_defaults_to_no_grace_or_primary_guard() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../config/prod.json")).unwrap();
+        let protocols = config["subgraphs_reader"]["protocols"].as_object().unwrap();
+        for (slug, value) in protocols {
+            if slug == "rensa" {
+                continue;
+            }
+            let protocol: ProtocolSettings = serde_json::from_value(value.clone()).unwrap();
+            assert_eq!(
+                protocol.forward_resolution_grace_period_seconds, 0,
+                "{slug}"
+            );
+            assert!(
+                !protocol.primary_name_record_requires_active_owner,
+                "{slug}"
+            );
         }
     }
 }

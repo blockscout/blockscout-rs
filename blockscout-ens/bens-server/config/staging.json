@@ -2,6 +2,12 @@
   "subgraphs_reader": {
     "refresh_cache_schedule": "0 0 * * * *",
     "networks": {
+      "4663": {
+        "blockscout": {
+          "url": "https://robinhoodchain.blockscout.com"
+        },
+        "use_protocols": ["rensa"]
+      },
       "11155111": {
         "blockscout": {
           "url": "https://eth-sepolia.k8s-dev.blockscout.com"
@@ -30,6 +36,25 @@
       }
     },
     "protocols": {
+      "rensa": {
+        "tld_list": ["rns"],
+        "network_id": 4663,
+        "subgraph_name": "rensa-subgraph",
+        "address_resolve_technique": "primary_name_record",
+        "forward_resolution_grace_period_seconds": 7776000,
+        "primary_name_record_requires_active_owner": true,
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0x08ed77b2ec313c7ad5ce23747b07d483071485f9",
+          "try_offchain_resolve": false
+        },
+        "meta": {
+          "short_name": "Rensa",
+          "title": "Rensa Names",
+          "description": "Rensa is a native .rns naming protocol on Robinhood Chain, with ERC-721 name ownership.",
+          "docs_url": "https://rensalabs.xyz"
+        }
+      },
       "ens": {
         "tld_list": ["eth"],
         "network_id": 11155111,
