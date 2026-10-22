@@ -39,12 +39,13 @@ http = { version = "1.1.0" }
 jsonrpsee = { version = "0.25.1", features = ["client-core", "macros", "jsonrpsee-http-client"] }
 lazy_static = { version = "1.5.0" }
 md5 = { version = "0.8.0" }
+pretty_assertions = { version = "1.4.1" }
 prometheus = { version = "0.14.0" }
 prost = { version = "0.13" }
 prost-build = "0.13"
 reqwest = { version = "0.12.5", features = ["json"] }
-reqwest-middleware = { version = "0.3.3" }
-reqwest-retry = { version = "0.6.1" }
+reqwest-middleware = { version = "0.4.2" }
+reqwest-retry = { version = "0.7.0" }
 rustls = { version = "0.23.28" }
 sea-orm = { version = "1.1", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros", "postgres-array"] }
 sea-orm-migration = { version = "1.1", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
@@ -52,9 +53,11 @@ serde = { version = "1.0" }
 serde_json = { version = "1.0.96" }
 serde_with = { version = "3.6.1" }
 sha3 = { version = "0.10.8" }
+thiserror = { version = "2.0" }
 tokio = { version = "1", features = ["full"] }
 toml = { version = "0.9.2" }
 tonic = { version = "0.12", features = ["tls", "tls-roots"] }
 tonic-build = { version = "0.12" }
 tracing = { version = "0.1" }
-wiremock = { version = "0.6" }
+wiremock = { version = "0.6.5" }
+url = { version = "2.5.7" }
