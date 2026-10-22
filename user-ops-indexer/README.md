@@ -2,12 +2,16 @@
 
 **User Ops Indexer** is a service designed to index, decode and serve user operations as per the ERC-4337 standard.
 
-The service can index 2 official ERC-4337 Entrypoint deployments:
+The service can index 4 official ERC-4337 Entrypoint deployments:
 
 * v0.6
   Entrypoint - [0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789](https://eth.blockscout.com/address/0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789)
 * v0.7
   Entrypoint - [0x0000000071727De22E5E9d8BAf0edAc6f37da032](https://eth.blockscout.com/address/0x0000000071727De22E5E9d8BAf0edAc6f37da032)
+* v0.8
+  Entrypoint - [0x4337084d9e255ff0702461cf8895ce9e3b5ff108](https://eth.blockscout.com/address/0x4337084d9e255ff0702461cf8895ce9e3b5ff108)
+* v0.9
+  Entrypoint - [0x433709009B8330FDa32311DF1C2AFA402eD8D009](https://eth.blockscout.com/address/0x433709009B8330FDa32311DF1C2AFA402eD8D009)
 
 The service consists of 2 parts:
 
@@ -69,9 +73,11 @@ found [here](../docs/common-envs.md).
 | `USER_OPS_INDEXER__INDEXER__ENTRYPOINTS__V07_ENTRY_POINT`                             |                          | Entrypoint v0.7 contract addresses, comma separated                                                                                                                                                                                                    | `0x0000000071727De22E5E9d8BAf0edAc6f37da032` |
 | `USER_OPS_INDEXER__INDEXER__ENTRYPOINTS__V08`                                         |                          | Enable Entrypoint v0.8 indexer                                                                                                                                                                                                                         | `true`                                       |
 | `USER_OPS_INDEXER__INDEXER__ENTRYPOINTS__V08_ENTRY_POINT`                             |                          | Entrypoint v0.8 contract addresses, comma separated                                                                                                                                                                                                    | `0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108` |
+| `USER_OPS_INDEXER__INDEXER__ENTRYPOINTS__V09`                                         |                          | Enable Entrypoint v0.9 indexer                                                                                                                                                                                                                         | `true`                                       |
+| `USER_OPS_INDEXER__INDEXER__ENTRYPOINTS__V09_ENTRY_POINT`                             |                          | Entrypoint v0.9 contract addresses, comma separated                                                                                                                                                                                                    | `0x433709009B8330FDa32311DF1C2AFA402eD8D009` |
 | `USER_OPS_INDEXER__INDEXER__REALTIME__ENABLED`                                        |                          | Enable forward realtime indexing of user operations from the `latest` block                                                                                                                                                                            | `true`                                       |
 | `USER_OPS_INDEXER__INDEXER__REALTIME__POLLING_INTERVAL`                               |                          | Polling interval for forward realtime indexing of user operations from the `latest` block, when using an HTTP RPC node                                                                                                                                 | `6`                                          |
-| `USER_OPS_INDEXER__INDEXER__REALTIME__POLLING_BLOCK_RANGE`                            |                          | Extra block range offset for polling in realtime indexing to recover from small re-orgs.                                                                                                                                                                | `6`                                          |
+| `USER_OPS_INDEXER__INDEXER__REALTIME__POLLING_BLOCK_RANGE`                            |                          | Extra block range offset for polling in realtime indexing to recover from small re-orgs.                                                                                                                                                               | `6`                                          |
 | `USER_OPS_INDEXER__INDEXER__REALTIME__MAX_BLOCK_RANGE`                                |                          | Max block range for single polling request in realtime indexing.                                                                                                                                                                                       | `10000`                                      |
 | `USER_OPS_INDEXER__INDEXER__PAST_RPC_LOGS_INDEXER__ENABLED`                           |                          | Enable one-time reindex of missed user operations from recent blocks                                                                                                                                                                                   | `false`                                      |
 | `USER_OPS_INDEXER__INDEXER__PAST_RPC_LOGS_INDEXER__BLOCK_RANGE`                       |                          | Block range width for missed user operations reindex. Will re-index events from a given number of blocks prior the `latest` block                                                                                                                      | `0`                                          |
