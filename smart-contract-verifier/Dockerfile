@@ -17,7 +17,7 @@ RUN cargo build --release
 
 FROM ubuntu:24.04 as run
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libssl3 ca-certificates openssh-client \
+    && apt-get install -y --no-install-recommends libssl3 ca-certificates openssh-client tini \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -34,4 +34,7 @@ RUN chown -R $APP_USER:$APP_USER /app
 USER app
 ENV HOME=/home/app
 
+# The server runs as PID 1 otherwise, and the SSH control masters it starts for the Docker
+# host daemonize and are reparented to it; tini reaps them once they exit.
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["./smart-contract-verifier-server"]
