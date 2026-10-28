@@ -195,3 +195,33 @@ Small topics may keep some sections brief.
   wait-then-give-up model; includes production evidence (Gnosis↔Ethereum,
   `home_chain_id = 100`) and the `stats`-service counter symptom this
   produces
+- `relay-protocol-model.md` — Relay (relay.link) as an indexing target: an
+  intent/solver network, not a message bridge. Protocol facts only:
+  - per-chain Depository deposits (prod vs staging/dev addresses on the same
+    mainnets) and their EVM variants;
+  - destination fills identified only by an `orderId` calldata suffix, with
+    zero logs for native fills; the Oracle's fill rules;
+  - `requestId` vs `orderId` identity, the off-chain `Order` holding
+    destination, recipient and output token, and the Relay Chain key formulas
+    (`getDeterministicId`);
+  - Relay Chain (537713) settlement, which records no destination; live chain
+    coverage (59 mainnets), cross-asset routes, calls;
+  - protocol/router history 2024-01 → 2026-10.
+
+  Pre-implementation: no Relay indexer exists yet. Companion to
+  `relay-indexing-schemes.md`
+- `relay-indexing-schemes.md` — how Relay orders can be ingested, and two
+  candidate schemes. Covers:
+  - the REST API as a source: payload by `orderId`, visibility scoping (a
+    regular key's `/requests/v3` sees ≈13% of traffic; only the relay.link
+    proxy was seen with global visibility), query surface, rate limits, v2
+    sunset 2026-11-24;
+  - on-chain indexing: what to index, one protocol solver identity behind 42
+    public EVM hot wallets, fill discovery (log-based vs full-block), and the
+    Relay Chain `Executed` keys as a per-order "settled" signal computable
+    from origin data;
+  - the schema mapping, Scheme 1 (API with unrestricted visibility) and
+    Scheme 2 (on chain only: Depository logs, full-block suffix matching,
+    Relay Chain stream), their comparison and a recommendation.
+
+  Not decided or prototyped
