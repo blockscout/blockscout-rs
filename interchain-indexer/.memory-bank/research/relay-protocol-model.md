@@ -153,7 +153,7 @@ Oracle address mismatch, resolved on chain:
 
 | Id | Form | On chain? | Notes |
 |---|---|---|---|
-| `requestId` | 32 bytes | **no** | API-level id from the quote. Its leading digits read as the creation unix time (observed, undocumented) |
+| `requestId` | 32 bytes | **not as protocol data** | API-level id from the quote; the API's `id` field and filter. Its leading digits read as the creation unix time (observed, undocumented). Seen on chain only as a calldata suffix of Relay-built txs outside the settlement protocol (see *Request kinds*) |
 | `orderId` | bytes32, EIP-712 hash of the `Order` | **yes** | `id` arg of the Depository events, or the 32-byte calldata suffix of an implicit deposit, a fill, or a refund |
 | `onchainId` | `gdi(slug, txId, logIndex)` | derived | per-deposit-log id used by the Oracle. For ERC-20 deposits `logIndex` is that of the token `Transfer` to the Depository, **not** of `RelayErc20Deposit` |
 | Hub `idempotencyKey` | bytes32 | Relay Chain (`Executed` topic1) | deposit MINT = `gdi(slug, txId)`; fill or refund TRANSFER = `gdi(gdi(sorted onchainIds…), orderId)`. Not the `orderId` itself |
@@ -169,6 +169,65 @@ Oracle address mismatch, resolved on chain:
   returned exactly one request.
 - Duplicates and refunds are separate requests linked via
   `duplicateDeposits` / `supersededByRequestId`.
+- "id" alone is ambiguous:
+  - the API's `id` field and filter is the `requestId`;
+  - the `id` argument of the Depository events is the `orderId` (`depositId`
+    in the Oracle code);
+  - the `id` of `RelayCallExecuted` is a Depository call-request id, neither
+    of the two.
+
+### Request kinds
+
+Not every API request is a cross-chain order, and not every order is
+cross-chain. Four kinds were inspected (2026-10-28):
+
+| Kind | Example request | On chain | `protocol` | Calldata suffix |
+|---|---|---|---|---|
+| cross-chain order | `0x1793041449…a890` (Ethereum → Arbitrum USDT) | user deposit to the Depository on X; solver fill on Y; settlement on the Relay Chain | `orderId`, deposit, settlement | `orderId` (fill, refund, implicit deposit) |
+| relayed call, `POST /execute` | `0x1793175266…55fb` (Ethereum) | one tx from a solver hot wallet to Multicall3 `aggregate3Value`, wrapping a user-signed payload | `null` | `requestId` |
+| same-chain swap, self-executed (default) | `0x1793173350…f9cc` (Ethereum USDT → ETH) | one user tx to ApprovalProxy `transferAndMulticall` → Router; swap through a DEX aggregator; payout to the user in the same tx | `null` | `requestId` |
+| same-chain swap, filled by the solver | `0x1793184451…d651` (Ethereum ETH → USDT) | same shape as a cross-chain order, both sides on one chain: user deposit to the Depository, then a solver fill; settlement on the Relay Chain | `orderId`, deposit, settlement | `orderId` |
+
+- **Relayed call.** Relay's gasless execution: an app with an API key and a
+  funded balance submits `to`, `data`, `value` and an optional EIP-7702
+  `authorizationList`, and a solver hot wallet posts it, paying the gas.
+  - The inspected one was a type-4 tx carrying the user's EIP-7702
+    authorization: it delegated the EOA to `0x7702cb55…` and called
+    `setImplementation` with the Coinbase Smart Wallet implementation
+    `0x000100ab…9e72`, logging `Upgraded` and two `AddOwner`. No value moved.
+  - The same relayer path also posts gasless origin deposits of cross-chain
+    orders (e.g. MetaMask Pay, Base → Hyperliquid).
+- **Same-chain swap.** The inspected tx:
+  - pulled 162.04 USDT from the user;
+  - paid the `gateway` fee (0.097224 USDT) to the main solver wallet
+    `0xf70da978…`;
+  - swapped through 0x AllowanceHolder (`0x…1ff3684f…`) on a Uniswap V3
+    pool;
+  - paid 0.0674 ETH to the user with `SolverNativeTransfer`.
+
+  No Depository event; `outTxs` holds only `{chainId}` with no hash.
+- **Same-chain swap filled by the solver.** Same-chain swaps are
+  self-executed by default. The solver fills them only for:
+  - quotes with `forceSolverExecution: true` ("Force executing swap requests
+    via the solver (by default, same-chain swap requests are self-executed)");
+  - deposit-address routes;
+  - Tron TRX/USDT (changelog 2026-09-09).
+
+  The inspected order had no deposit address and a direct `depositNative`, so
+  it was most likely forced; the API does not return quote parameters. It ran
+  as follows:
+  1. The user deposited 0.0316 ETH through `depositNative` (`RelayNativeDeposit`,
+     block 26290725).
+  2. In the next block, hot wallet `0x18dd3c14…` called
+     `USDT.transferFrom(main wallet, 0xf690a758…, 74.602952)` with the
+     `orderId` suffix. The recipient is not the depositor.
+  3. MINT and TRANSFER were settled in one Relay Chain tx, `0xa507ab05…`.
+
+  Its route is `relay` on both sides (no DEX), and the fees are the solver's
+  (`gas`, `fixed`, `price`, `gateway`).
+- **The relay.link "Deposit" / "Fill" labels are the API's `inTxs` /
+  `outTxs` slots, not protocol roles.** A relayed call shows the same tx in
+  both.
 
 ### `Order` (format "v1", the one returned by live quotes)
 
@@ -235,7 +294,7 @@ Hyperliquid mismatch: the repo's prod depository is `0x865eb9ba…7081`, but
 | Depository | `RelayErc20Deposit(address from, address token, uint256 amount, bytes32 id)` | `0x49fed1d0…55e1` |
 | Depository | `RelayCallExecuted(bytes32 id, (address,bytes,uint256,bool) call)` | `0x4be10945…c5ea` |
 | Router (≤v3.1) / Multicall3 | `SolverCallExecuted(address to, bytes data, uint256 amount)` | `0x93485dcd…c324` |
-| Router v3.2 | `SolverCallExecuted` with a 32-byte **hash** of the call data | signature not published ("ABIs on request") |
+| Router v3.2 | `SolverCallExecuted(address to, bytes32 dataHash, uint256 amount)`: call data replaced by its hash | `0x41b532d6…` (types recovered by keccak match on a live tx; parameter names inferred; ABI not published) |
 | Router | `SolverNativeTransfer(address to, uint256 amount)` | `0xd3546797…dba6` |
 | Router / ApprovalProxy (v3+) | `FundsMovement(address from, address to, address currency, uint256 amount, bytes metadata)` | `0xafbab204…2b91` |
 | Legacy RelayReceiver | `FundsForwardedWithData(bytes data)` | `0x936c2ca3…f53e` |
@@ -364,6 +423,11 @@ a completion signal* in `relay-indexing-schemes.md`.
 - **Fast refund**: the solver pays the user back on the origin chain, with the
   same calldata-suffix convention, and the refund is settled like a fill.
 - The order lists refund options on both chains.
+- **A destination-chain refund looks like a fill on chain.** That option pays
+  the order's recipient on the destination chain — USDC in the live
+  cross-chain orders; USDT to the recipient in the solver-filled same-chain
+  order. It carries the same `orderId` suffix. Only the output token, which is
+  in the off-chain order, tells it from a fill.
 
 ## Answers To The Protocol Questions
 
@@ -482,6 +546,13 @@ API coverage gaps) are in `relay-indexing-schemes.md`. On the protocol side:
   carry over between ApprovalProxy versions.
 - An ERC-20 deposit's `onchainId` uses the `Transfer` log index, one below the
   `RelayErc20Deposit` log in the observed txs.
+- Router events (`SolverNativeTransfer`, `FundsMovement`,
+  `SolverCallExecuted`) are emitted by same-chain swaps too. They do not by
+  themselves mean a cross-chain fill.
+- Solver hot wallets are also Relay's `/execute` relayer, so a tx from a
+  solver wallet is not necessarily a fill.
+- An `orderId` does not imply a cross-chain order. Solver-filled same-chain
+  swaps are full protocol orders whose origin and destination are one chain.
 
 ## Change Triggers
 
@@ -490,7 +561,8 @@ Update this note when any of these happen:
 - `/chains` adds or removes chains, or Depository addresses change (e.g. the
   Hyperliquid mismatch resolves)
 - a new router or ApprovalProxy version, or the v3.2 `SolverCallExecuted` ABI
-  is published
+  is published (confirm the inferred parameter names)
+- a new request kind appears, or `requestId` / `orderId` suffix usage changes
 - `OrderV2` appears in production orders, or multi-input / multi-payment
   orders are observed
 - a second solver identity appears in orders
@@ -499,7 +571,6 @@ Update this note when any of these happen:
 
 ## Open Questions
 
-- Exact ABI and topic0 of the v3.2 `SolverCallExecuted` (hash variant).
 - Direction of the 2025-07..09 USD threshold (which orders used legacy versus
   the Depository), and the exact date legacy `RelayReceiver` deposits stopped.
 - Shape of canonical / canonical+ requests on chain, if they are to be covered

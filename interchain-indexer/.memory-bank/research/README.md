@@ -204,6 +204,11 @@ Small topics may keep some sections brief.
   - `requestId` vs `orderId` identity, the off-chain `Order` holding
     destination, recipient and output token, and the Relay Chain key formulas
     (`getDeterministicId`);
+  - request kinds: cross-chain orders versus relayed `/execute` calls and
+    self-executed same-chain swaps (no `orderId`, `requestId` calldata
+    suffix), and solver-filled same-chain swaps (full orders with an
+    `orderId` on one chain); destination-chain refunds that look like fills;
+    the recovered v3.2 `SolverCallExecuted` signature;
   - Relay Chain (537713) settlement, which records no destination; live chain
     coverage (59 mainnets), cross-asset routes, calls;
   - protocol/router history 2024-01 → 2026-10.
@@ -221,7 +226,14 @@ Small topics may keep some sections brief.
     Relay Chain `Executed` keys as a per-order "settled" signal computable
     from origin data;
   - the schema mapping, Scheme 1 (API with unrestricted visibility) and
-    Scheme 2 (on chain only: Depository logs, full-block suffix matching,
-    Relay Chain stream), their comparison and a recommendation.
+    Scheme 2 (on chain only: Depository logs and full-block suffix matching;
+    the Relay Chain stream is optional and why), their comparison and a
+    recommendation;
+  - growing the indexed chain set without rescans: a durable fill-candidate
+    table keyed by suffix, a shape-based candidate rule measured on Base, and
+    what still forces a rescan;
+  - measured transfer intensity: ≈2.2 cross-chain solver transfers/s
+    (1.6–3.0/s across sampled windows), the destination split, and on-chain
+    cross-checks of fills and deposits per chain.
 
   Not decided or prototyped

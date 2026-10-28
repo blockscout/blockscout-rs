@@ -20,6 +20,7 @@ In scope:
   settlement signal
 - the mapping onto the interchain-indexer schema
 - the two schemes, their comparison and a recommendation
+- growing the set of indexed chains without rescanning those already indexed
 
 Out of scope:
 
@@ -48,18 +49,26 @@ on 2026-10-28 from that evidence; neither has been prototyped.
   - Only relay.link's own server-side proxy was observed with global
     visibility.
   - The keyless, global `/requests/v2` sunsets on 2026-11-24.
-- **Without it, three on-chain streams cover EVM chains (Scheme 2):**
+- **Without it, two on-chain streams cover EVM chains (Scheme 2):**
   - deposits from the prod Depository logs on each origin chain;
   - fills and refunds, found by reading every block of each indexed chain and
     matching the last 32 bytes of calldata against `orderId`s. Logs alone are
-    not enough: 61% of sampled fills are native transfers with no logs;
-  - Relay Chain Oracle `Executed` events as a per-order "settled" signal whose
-    key is computable from origin data.
+    not enough: 61% of sampled fills are native transfers with no logs.
 
-  Scheme 2 records the actual payout, not the order's intended output, and
-  sees non-EVM destinations only as "settled".
-- **Volume** is orders of magnitude above the bridges indexed today: ≈2–3
-  orders/s globally.
+  Scheme 2 records the actual payout, not the order's intended output. Orders
+  filled outside the indexed chains stay "destination unknown"; ≈7–15% of
+  sampled cross-chain orders went to non-EVM chains.
+- **The Relay Chain is optional in Scheme 2.** Its `Executed` events can mark
+  those orders as "settled", but say nothing about where, how, or whether by
+  fill or refund. Everything else it offers is already on chain or does not
+  work (see *Is the Relay Chain stream needed in Scheme 2?*).
+- **The chain set can grow without rescans** if Scheme 2 keeps fill
+  candidates in a durable table, recognised by tx shape rather than by known
+  `orderId`s, and pairs them with deposits by a join on `orderId` (see
+  *Extending the chain set without rescanning*).
+- **Volume** is orders of magnitude above the bridges indexed today: ≈2.2
+  cross-chain solver transfers/s globally, 1.6–3.0/s across sampled windows
+  (see *Transfer intensity*).
 
 ## Why This Matters
 
@@ -81,8 +90,8 @@ on 2026-10-28 from that evidence; neither has been prototyped.
 - **Volume.**
   - Base alone: ≈650 `RelayNativeDeposit` + ≈670 `RelayErc20Deposit` per hour
     (2026-10-26 evening UTC).
-  - The global request feed showed ≈2–3 requests/s (≈120–180/min,
-    ≈175k–250k/day).
+  - The global request feed showed ≈2.5 requests/s, of which ≈2.2/s are
+    cross-chain orders (≈190k/day; see *Transfer intensity*).
 
 ## Source-of-Truth Files
 
@@ -172,6 +181,88 @@ Deposit-address flows reveal nothing until the sweep tx.
   integrator-scoped.
 - The same lookup on v3, by `orderId` or by `id`, returned 0 rows with a
   regular key, even 16 hours after the request completed. v3 *is* scoped.
+
+### Transfer intensity
+
+Measured on 2026-10-28 over windows from 2026-10-24 to 2026-10-28.
+Settlement on the Relay Chain is not counted: these
+are solver transfers only. A cross-chain order = one Depository deposit plus
+one solver fill or refund.
+
+**Global feed.** Six 3-minute windows of the keyless, global
+`/requests/v2`: five 6 hours apart over the last day, plus one four days
+earlier (1,080 s, 2,736 requests):
+
+| Window end (UTC) | All requests | Cross-chain orders | Same-chain orders (solver-filled) | No `orderId` |
+|---|---|---|---|---|
+| 10-24 11:34 (Sat) | 3.31/s | **3.03/s** | 0.09/s | 0.19/s |
+| 10-27 11:34 | 2.61/s | **2.19/s** | 0.10/s | 0.32/s |
+| 10-27 17:34 | 3.17/s | **2.78/s** | 0.11/s | 0.28/s |
+| 10-27 23:34 | 1.93/s | **1.69/s** | 0.07/s | 0.17/s |
+| 10-28 05:34 | 1.80/s | **1.56/s** | 0.05/s | 0.19/s |
+| 10-28 11:04 | 2.38/s | **2.17/s** | 0.07/s | 0.14/s |
+| **all windows** | 2.53/s | **2.24/s** | 0.08/s | 0.22/s |
+
+- **≈2.2 cross-chain solver transfers per second** on average, ≈190k per day.
+  Across windows: from ≈1.6/s at night UTC to ≈2.8/s in the US afternoon,
+  and 3.0/s in one Saturday window. Day-to-day variation is not
+  characterised by a single window.
+- The "no `orderId`" column is self-executed same-chain swaps and `/execute`
+  relays: not solver transfers. No cross-chain request without an `orderId`
+  was seen.
+- **Destination split of cross-chain orders:**
+
+  | Destination | Share |
+  |---|---|
+  | Solana | 25% |
+  | Robinhood | 17% |
+  | BSC | 16% |
+  | Base | 11% |
+  | Ethereum | 10% |
+  | Polygon | 7% |
+  | Arbitrum | 4% |
+  | Hyperliquid | 4% |
+  | Tron, Monad | 1% each |
+
+  About 30% go to non-EVM chains.
+
+**On-chain cross-check**, without the API:
+
+- **Solver fills** — fill-shaped txs from the `/chains` wallets, windows of
+  1.5–5 minutes:
+
+  | Chain | Fills/s |
+  |---|---|
+  | Ethereum | 0.37 |
+  | BSC | 0.25 |
+  | Polygon | 0.21 |
+  | Base | 0.16 |
+  | Arbitrum | 0.05 |
+  | **sum of five chains** | **≈1.0** |
+
+  These five destinations take 48% of cross-chain orders. At the 2.17/s of
+  the 10-28 11:04 window, close to when the fills were counted, the feed
+  predicts ≈1.04/s. The rest is refunds and same-chain orders.
+- **Explicit Depository deposits**, last hour:
+
+  | Chain | Deposits/s |
+  |---|---|
+  | BSC | 0.29 |
+  | Ethereum | 0.24 |
+  | Base | 0.20 |
+  | Polygon | 0.19 |
+  | Arbitrum | 0.08 |
+  | Optimism | 0.01 |
+  | **sum of six chains** | **≈1.0** |
+
+  Implicit deposits (a bare `Transfer` to the Depository) are not counted, so
+  this is a lower bound.
+- **Non-fill solver traffic.** Solver wallets send another ≈15–20% of txs on
+  top of fills: Depository withdrawals and `/execute` relays.
+
+For an indexer, ≈2 orders/s means ≈4 relevant events/s across all chains (a
+deposit on the origin, a fill on the destination). Indexing EVM chains only
+cuts that by about a third.
 
 ## API
 
@@ -384,7 +475,7 @@ Base, 301 blocks from 53157537 (≈10 min): 108,667 txs, of which 241 (0.22%,
 |---|---|---|
 | hot wallet → `token.transferFrom(main, recipient, amt)` + suffix | 96 | ERC-20 fill |
 | `Depository.execute` (`0x2d9fb478`) | 41 (35 hot, 6 main) | from a hot wallet: withdraw-and-fill (`RelayCallExecuted`, recipient = user); from main: withdrawal |
-| Multicall3 `aggregate3Value` (`0x174dea71`) | 27 | includes solver-submitted gasless **origin deposits** with a `requestId` suffix, not an `orderId` (e.g. MetaMask Pay Base → Hyperliquid, `0x0b07653b…`) |
+| Multicall3 `aggregate3Value` (`0x174dea71`) | 27 | Relay's `/execute` relayer, `requestId` suffix rather than `orderId`: gasless **origin deposits** (e.g. MetaMask Pay Base → Hyperliquid, `0x0b07653b…`) and standalone same-chain calls (e.g. an EIP-7702 smart-wallet upgrade; see *Request kinds* in `relay-protocol-model.md`) |
 | input is exactly 32 bytes | 23 | native direct fill, zero logs |
 | RelayRouter v3.2 `multicall` (`0xcd6e13f7`) | 20 | fill with swap or calls |
 | ApprovalProxy v3.2 (`0x0a2b8f36`) | 14 | proxy-routed action, not classified further |
@@ -406,7 +497,8 @@ covers both.
      `transferFrom` ERC-20 fills (all ERC-20 fills seen on Base). Recipient,
      token and amount come from the log.
    - Router and ApprovalProxy events of every live version:
-     `SolverNativeTransfer`, `SolverCallExecuted`, `FundsMovement`.
+     `SolverNativeTransfer`, `SolverCallExecuted`, `FundsMovement`. Same-chain
+     swaps emit them too, so only the suffix match decides.
    - Depository `RelayCallExecuted` whose call recipient is not the main
      wallet: withdraw-and-fill (verified `0x5333c76a…`, Robinhood → Base).
 2. **Native direct fills (no logs).** A tx from a listed wallet whose input is
@@ -417,10 +509,15 @@ covers both.
 
    Skipping this step loses most fills (61% of the sample).
 3. **Classify every match:**
-   - `orderId` suffix on a chain other than the deposit's → fill;
-   - `orderId` suffix on the deposit's chain, paying the depositor → refund;
-   - `requestId` suffix (solver Multicall3) → an origin deposit the solver
-     submitted, not a fill;
+   - `orderId` suffix on a chain other than the deposit's → fill, or a
+     destination-chain refund, which looks the same on chain;
+   - `orderId` suffix on the deposit's chain returning the deposit currency to
+     the depositor → refund;
+   - `orderId` suffix on the deposit's chain, any other payout → fill of a
+     solver-filled same-chain order, which is out of scope;
+   - `requestId` suffix → not a fill: a relayed `/execute` call from a
+     solver wallet (an origin deposit or a standalone same-chain action), or a
+     user's same-chain swap through ApprovalProxy / Router;
    - `Depository.execute` from main with no id → solver withdrawal.
 4. **Accept destination-first arrival.** A fill can land before the deposit:
    in the Polygon → Arbitrum example, the fill came 1 s before the deposit
@@ -459,6 +556,9 @@ What the signal is good for:
 - registering orders filled on unindexed or non-EVM chains as "settled,
   destination unknown".
 
+For Scheme 2 only the second use is unique, and it is weighed against its
+cost in *Is the Relay Chain stream needed in Scheme 2?*.
+
 Limits:
 
 - **Fill and refund look alike.** Same key formula, same order → solver
@@ -476,13 +576,17 @@ Limits:
 ### What stays unknown without the API
 
 - the destination chain, until the fill is found;
+- whether a payout on the destination chain is a fill or a destination-chain
+  refund. Both carry the `orderId` suffix and pay the recipient there;
 - the intended output token, recipient and `minimumAmount`. Only the actual
   payout is recorded; under- or over-payment cannot be judged;
 - the original T1 of origin swaps, except through `FundsMovement` /
   `Transfer` logs of the deposit tx;
 - fills on non-EVM chains (Relay Chain signal only);
 - wallet-set completeness: a wallet added and used between refreshes is
-  missed for destination-first fills until it is learned.
+  missed for destination-first fills until it is learned, unless the fill's
+  shape alone makes it a candidate (see *Extending the chain set without
+  rescanning*).
 
 ## Indexing Schemes
 
@@ -498,7 +602,7 @@ Drafted 2026-10-28. Neither scheme is decided or prototyped.
 - Chain slugs and Relay numeric ids map to chain ids through `/chains`. The
   `chains.json` model is EVM- and RPC-centric, so non-EVM chains need a
   mapping layer or stay "unknown chain" under the existing filtering rules.
-- Volume (≈2–3 orders/s) makes buffer sizing, the stats-projection batch
+- Volume (≈2 orders/s, ≈4 relevant on-chain events/s) makes buffer sizing, the stats-projection batch
   limits (see `stats-projection-unbatched-pks-lookup-crash.md`) and the
   PostgreSQL bind limit first-order concerns.
 
@@ -510,8 +614,12 @@ Assumes an App with global `/requests/v3` visibility and an elevated limit.
    `sortDirection=asc`, `startTimestamp`, `limit=100`, `continuation`. The
    cursor (`updatedAt` + `continuation`) needs its own checkpoint; the
    existing checkpoints are block ranges per chain.
-2. **Filter:** `protocol.orderId` present, origin chain ≠ destination chain,
-   both chains configured (or handled by the unknown-chain rules).
+2. **Filter:** `protocol.orderId` present, origin chain ≠ destination chain.
+   This drops same-chain swaps and relayed `/execute` calls, which have
+   `protocol = null`. It also drops solver-filled same-chain swaps, which do
+   have an `orderId`, so both conditions are needed.
+   Store requests for every chain and apply the configured-chain rules only
+   when exposing data, so adding a chain later needs no API re-read.
 3. **Map each request to a whole message**, written by upsert:
    - source: `inTxs[]` and `protocol.deposit.origin` (depositor, token,
      amount, tx);
@@ -526,8 +634,8 @@ Assumes an App with global `/requests/v3` visibility and an elevated limit.
 4. **Updates** of the same request overwrite the row. The buffer's
    source/destination pairing is not needed: both sides arrive in one record.
 5. **History** through the same feed from the chosen start. At today's
-   ≈175k–250k requests/day, a year is at most ≈65–90M rows: ≈2–3 days at the
-   default 200 calls/min × 100 rows, ≈9–13 h at 20 rps. Live traffic needs
+   ≈220k requests/day (all kinds), a year is at most ≈80M rows: ≈2.8 days at
+   the default 200 calls/min × 100 rows, ≈11 h at 20 rps. Live traffic needs
    ≈5 calls/min.
 6. **Optional, later:** spot-check EVM chains in the config on chain — the
    deposit and fill receipts, and the `orderId` in the event or calldata
@@ -555,62 +663,223 @@ Uses only chain data and the keyless `/chains` registry.
      `RelayErc20Deposit`, plus `Transfer(topic2 = Depository)` with tx input
      for implicit deposits.
    - Yields `orderId`, depositor, token, amount and tx.
-   - The Relay Chain keys (MINT and fill/refund) are computed here.
 2. **Fills and refunds, per EVM chain.** Read every block with its
    transactions (`eth_getBlockByNumber` with full txs) and take the last 32
-   bytes of each tx input. A tx is a candidate when:
+   bytes of each tx input. A tx is a candidate when, whatever the set of
+   indexed chains:
    - the suffix matches a pending `orderId`; or
-   - the sender is in the solver wallet set, even if no deposit is known yet
-     (a fill can precede its deposit).
+   - it has a fill shape, from any sender: input exactly 32 bytes with
+     `value > 0` (native direct), `transfer` / `transferFrom` with 32 extra
+     bytes, or a call to a Relay contract (Router, ApprovalProxy,
+     Depository); or
+   - the sender is in the solver wallet set.
 
-   For each candidate, fetch the receipt and read amount and recipient:
+   The second and third rules catch fills whose deposit is not known yet: a
+   fill can precede its deposit, or its deposit is on a chain not indexed yet.
+   The rules were measured on Base (see *Extending the chain set without
+   rescanning*).
+
+   For each candidate matched to a deposit, fetch the receipt and read amount
+   and recipient:
    - native direct: `value` and `to`;
    - ERC-20: the token `Transfer`;
    - through the Router: `SolverNativeTransfer` / `FundsMovement`.
 
-   A match on the deposit's own chain that pays the depositor is a refund.
+   A match on the deposit's own chain that returns the deposit currency to the
+   depositor is a refund. Any other payout there fills a solver-filled
+   same-chain order.
 
    This one stream covers every fill shape, so the log paths of *Finding
    fills on a destination chain* are not needed. It is a new component: the
    existing EVM pipeline streams logs, not block bodies. Cost: one call per
    block (Base ≈0.5/s carrying ≈180 tx/s; Arbitrum ≈4 blocks/s), plus
-   receipts for candidates only (≈0.4/s on Base). For fast chains,
-   `trace_filter` by sender set is an alternative (untested).
-3. **Settlement, on the Relay Chain (537713).** A `LogStream` on the Oracle
-   `0xd180…`, event `Executed`, key in `topic1`; ≈5 events/s.
-   - When a fill was found, it confirms it.
-   - When no fill or refund was found on the indexed chains (non-EVM or
-     unindexed destination), it marks the order "settled, destination
-     unknown". It cannot tell a fill from a refund.
-4. **Pairing** in the existing buffer (`Consolidate`), keyed by `orderId`.
-   - Deposit, fill or refund, and settlement arrive in any order.
-   - Wallet-set candidates with no matching deposit expire by TTL. These are
-     mostly gasless deposits with a `requestId` suffix and withdrawals.
-   - Statuses: deposit → initiated; fill → completed; refund → refunded;
-     settlement alone → terminal with unknown outcome. The current status set
-     has no such value (see *Open Questions*).
+   receipts for matched candidates only (fewer than ≈0.4/s on Base). For fast
+   chains, `trace_filter` by sender set is an alternative (untested); it sees
+   only the wallet-set rule.
+3. **Pairing** in the existing buffer (`Consolidate`), keyed by `orderId`.
+   - Deposit and fill or refund arrive in either order.
+   - Candidates with no matching deposit are not dropped at the TTL: they
+     move to a durable candidate table (see *Extending the chain set without
+     rescanning*). Most never match: gasless deposits with a `requestId`
+     suffix, withdrawals, user calls to Relay contracts, and fills of orders
+     from unindexed or non-EVM chains.
+   - Statuses: deposit → initiated; fill → completed; refund → refunded.
+   - A solver-filled same-chain order looks like any other deposit until its
+     fill shows up on the same chain. Then it is dropped or hidden, like
+     self-executed same-chain swaps.
+   - A deposit with no fill or refund found within the TTL is persisted as
+     initiated with an unknown destination. That is the honest state: the
+     deposit is known, the outcome is not. ADR-010 (unresolved Avalanche
+     destinations) is the precedent for keeping such sends.
+   - A fill found after the TTL must still update the stored message.
+     `amb-destination-only-missing-source-gap.md` shows what happens when a
+     late event cannot be merged into an already finalized entry.
+
+An optional fourth stream, the Relay Chain Oracle `Executed` events, is
+discussed in *Is the Relay Chain stream needed in Scheme 2?*. It is not part
+of the base scheme.
 
 The wallet set comes from `/chains` and grows with the senders of matched
-fills. It matters only for destination-first arrivals; a suffix match on a
-pending `orderId` does not depend on the sender.
+fills. With the shape rules it is a safety net for fills of an unexpected
+shape from known wallets. A suffix match on a pending `orderId` does not
+depend on the sender.
 
 - **Closes:**
   - verifiability: everything is checkable on chain;
   - independence from the API;
-  - refunds;
-  - non-EVM destinations partly, as "settled, destination unknown".
+  - refunds to the origin chain, which is always indexed when the deposit is;
+  - adding chains later without rescanning the ones already indexed.
 - **Does not close:**
   - the intended recipient, token and `minimumAmount`: only the actual payout
     is recorded, and the recipient is inferred;
   - the original T1, except through `FundsMovement`;
-  - fills on non-EVM chains;
+  - destination-chain refunds: they are recorded as completed fills, since
+    only the off-chain order tells them apart;
+  - the outcome of orders filled or refunded outside the indexed chains (all
+    non-EVM destinations); they stay "destination unknown";
   - deposits from non-EVM chains: their EVM fills are visible but have no
     source;
   - history before 2025-07-09, when the Depositories appeared;
   - RPC cost: every block of ~50 chains, from an RPC with full block and
     receipt history for backfill;
-  - a fill from an unknown wallet that lands before its deposit (0 cases in
-    the sample).
+  - a fill of an unexpected shape, outside the Relay contracts, from a wallet
+    not in the set, that lands before its deposit (0 cases in the sample).
+
+### Extending the chain set without rescanning
+
+The indexer will most likely start with a subset of the 50 EVM chains — the
+most active ones, or those with a Blockscout instance — and grow. The goal is
+that adding a chain never rescans the chains already indexed. Assessed on
+2026-10-28.
+
+Adding chain C to indexed chains A and B:
+
+| Direction | Candidates dropped at the TTL | Durable candidate table |
+|---|---|---|
+| deposit on A → fill on C | works: A's deposit waits as "destination unknown"; C's backfill finds the fill and matches it against unresolved `orderId`s | same |
+| deposit on C → fill on A | **breaks**: A was scanned while C's `orderId`s were unknown, the candidate expired, and A must be rescanned | works: C's deposits are looked up among A's stored candidates |
+| refund | to the deposit's chain: always visible; to the destination chain: as one of the rows above | same |
+
+**Design rule:** each chain's scan extracts and keeps everything
+Relay-relevant on that chain, whatever other chains are indexed. Pairing is a
+join on `orderId` that is rerun when a chain is added.
+
+- **Candidate table.**
+  - Narrow and append-only: the suffix (or the `i64` key derived from it),
+    `chain_id`, block, tx hash; indexed by the key.
+  - Amount and recipient are read from the receipt only on a match — a
+    targeted fetch of one tx, not a rescan.
+- **Unresolved deposits** stay in `crosschain_messages` indefinitely. They are
+  found by the same derived key, so no new index is needed.
+- **Adding C:**
+  - backfill C;
+  - look up C's deposits among the stored candidates of every indexed chain;
+  - look up C's candidates among the unresolved deposits.
+
+  The per-chain checkpoints, independent within a bridge, already let C catch
+  up on its own.
+- **Not `pending_messages`.** The buffer is built for short waits with
+  give-up semantics (see `amb-destination-only-missing-source-gap.md`) and
+  stores JSON payloads. Candidates live for years and are numerous. The buffer
+  stays for live pairing; the table holds the long tail.
+
+Candidate rule, measured on the 301 Base blocks (≈10 min):
+
+| Rule (any sender) | Solver wallets | Others |
+|---|---|---|
+| input exactly 32 bytes, `value > 0` (native direct) | 23 | 1 |
+| `transfer` / `transferFrom` + 32 bytes | 91 | 8 |
+| call to a Relay contract (Router, ApprovalProxy, Depository) | 75 | 67 |
+| matched by none of the above | 47 | — |
+
+- The shape and contract rules covered every fill shape in the sample
+  without the wallet set.
+- The 47 solver txs outside them are Multicall3 calls (those checked carried
+  a `requestId`, not an `orderId`), solver operations, and `transferFrom`
+  without a suffix.
+- The wallet set stays as an extra rule. It also matters for backfill: today's
+  `/chains` may lack wallets retired long ago, and the shape rules still catch
+  their fills.
+- The 67 calls to Relay contracts from senders outside the wallet set were not
+  classified one by one. They are expected to be user txs: Depository
+  deposits, origin swaps of cross-chain orders, and same-chain swaps. Their `requestId` suffix never matches; they cannot be excluded by
+  shape, because a router call from an unknown solver wallet looks the same.
+- Without `value > 0`, the 32-byte rule picks up 285 unrelated txs in 10
+  minutes; with it, 1.
+- Candidate rate: ≈0.44/s on Base, against ≈180 tx/s.
+
+Costs:
+
+- **The candidate table.** Base gives ≈40–45k rows/day; 5–10 chains give tens
+  of millions of rows and a few GB per year. This is an estimate: the noise was
+  not measured on other chains.
+- **It must exist from the first scan of every chain.** It cannot be added
+  later without a rescan.
+- **Many unresolved deposits early on.** With few chains indexed, most
+  deposits stay "destination unknown" until their chain is added. Whether to
+  expose them before resolution is a product decision.
+- **Stats change retroactively.** When a chain is added, old orders close and
+  are projected into past days. Whether the stats projection handles
+  late-finalized messages for old dates correctly is unverified.
+
+What still forces a rescan:
+
+- **Widening the candidate rule** (a new fill shape, a router v4): rescan the
+  affected period.
+- **A fill of an unexpected shape, outside the Relay contracts, from a wallet
+  not in the set** (0 in the sample). On chains with a Blockscout instance, a
+  newly found wallet's history can be fetched per address instead of reading
+  blocks.
+- **Full independence from the rules** would need the suffix of every tx, or
+  per-range bloom filters: billions of rows a year on Base alone. Not worth
+  it.
+
+Scheme 1 extends trivially: store every cross-chain request and filter by
+configured chains only when exposing data.
+
+### Is the Relay Chain stream needed in Scheme 2?
+
+Mostly not (assessed 2026-10-28). The stream would be a `LogStream` on the
+Oracle `0xd180…`, event `Executed`, key in `topic1`, ≈5 events/s, joined to
+deposits through keys computed from origin data.
+
+| Expected benefit | In Scheme 2 |
+|---|---|
+| confirms a found fill | redundant. The fill is on chain: the suffix matched in a successful tx. The Oracle checks the same plus `minimumAmount` and `deadline`, which Scheme 2 cannot check anyway, and `force` makes its confirmation non-strict |
+| tells a fill from a refund | no: same key formula, same order → solver TRANSFER |
+| detects missed fills | no: "settled, nothing found" looks the same as "destination not indexed" |
+| bounds how long a deposit waits | a TTL does the same; fills arrive within seconds to minutes |
+| closes orders whose outcome lies outside the indexed chains | **the only unique value** |
+
+How much that value is worth:
+
+- **Share.** In two v3 regular-key samples, 6 of 87 and 7 of 90 cross-chain
+  requests went to non-EVM chains (Solana, Hyperliquid); in a v2 global sample,
+  6 of 39. That is ≈7–15%, from small one-day samples, and more if not every
+  EVM chain is indexed.
+- **Refunds to the origin chain are visible without it.** That is the
+  deposit's own chain, and the refund carries the same suffix. Only refunds to
+  an unindexed destination are invisible.
+- **The result is "closed, outcome unknown".** No destination chain, no tx, no
+  fill/refund distinction, and a status value the schema does not have.
+- **Stats gain nothing.** `stats_messages.dst_chain_id` is non-nullable, so an
+  order without a destination chain is not projected either way.
+
+What it costs:
+
+- **Another chain to stream.** The public RPC is slow and silently drops
+  topic-filtered logs. Running a node for a Sovereign Stack rollup on Celestia
+  is a project of its own. The Blockscout instance suits lookups, not a live
+  stream.
+- **Brittle keys.** `getDeterministicId` is off-chain Oracle code that can
+  change without an on-chain trace. The fill key needs every deposit of the
+  order, and for a multi-input order some deposits may sit on unindexed chains.
+- **More moving parts.** A third stream in pairing and a new status in the
+  schema and API.
+
+Decision: the base Scheme 2 has two streams. Add the Relay Chain only if the
+product must separate "stuck" from "closed elsewhere" for these orders, and
+then as status enrichment outside the buffer's pairing.
 
 ### Rejected variant: a regular key as enrichment
 
@@ -625,21 +894,23 @@ option) was considered and dropped:
 
 | | Scheme 1 (API) | Scheme 2 (on chain) |
 |---|---|---|
-| Chains | all 59, incl. non-EVM | configured EVM chains; non-EVM only as the settlement signal |
-| Destination data | chain, tx, recipient, token, amount | actual payout; recipient inferred |
+| Chains | all 59, incl. non-EVM | configured EVM chains; other destinations stay "destination unknown" |
+| Destination data | chain, tx, recipient, token, amount | actual payout; recipient inferred; destination-chain refunds look like fills |
 | Intended output of the order | yes | no |
 | Trust | off chain, Relay | verifiable on chain |
 | History | from 2024-01 | from 2025-07-09 |
-| Load | ≈5 calls/min live | every block of every chain + candidate receipts + one Relay Chain stream |
-| Architecture | new path: API poller with its own cursor | 2 `LogStream`s, a new block scanner, the buffer as is |
+| Load | ≈5 calls/min live | every block of every chain + candidate receipts |
+| Architecture | new path: API poller with its own cursor | a `LogStream`, a new block scanner, the buffer as is, a durable candidate table |
+| Adding a chain later | free, if all requests are stored | scan only the new chain |
 | Dependencies | key, visibility, limits, API format | RPC (full history for backfill), `/chains` |
 
 ### Recommendation
 
 - **If Relay grants global visibility:** Scheme 1. It is cheaper and more
   complete. Add the on-chain spot-check only when it is needed.
-- **If not:** Scheme 2 with the three streams above. A regular key is not
-  worth adding (see *Rejected variant*).
+- **If not:** Scheme 2 with its two streams. Neither a regular key (see
+  *Rejected variant*) nor, by default, the Relay Chain stream (see *Is the
+  Relay Chain stream needed in Scheme 2?*) is worth adding.
 
 ## Invariants
 
@@ -649,6 +920,8 @@ option) was considered and dropped:
 - Scheme 2 is complete only if every block of every indexed chain is read.
   A skipped block loses its fills, and nothing else on chain records them
   except the Relay Chain signal.
+- In Scheme 2, what a chain's scan extracts must not depend on which other
+  chains are indexed. Otherwise adding a chain forces rescans of the others.
 - Relay Chain keys are deterministic functions of origin data and the
   `orderId`, so settlement can be joined without the API.
 - API records are keyed by `requestId`, on-chain records by `orderId`. A
@@ -660,10 +933,20 @@ option) was considered and dropped:
   instead of the prod Depository address (staging on Base: ≈17/day).
 - **Fills are missed** if only router events are watched. Direct native and
   ERC-20 fills emit nothing Relay-specific.
-- **Destination-first fills are missed** when a new solver wallet starts
-  sending before the wallet set is refreshed or learned.
+- **Non-bridge activity is indexed** if router events or Relay-tagged txs are
+  taken as orders. Same-chain swaps and relayed `/execute` calls emit the same
+  router events or carry a 32-byte suffix, but have no `orderId`.
+- **Refunds are reported as completed transfers.** In Scheme 2, a
+  destination-chain refund matches like a fill: same suffix, payout to the
+  recipient. Only the API's `status = refund` tells it apart.
+- **Destination-first fills are missed** when a new solver wallet sends a
+  fill of an unexpected shape, outside the Relay contracts, before the wallet
+  set is refreshed or learned.
 - **Relay Chain lookups silently miss** when made through the public RPC's
   topic-filtered `eth_getLogs`. Query the Blockscout instance instead.
+- **Old orders stay unmatched after a rule change.** Widening the Scheme 2
+  candidate rule without rescanning the affected period leaves fills of the
+  new shape unmatched for that period.
 - **Origin token is misreported** for origin-swap routes (Depository event
   shows USDC, the user sent T1).
 - **History is lost** after 2026-11-24 if relying on keyless v2.
@@ -677,8 +960,18 @@ option) was considered and dropped:
 
 - `user` in the API can be an aggregator contract (LI.FI diamond `0x1231deb6…`)
   while the Depository's `from` is the end user.
-- Not every solver tx with a 32-byte suffix is a fill. Solver-submitted
-  gasless origin deposits carry a `requestId` suffix.
+- Not every tx with a 32-byte suffix is a fill. Relayed `/execute` calls
+  (from solver wallets) and same-chain swaps (from users) carry a `requestId`
+  suffix. Only a match on a known `orderId` identifies a fill or refund.
+- The main solver wallet receives `gateway` fees as ERC-20 `Transfer`s. The
+  ERC-20 fill filter must use `topic1` (from) = main wallet, never `topic2`.
+- Same-chain swaps are out of scope for an interchain index. Indexing them
+  would create messages with the same source and destination chain.
+  - Self-executed ones have no Depository and no `orderId`.
+  - Solver-filled ones (`forceSolverExecution`, deposit-address routes, Tron
+    TRX/USDT) are full orders. Their deposit cannot be told from a
+    cross-chain one, and they are recognised only once the fill shows up on
+    the deposit's chain.
 - ERC-20 fill shape varies: on Base hot wallets pull from the main wallet via
   `transferFrom`; on Arbitrum the main wallet paid with a direct `transfer`.
   This matters for the log-based paths, not for a full-block read.
@@ -702,6 +995,8 @@ Update this note when any of these happen:
   orders, or a fill is seen from an unlisted sender
 - the Oracle contract is replaced, or `getDeterministicId` / the
   idempotency-key formulas change
+- a new fill shape or router version appears (widen the Scheme 2 candidate
+  rule and rescan the affected period)
 
 ## Open Questions
 
@@ -713,8 +1008,24 @@ Update this note when any of these happen:
   2/min.
 - Scheme 1: the v3 field names for recipient, output token and amount, and
   the full list of in-flight `status` values.
-- Scheme 2: which status a message gets when the Relay Chain shows it settled
-  but no fill or refund was found on indexed chains.
+- Scheme 2: the TTL after which a deposit without a found fill is persisted
+  as "destination unknown", and how a later fill is merged into it.
+- Scheme 2, only if the optional Relay Chain stream is added: which status a
+  message gets when it is settled but no fill or refund was found on the
+  indexed chains.
+- The share of cross-chain orders to non-EVM destinations, measured on a
+  larger and global sample than the ≈7–15% from one day.
+- Scheme 2 candidate rule on chains other than Base: its noise, the
+  resulting candidate-table volume, and whether any solver Multicall3 tx
+  carries an `orderId` (only some were checked).
+- Whether to expose deposits that stay "destination unknown" until their
+  destination chain is indexed.
+- Share of destination-chain refunds among terminal orders. It sizes how many
+  refunds Scheme 2 reports as completed.
+- Share of solver-filled same-chain orders among Depository deposits. They sit
+  among "destination unknown" until their fill shows up.
+- Whether the stats projection handles messages finalized long after their
+  date (orders closed when a chain is added).
 - Duplicate deposits: do they share the `orderId`, and should the message
   key be `orderId` or `(orderId, deposit onchainId)`?
 - Whether the `Block` fetched by `receipt_fetch` exposes tx input (needed for
