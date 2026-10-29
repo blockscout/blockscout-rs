@@ -44,10 +44,13 @@ on 2026-10-28 from that evidence; neither has been prototyped.
   including non-EVM, in one record.
 - **A regular API key is not that.**
   - `/requests/v3` returns only the caller's integrator's requests plus
-    requests made without a key. A fresh self-serve key saw ≈13% of the global
-    feed.
+    requests made without a key. A fresh self-serve key saw ≈8% of the global
+    feed (228 of 2,736 requests in six 3-minute windows, 3–14% per window).
   - Only relay.link's own server-side proxy was observed with global
     visibility.
+  - The scoping applies only to requests created after 2026-03-24, ≈19:00–20:00
+    UTC. A regular key sees all older history, back to v3's earliest record
+    (2024-01-16).
   - The keyless, global `/requests/v2` sunsets on 2026-11-24.
 - **Without it, two on-chain streams cover EVM chains (Scheme 2):**
   - deposits from the prod Depository logs on each origin chain;
@@ -169,7 +172,7 @@ Deposit-address flows reveal nothing until the sweep tx.
 
 | Source | Complete? | Limits |
 |---|---|---|
-| `GET /requests/v3`, regular key | **no**: own integrator + keyless requests only (≈13% of traffic) | API key required; off-chain trust |
+| `GET /requests/v3`, regular key | **no**: own integrator + keyless requests only (≈8% of traffic) | API key required; off-chain trust |
 | `GET /requests/v3`, privileged visibility | yes (all chains, incl. non-EVM) | only relay.link's own proxy observed with it; availability to third parties unknown |
 | `GET /requests/v2` | yes, keyless and global | deprecated 2026-07-22, throttled from 2026-09-01, **sunset 2026-11-24**; `limit` ≤ 50 |
 | `GET /intents/status/v3` | global, but one `requestId` per call | `requestId` is not on chain |
@@ -293,9 +296,16 @@ Payload:
   - `deposit.attestation` (actions, idempotency key, oracle signatures)
   - `settlement.destination.fills[] / refunds[]` (chain, tx)
   - `settlement.relay{tx hash, transfer|burn|mixed, solver}`
-- **`orderData`:** the full `Order` (v2 endpoint only; omitted for public
-  non-terminal requests; absent from the v3 schema). It allows recomputing and
-  verifying the `orderId`.
+- **`orderData`:** the full `Order` (v2 endpoint only, with
+  `includeOrderData=true`; omitted for public non-terminal requests; absent
+  from the v3 schema). It allows recomputing and verifying the `orderId`.
+  - v3 already carries the order's intended output: `recipient`, and
+    `data.route.quoted.destination.outputCurrency` with `amount` (=
+    `expectedAmount`), `minimumAmount` and `currency.chainId` / `address`.
+    Checked field by field on one Base → Polygon USDC request (2026-10-29).
+  - Only `orderData` has `output.calls`, the deadlines, the refund options
+    (`inputs[].refunds[]`), and `salt` / `extraData` / `version` / `weight`.
+    The v3 schema has no call field besides `failedCallData`.
 
 A refund shows up as `status = refund` with the refund tx in
 `settlement.destination.refunds[]`.
@@ -318,7 +328,11 @@ its own, v3 returns only **public keyless requests**.
 
 | Check | Result |
 |---|---|
-| v3 with no filter vs relay.link proxy, same 49 s window (11:41:59–11:42:48 UTC) | proxy 100 requests; our key 14; 13 in both, 87 proxy-only. The 1 key-only row was indexed after the proxy snapshot and the proxy finds it on `id` lookup |
+| v3 with no filter vs relay.link proxy, same 49 s window (11:41:59–11:42:48 UTC) | proxy 100 requests (a 5-page snapshot); our key 14. Rechecked 2026-10-29: the global v2 holds 106 requests in that span (the snapshot missed 6 not yet indexed), and the key sees 14 of them (13%) |
+| the six 3-minute global v2 windows of *Transfer intensity* (2,736 requests), queried with the key on 2026-10-29 | key sees 228 (8.3%; 2.9–13.9% per window); cross-chain orders 200 of 2,414 (8.3%); no key-only rows |
+| 2-minute windows at noon UTC on 11 dates, 2024-01-20 … 2026-07-01, v2 vs v3 with the key (2026-10-29) | up to 2026-01-01 the key sees every v2 request plus a few more (e.g. 2025-10-01: v2 411, key 418, 411 common); 2026-04-01 and 2026-07-01: 14 of 151, 16 of 161 |
+| v3 with the key, one 2-minute window per day and then per hour | a full 100-row page through 2026-03-24 19:00 UTC; 10–30 rows from 20:00 UTC on: **the integrator scoping started 2026-03-24, ≈19:00–20:00 UTC** |
+| earliest records, `sortDirection=asc` | v3 (key): 2024-01-16 13:24:57 UTC; v2: 2024-01-10 10:09:16 UTC. 300+ v2 requests of 2024-01-10 alone are absent from v3; 50 of them were looked up by `id` and none was found |
 | 100 on-chain Base Depository `orderId`s (1–10 min old), one `filters` call | 17 found |
 | v3 `id=` / `orderId=` for LI.FI (≈16 h old) and OpenSea (≈1 h old) requests | 0, with or without `includeChildRequests` |
 | v2 keyless `orderId=` for v3-invisible orders | found (referrers `opensea-unlinked-recipient`, `relay.link`) |
@@ -371,10 +385,12 @@ Push channels are not discovery channels:
     bucket), others 200/min.
   - Elevated: `/requests/v3` 20 rps, `/requests` + `/requests/v2` a shared
     5 rps.
-- **The newly created App was configured** at `/requests` 2/min,
-  `/withdrawals/status` 120/min, others 200/min. Whether v3 falls into its
-  own bucket for that App was not established; all calls were paced to
-  2/min.
+- **The newly created App's limits table** listed `/requests` at 2/min,
+  `/withdrawals/status` 120/min, others 200/min. `/requests/v3` is not bound
+  by the 2/min: 12 back-to-back v3 calls on 2026-10-29 (≈13 s) all returned
+  `200`, and so did 179 of 180 calls in three parallel streams over 65 s
+  (≈166/min; the other one was a network timeout, not a `429`). This matches
+  the documented own bucket of 200/min.
 - No rate-limit headers were returned.
 - The keyless v2 is IP-throttled and returned `429` after a handful of calls.
 - **Lifecycle:** `/requests/v2` was deprecated on 2026-07-22, throttled from
@@ -385,17 +401,18 @@ Push channels are not discovery channels:
 Two API-based scenarios were measured against the regular-key visibility:
 
 - **Scenario 1: on-chain Depository logs, then `orderId` lookup.**
-  - Mechanically viable: 100 `orderId`s per `filters` call × 2/min = 200
-    lookups/min, against ≈12–22 explicit deposits/min on Base alone.
+  - Mechanically viable: 100 `orderId`s per `filters` call, at up to 200
+    calls/min, against ≈12–22 explicit deposits/min on Base alone.
   - Coverage ≈17%. The other ≈83% need on-chain destination matching
     (Scheme 2) or privileged visibility.
 - **Scenario 2: API-only tracking** via an `updatedAt` feed.
-  - Visible volume ≈23 new requests/min plus status updates: about one
-    100-row call/min, little headroom for history.
-  - Covers only the ≈13% visible slice of ≈120–180 requests/min.
+  - Visible volume ≈13 new requests/min (228 in the 18 sampled minutes) plus
+    status updates: well under one 100-row call/min.
+  - Covers only the ≈8% visible slice of ≈150 requests/min.
 
 **Both scenarios become complete only if Relay grants global v3 visibility to
-the App**, and need the elevated v3 limit at full volume.
+the App.** The default v3 limit is enough at full volume; an elevated one only
+shortens the backfill (see Scheme 1, step 5).
 
 ## On-Chain Indexing
 
@@ -608,7 +625,9 @@ Drafted 2026-10-28. Neither scheme is decided or prototyped.
 
 ### Scheme 1: API with unrestricted visibility
 
-Assumes an App with global `/requests/v3` visibility and an elevated limit.
+Assumes an App with global `/requests/v3` visibility. The default limit
+(200 calls/min) covers live traffic; an elevated one only shortens the
+backfill.
 
 1. **Poll the change feed:** `/requests/v3` with `sortBy=updatedAt`,
    `sortDirection=asc`, `startTimestamp`, `limit=100`, `continuation`. The
@@ -623,10 +642,11 @@ Assumes an App with global `/requests/v3` visibility and an elevated limit.
 3. **Map each request to a whole message**, written by upsert:
    - source: `inTxs[]` and `protocol.deposit.origin` (depositor, token,
      amount, tx);
-   - destination: `outTxs[]` and `protocol.settlement.destination.fills[]`;
-     recipient, output token and amount from the request metadata and
-     `stateChanges` (field names seen in the v2 payload; to be confirmed on
-     v3);
+   - destination: `outTxs[].txHash` / `chainId` and
+     `protocol.settlement.destination.fills[]`; recipient from `recipient`;
+     output token and amounts from `data.route.quoted|actual.destination
+     .outputCurrency` (confirmed on v3, 2026-10-29); destination calls are not
+     in v3;
    - original T1 before an origin swap: `route.origin.inputCurrency`;
    - status: `success` → completed; `refund` → refunded, with the tx from
      `settlement.destination.refunds[]`; `failure` → failed; the in-flight
@@ -645,7 +665,7 @@ Assumes an App with global `/requests/v3` visibility and an elevated limit.
   - all 59 chains, including non-EVM;
   - full destination data and the intended output of the order;
   - refunds and the original T1;
-  - history from 2024-01.
+  - history from 2024-01-16 (v3's earliest record).
 - **Does not close:**
   - trust: the data is off chain and Relay-operated;
   - the dependency on API availability and format (v2 is already being
@@ -886,7 +906,8 @@ then as status enrichment outside the buffer's pairing.
 Scheme 2 plus `orderId` lookups with a regular key (earlier "hybrid"
 option) was considered and dropped:
 
-- it covers ≈13–17% of orders and no class of orders completely;
+- it covers ≈8% of orders (3–17% across the measurements) and no class of
+  orders completely;
 - it adds the key and rate-limit dependency of Scheme 1 without its
   completeness.
 
@@ -898,7 +919,7 @@ option) was considered and dropped:
 | Destination data | chain, tx, recipient, token, amount | actual payout; recipient inferred; destination-chain refunds look like fills |
 | Intended output of the order | yes | no |
 | Trust | off chain, Relay | verifiable on chain |
-| History | from 2024-01 | from 2025-07-09 |
+| History | from 2024-01-16 | from 2025-07-09 |
 | Load | ≈5 calls/min live | every block of every chain + candidate receipts |
 | Architecture | new path: API poller with its own cursor | a `LogStream`, a new block scanner, the buffer as is, a durable candidate table |
 | Adding a chain later | free, if all requests are stored | scan only the new chain |
@@ -948,7 +969,7 @@ option) was considered and dropped:
   candidate rule without rescanning the affected period leaves fills of the
   new shape unmatched for that period.
 - **Origin token is misreported** for origin-swap routes (Depository event
-  shows USDC, the user sent T1).
+  shows the post-swap solver currency, the user sent T1).
 - **History is lost** after 2026-11-24 if relying on keyless v2.
 - **Silent partial coverage.** With a regular key, v3 answers `200` with an
   empty or short list for requests it hides. A lookup miss is not evidence
@@ -1004,10 +1025,8 @@ Update this note when any of these happen:
   relay.link proxy has, and at which rate limit? The answer picks the scheme.
   (Answered so far: v3 does **not** return other integrators' requests to a
   regular key.)
-- Which bucket `/requests/v3` uses for an App whose `/requests` limit is
-  2/min.
-- Scheme 1: the v3 field names for recipient, output token and amount, and
-  the full list of in-flight `status` values.
+- Scheme 1: the full list of in-flight `status` values, and how (or whether)
+  v3 exposes the destination calls of a cross-chain order with calls.
 - Scheme 2: the TTL after which a deposit without a found fill is persisted
   as "destination unknown", and how a later fill is merged into it.
 - Scheme 2, only if the optional Relay Chain stream is added: which status a

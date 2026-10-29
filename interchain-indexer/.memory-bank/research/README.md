@@ -218,7 +218,7 @@ Small topics may keep some sections brief.
 - `relay-indexing-schemes.md` — how Relay orders can be ingested, and two
   candidate schemes. Covers:
   - the REST API as a source: payload by `orderId`, visibility scoping (a
-    regular key's `/requests/v3` sees ≈13% of traffic; only the relay.link
+    regular key's `/requests/v3` sees ≈8% of traffic; only the relay.link
     proxy was seen with global visibility), query surface, rate limits, v2
     sunset 2026-11-24;
   - on-chain indexing: what to index, one protocol solver identity behind 42
