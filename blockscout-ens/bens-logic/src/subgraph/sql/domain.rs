@@ -73,6 +73,8 @@ mod sql_gen {
 // values with "timestamp out of range" (22008), failing the whole query for
 // every domain it scans. Values past 9999-12-31T23:59:59Z (253402300799) are
 // therefore clamped in filters and returned as NULL ("no expiry").
+// ensdomains/ens-subgraph 2.1.1+ clamps never-expiring names to exactly
+// 253402300799 on `expiry_date`, so that value itself is "no expiry" too.
 const DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE: &str = r#"
 vid,
 block_range,
@@ -93,7 +95,7 @@ to_timestamp(created_at) as registration_date,
 owner,
 registrant,
 wrapped_owner,
-CASE WHEN expiry_date <= 253402300799 THEN to_timestamp(expiry_date) END as expiry_date,
+CASE WHEN expiry_date < 253402300799 THEN to_timestamp(expiry_date) END as expiry_date,
 COALESCE(to_timestamp(LEAST(expiry_date, 253402300799)) < now(), false) AS is_expired,
 token_id::text as token_id
 "#;
@@ -110,7 +112,7 @@ owner,
 wrapped_owner,
 stored_offchain,
 resolved_with_wildcard,
-CASE WHEN expiry_date <= 253402300799 THEN to_timestamp(expiry_date) END as expiry_date,
+CASE WHEN expiry_date < 253402300799 THEN to_timestamp(expiry_date) END as expiry_date,
 COALESCE(to_timestamp(LEAST(expiry_date, 253402300799)) < now(), false) AS is_expired
 "#;
 

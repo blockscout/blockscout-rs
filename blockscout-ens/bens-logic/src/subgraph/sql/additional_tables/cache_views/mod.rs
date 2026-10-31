@@ -5,7 +5,7 @@ mod address_names;
 pub use addr_reverse_names::AddrReverseNamesView;
 pub use address_names::AddressNamesView;
 
-use crate::subgraph::sql::DbErr;
+use crate::{protocols::Protocol, subgraph::sql::DbErr};
 use anyhow::Context;
 use sqlx::{Executor, PgPool, Row};
 
@@ -16,11 +16,34 @@ pub trait CachedView {
     fn unique_field() -> &'static str;
     fn table_sql(schema: &str) -> String;
 
+    /// View SQL for a protocol. Defaults to the schema-only variant; views
+    /// whose shape depends on the protocol's subgraph (e.g. ENSv2 tables)
+    /// override it.
+    fn table_sql_for_protocol(protocol: &Protocol) -> String {
+        Self::table_sql(&protocol.subgraph_schema)
+    }
+
     async fn create_view(pool: &PgPool, schema: &str) -> Result<(), DbErr> {
+        Self::create_view_with_sql(pool, schema, Self::table_sql(schema)).await
+    }
+
+    async fn create_view_for_protocol(pool: &PgPool, protocol: &Protocol) -> Result<(), DbErr> {
+        Self::create_view_with_sql(
+            pool,
+            &protocol.subgraph_schema,
+            Self::table_sql_for_protocol(protocol),
+        )
+        .await
+    }
+
+    async fn create_view_with_sql(
+        pool: &PgPool,
+        schema: &str,
+        table_sql: String,
+    ) -> Result<(), DbErr> {
         let view_table_name = Self::view_table_name();
         let refresh_function_name = Self::refresh_function_name();
         let unique_field = Self::unique_field();
-        let table_sql = Self::table_sql(schema);
         let mut tx = pool.begin().await?;
 
         // https://stackoverflow.com/questions/20582500/how-to-check-if-a-table-exists-in-a-given-schema

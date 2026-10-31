@@ -6,5 +6,9 @@
     "node_modules/@graphprotocol/graph-ts/global/global.ts",
     "src/**/*.ts",
     "tests/**/*.ts"
-  ]
+  ],
+  "compilerOptions": {
+    "typeRoots": ["./src/@types"],
+    "types": ["assembly", "es5"]
+  }
 }

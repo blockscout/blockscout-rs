@@ -180,11 +180,14 @@ impl SubgraphReader {
             tracing::info!("start initializing cache table for schema {schema}");
             match address_resolve_technique {
                 AddressResolveTechnique::ReverseRegistry => {
-                    sql::AddrReverseNamesView::create_view(self.pg_pool_write(), schema)
-                        .await
-                        .context(format!(
-                            "failed to create AddrReverseNamesView for schema {schema}"
-                        ))?;
+                    sql::AddrReverseNamesView::create_view_for_protocol(
+                        self.pg_pool_write(),
+                        protocol,
+                    )
+                    .await
+                    .context(format!(
+                        "failed to create AddrReverseNamesView for schema {schema}"
+                    ))?;
                 }
                 AddressResolveTechnique::AllDomains => {
                     sql::AddressNamesView::create_view(self.pg_pool_write(), schema)

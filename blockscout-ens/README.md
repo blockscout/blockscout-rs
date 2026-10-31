@@ -12,7 +12,7 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 
 | Subgraph Name       | Network   | TLD   | Note |
 |---------------------|-----------|-------|------|
-| ens-subgraph        | Ethereum  | .eth  |      |
+| ens-subgraph        | Ethereum  | .eth  | ENSv1 + ENSv2, see [ENSv2](#ensv2) |
 | rns-subgraph        | Rootstock | .rsk  |      |
 | genome-subgraph     | Gnosis    | .gno  | SpaceID contracts |
 | bns-subgraph        | Base      | .base |      |
@@ -23,6 +23,41 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 | story-subgraph      | Story     | .ip   | SpaceID contracts |
 | gravity-subgraph    | Gravity   | .g    | SpaceID contracts |
 | zeta-subgraph       | Zeta      | .zeta | SpaceID contracts |
+
+## ENSv2
+
+`ens-subgraph` is [ensdomains/ens-subgraph](https://github.com/ensdomains/ens-subgraph)
+`v2.1.1` with Blockscout's extension fields (see its
+[README](./graph-node/subgraphs/ens-subgraph/README.md)). It indexes ENSv1 and
+ENSv2 on mainnet and Sepolia and projects ENSv2 names into the legacy `Domain`
+tables, so BENS keeps working on the same schema. Specific to it:
+
+- **Graph Node `v0.45.0`+** is required (`graph-node/docker-compose.yml`): the
+  manifest is `specVersion 1.3.0` with `indexerHints`, which `v0.34.x` rejects.
+- **ENSIP-19 default primary names.** The ENSv2 app sets a primary name on the
+  `DefaultReverseRegistrar` instead of the v1 `addr.reverse` resolver. The
+  subgraph indexes them as `ENSv2PrimaryName`, with a Blockscout extension
+  field `reverse_node = namehash(<addr>.addr.reverse)`. When a protocol has
+  `specific.ensv2` configured, BENS's `addr_reverse_names` view UNIONs that
+  table with the v1 `name_changed` source, newest record per reverse node.
+- **Never-expiring names.** The subgraph writes `253402300799`
+  (9999-12-31T23:59:59Z) to `expiry_date` for ENSv2 names that never expire.
+  BENS reports that value, or anything beyond it, as no expiry
+  (`expiry_date: null`, "never expires"). Earlier 2.x releases wrote
+  `8640000000000` (year 275760), which Rust's `chrono` cannot represent;
+  the same guard covers a schema indexed by them.
+
+```json
+"specific": {
+  "type": "ens_like",
+  "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
+  "registry_contract": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
+  "try_offchain_resolve": true,
+  "ensv2": {}
+}
+```
+
+Protocols without `ensv2` are unaffected and never touch the ENSv2 tables.
 
 ## Envs
 
