@@ -130,7 +130,8 @@ pub struct EnsLikeProtocol {
     #[serde(default)]
     pub try_offchain_resolve: bool,
     /// Set when the subgraph is ensdomains/ens-subgraph 2.x (ENSv2-aware): it
-    /// switches on the ENSv2 tables in the reverse-name view.
+    /// switches on the ENSv2 tables in the reverse-name view and the
+    /// migration-aware owner (see `EnsV2Settings`).
     #[serde(default)]
     pub ensv2: Option<EnsV2Settings>,
 }
@@ -138,7 +139,15 @@ pub struct EnsLikeProtocol {
 /// ENSv2 specifics of an ENS-like protocol indexed by ensdomains/ens-subgraph 2.x.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(deny_unknown_fields)]
-pub struct EnsV2Settings {}
+pub struct EnsV2Settings {
+    /// Contracts the ENSv1 -> ENSv2 migration parks retired v1 state in: the
+    /// Graveyard and the migration controllers. The subgraph keeps
+    /// `Domain.owner` as the v1 registry owner, so a migrated name's owner is
+    /// one of these; BENS reports the holder instead (wrapped owner,
+    /// registrant or the ENSv2 slot owner).
+    #[serde(default)]
+    pub migration_contracts: Vec<Address>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(deny_unknown_fields)]

@@ -46,6 +46,16 @@ tables, so BENS keeps working on the same schema. Specific to it:
   (`expiry_date: null`, "never expires"). Earlier 2.x releases wrote
   `8640000000000` (year 275760), which Rust's `chrono` cannot represent;
   the same guard covers a schema indexed by them.
+- **Migrated names.** The ENSv1 -> ENSv2 migration parks the v1 registry
+  owner in the Graveyard (or a migration controller), and the subgraph keeps
+  `Domain.owner` as that v1 registry owner. With
+  `specific.ensv2.migration_contracts` listing those contracts, BENS reports
+  the name's holder as `owner` instead (the wrapped owner, the registrant, or
+  the owner of the ENSv2 name slot for migrated subnames), lists the name
+  under its holder's address and not under the migration contract's, and
+  does not link the retired NameWrapper token. The raw registry owner stays available to the code as
+  `registry_owner`. Protocols without `ensv2` are unaffected and never touch
+  the ENSv2 tables.
 
 ```json
 "specific": {
@@ -53,11 +63,19 @@ tables, so BENS keeps working on the same schema. Specific to it:
   "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
   "registry_contract": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
   "try_offchain_resolve": true,
-  "ensv2": {}
+  "ensv2": {
+    "migration_contracts": [
+      "0xda021a2c1c2f99574d861ef8c6fa745851beb7f6",
+      "0x3cea18620883a69ed349b23328a3b6302598e51a",
+      "0xab821ca676cf2e0790fa273526a165cfa86aeb64"
+    ]
+  }
 }
 ```
 
-Protocols without `ensv2` are unaffected and never touch the ENSv2 tables.
+Mainnet: Graveyard `0xda02…b7f6`, LockedMigrationController `0x3cea…e51a`,
+UnlockedMigrationController `0xab82…eb64`. Sepolia: `0xb58a…b04d`,
+`0x6029…c3A8`, `0x2a35…64A2` (see `bens-server/config/dev.json`).
 
 ## Envs
 

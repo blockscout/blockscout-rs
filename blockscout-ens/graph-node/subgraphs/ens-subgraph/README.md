@@ -64,8 +64,10 @@ Or directly: `just network=sepolia name=ens-sepolia-subgraph deploy v2.1.1`.
 ## BENS configuration
 
 The `ens` and `ens-sepolia` protocols in `bens-server/config/*.json` carry
-`specific.ensv2` (`{}`). With it set, BENS reads the ENSv2 tables: the
-reverse-name view includes ENSIP-19 default primary names. See
+`specific.ensv2.migration_contracts` (the ENSv2 Graveyard and migration
+controllers). With it set, BENS reads the ENSv2 tables: the reverse-name view
+includes ENSIP-19 default primary names, and a migrated name's `owner` is
+reported as its holder instead of the migration contract. See
 `../../../README.md`, section "ENSv2".
 
 ## Tests

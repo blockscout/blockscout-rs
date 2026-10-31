@@ -66,12 +66,28 @@ fn extract_tokens_for_ens_like(
 
     if domain.wrapped_owner.is_some() {
         let id = token_id(&domain.id)?;
-        let contract = Address::from_str(&domain.owner).context("parse owner as address")?;
-        tokens.push(DomainToken {
-            id,
-            contract,
-            _type: DomainTokenType::Wrapped,
-        });
+        // The registry owner of a wrapped name is the NameWrapper contract.
+        // `domain.owner` can be the holder for ENSv2-migrated names, so the
+        // raw registry owner is used here.
+        let registry_owner = if domain.registry_owner.is_empty() {
+            &domain.owner
+        } else {
+            &domain.registry_owner
+        };
+        let contract = Address::from_str(registry_owner).context("parse owner as address")?;
+        // A migrated name's v1 wrapper token is parked in a migration
+        // contract and no longer represents the name.
+        let retired = ens_like
+            .ensv2
+            .as_ref()
+            .is_some_and(|v2| v2.migration_contracts.contains(&contract));
+        if !retired {
+            tokens.push(DomainToken {
+                id,
+                contract,
+                _type: DomainTokenType::Wrapped,
+            });
+        }
     };
 
     Ok(tokens)
@@ -117,7 +133,7 @@ mod tests {
     use super::*;
     use crate::{
         blockscout::BlockscoutClient,
-        protocols::{DeployedProtocol, EnsLikeProtocol, Network, Protocol, Tld},
+        protocols::{DeployedProtocol, EnsLikeProtocol, EnsV2Settings, Network, Protocol, Tld},
     };
     use nonempty::nonempty;
     use pretty_assertions::assert_eq;
@@ -139,6 +155,7 @@ mod tests {
                     .expect("invalid labelhash provided"),
             ),
             owner: owner.to_string(),
+            registry_owner: owner.to_string(),
             wrapped_owner: maybe_wrapped_owner.map(str::to_string),
             ..Default::default()
         }
@@ -236,20 +253,88 @@ mod tests {
             let mut protocol = Protocol::default();
             protocol.info.tld_list = nonempty![Tld::new("eth")];
             protocol.info.protocol_specific = ProtocolSpecific::EnsLike(EnsLikeProtocol { native_token_contract, ..Default::default() });
-            let deployed_protocol = DeployedProtocol {
-                protocol: &protocol,
-                deployment_network: &Network {
-                    network_id: 1,
-                    blockscout_client: Arc::new(BlockscoutClient::new("http://localhost:8545".parse().unwrap(), 1, 1)),
-                    rpc_url: None,
-                    use_protocols: vec![],
-                },
-            };
-            let name = DomainNameOnProtocol::from_str(domain.name.as_ref().unwrap(), deployed_protocol).unwrap();
-            let tokens = extract_tokens_from_domain(&domain, &name)
-                .expect("failed to extract tokens from domain");
-
-            assert_eq!(tokens, expected_tokens, "failed for domain: {}", name.inner.name());
+            check(&protocol, domain, expected_tokens);
         }
+    }
+
+    // An ENSv2-migrated locked name: the registry owner is the Graveyard, the
+    // reported owner is the holder (wrapped owner). The v1 NameWrapper token is
+    // retired, so only the native token is linked, and never against the holder.
+    #[test]
+    fn migrated_wrapped_name_links_no_retired_wrapper_token() {
+        let native_contract = "0x1234567890123456789012345678901234567890";
+        let graveyard = "0xda021a2c1c2f99574d861ef8c6fa745851beb7f6";
+        let holder = "0x1111111111111111111111111111111111111111";
+        let mut migrated = domain("levvv.eth", "0x0200", "0x0100", holder, Some(holder));
+        migrated.registry_owner = graveyard.to_string();
+
+        let mut protocol = Protocol::default();
+        protocol.info.tld_list = nonempty![Tld::new("eth")];
+        protocol.info.protocol_specific = ProtocolSpecific::EnsLike(EnsLikeProtocol {
+            native_token_contract: addr(native_contract),
+            ensv2: Some(EnsV2Settings {
+                migration_contracts: vec![Address::from_str(graveyard).unwrap()],
+            }),
+            ..Default::default()
+        });
+        check(
+            &protocol,
+            migrated.clone(),
+            vec![DomainToken {
+                id: "256".to_string(),
+                contract: Address::from_str(native_contract).unwrap(),
+                _type: DomainTokenType::Native,
+            }],
+        );
+
+        // Same name indexed by a subgraph without ENSv2 config: the wrapper
+        // token is still linked, against the registry owner, not the holder.
+        protocol.info.protocol_specific = ProtocolSpecific::EnsLike(EnsLikeProtocol {
+            native_token_contract: addr(native_contract),
+            ..Default::default()
+        });
+        check(
+            &protocol,
+            migrated,
+            vec![
+                DomainToken {
+                    id: "256".to_string(),
+                    contract: Address::from_str(native_contract).unwrap(),
+                    _type: DomainTokenType::Native,
+                },
+                DomainToken {
+                    id: "512".to_string(),
+                    contract: Address::from_str(graveyard).unwrap(),
+                    _type: DomainTokenType::Wrapped,
+                },
+            ],
+        );
+    }
+
+    fn check(protocol: &Protocol, domain: DetailedDomain, expected_tokens: Vec<DomainToken>) {
+        let deployed_protocol = DeployedProtocol {
+            protocol,
+            deployment_network: &Network {
+                network_id: 1,
+                blockscout_client: Arc::new(BlockscoutClient::new(
+                    "http://localhost:8545".parse().unwrap(),
+                    1,
+                    1,
+                )),
+                rpc_url: None,
+                use_protocols: vec![],
+            },
+        };
+        let name = DomainNameOnProtocol::from_str(domain.name.as_ref().unwrap(), deployed_protocol)
+            .unwrap();
+        let tokens = extract_tokens_from_domain(&domain, &name)
+            .expect("failed to extract tokens from domain");
+
+        assert_eq!(
+            tokens,
+            expected_tokens,
+            "failed for domain: {}",
+            name.inner.name()
+        );
     }
 }

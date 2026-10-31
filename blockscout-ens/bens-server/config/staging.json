@@ -40,7 +40,13 @@
           "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
           "registry_contract": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
           "try_offchain_resolve": true,
-          "ensv2": {}
+          "ensv2": {
+            "migration_contracts": [
+              "0xda021a2c1c2f99574d861ef8c6fa745851beb7f6",
+              "0x3cea18620883a69ed349b23328a3b6302598e51a",
+              "0xab821ca676cf2e0790fa273526a165cfa86aeb64"
+            ]
+          }
         },
         "meta": {
           "short_name": "ENS",

@@ -18,7 +18,13 @@ pub struct DetailedDomain {
     pub ttl: Option<chrono::DateTime<Utc>>,
     pub is_migrated: bool,
     pub registration_date: chrono::DateTime<Utc>,
+    /// The holder as reported by the API. Equals `registry_owner` except for
+    /// ENSv2-migrated names, where the registry owner is a migration contract
+    /// and this is the wrapped owner, registrant or ENSv2 slot owner.
     pub owner: String,
+    /// Raw `Domain.owner` from the subgraph (the v1 registry owner).
+    #[sqlx(default)]
+    pub registry_owner: String,
     pub registrant: Option<String>,
     pub wrapped_owner: Option<String>,
     pub created_at: BigDecimal,
