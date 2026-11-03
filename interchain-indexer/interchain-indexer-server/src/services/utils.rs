@@ -148,9 +148,10 @@ pub fn parse_page_token<M: ListMarker>(page_token: Option<&str>) -> Result<Optio
 /// Renders both sides of an `OutputPagination` into the shared response
 /// cursor. Infallible by design: a side whose marker cannot be encoded is
 /// logged here (the handling point) and omitted, so the page itself is still
-/// served. Reachable in practice through a bridged-tokens asset whose name
-/// exceeds the 512-byte cursor cap; omitting the side keeps the page visible
-/// (the items beyond it stay unreachable, as before).
+/// served. No marker a list query builds is expected to fail: bridged-tokens
+/// bounds its name sort key to fit the 512-byte name cap
+/// (`bridged_tokens_query.rs`). The omission is the safety net if one ever
+/// does.
 pub fn page_params<M: ListMarker + std::fmt::Debug>(
     pagination: OutputPagination<M>,
 ) -> (Option<Pagination>, Option<Pagination>) {

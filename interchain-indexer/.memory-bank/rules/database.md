@@ -147,6 +147,11 @@ impl From<Config> for entity::ActiveModel {
   "Former Raw Cursor Fields Are `reserved`").
 - Never expose internal IDs; use opaque tokens.
 - Cursor marker fields must exactly match the SQL `ORDER BY` + tie-breaker fields.
+- A cursor key derived from external data (names, symbols, anything read
+  on-chain) must be bounded in the SQL key expression itself, and the
+  marker copies that column as is. An encoder-side length cap only moves
+  the failure to the page boundary (see `gotchas.md`, "Keyset Cursor Keys
+  Must Be Bounded By Construction").
 - Marker decode/encode order must be stable and deterministic across pages.
 
 ## Protocol Metadata

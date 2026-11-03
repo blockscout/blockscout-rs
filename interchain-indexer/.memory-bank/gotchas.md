@@ -3162,3 +3162,41 @@ Every one of these surfaces as a compile error, never as a silent
 miscompile. Check this function first whenever a proto edit breaks the proto
 crate with duplicate `*Internal` definitions — for example cluster protos
 reusing existing response messages.
+
+---
+
+## Keyset Cursor Keys Must Be Bounded By Construction
+
+**Symptom:** a bridged-tokens list stops at one row. The page has no
+`next_page_params` (or `prev_page_params`), and the server logs
+`failed to encode page token` on every view of it. A related symptom: a
+name-sorted walk never ends.
+
+**Root cause:**
+
+- Until this fix, the bridged-tokens cursor carried the full
+  `stats_assets.name` as its name sort key in every sort mode. The
+  page-token encoder caps that name at 512 bytes.
+- Asset names come verbatim from on-chain `name()` and are unbounded
+  `TEXT`. Anyone can choose one: Omnibridge bridges any ERC-20 and reads
+  its name with no length limit.
+- The encoder cap only moved the failure to the page boundary. Raising the
+  cap would not help either: the production edge rejects a `page_token` of
+  about 11,000 characters with HTTP 520, which the service never sees
+  (measured 2026-11-03; 10,000 characters still passed).
+
+**Fix:**
+
+- Bound the key in the SQL expression that the ORDER BY reads:
+  `left(name, 128)`, and 128 characters × 4 bytes = 512.
+- Copy that column into the marker as is.
+- Map a decoded cursor into the same key space before binding it, so old
+  tokens still continue.
+- Never re-derive a marker field in Rust differently from the SQL.
+
+The whitespace-only loop was such a re-derivation. SQL sorted by the raw
+`COALESCE(name, '')`, while `marker()` sent `''` for blank names, so a name
+made of spaces made the walk revisit pages forever.
+
+See `NAME_SORT_PREFIX_CHARS` in
+`interchain-indexer-logic/src/bridged_tokens_query.rs`.

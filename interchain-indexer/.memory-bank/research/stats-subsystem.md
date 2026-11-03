@@ -585,6 +585,19 @@ Metadata semantics:
   correctly does not flag it (owner-confirmed modelling, observed on
   Avalanche NUMI/WTTC in a live run)
 
+Ordering and cursor:
+
+- The name sort key is `''` for a blank name (`NULL`, empty or
+  whitespace-only). Otherwise it is the first 128 characters of
+  `stats_assets.name` (`NAME_SORT_PREFIX_CHARS`). Blank rows sort after all
+  others in both orders.
+- Ties on the key are broken by `stats_asset_id`, in the direction of the
+  order. These ties are blank rows, names that share their first
+  128 characters, and equal counts in the count sorts.
+- The page token carries the key in every sort mode. The bound keeps it
+  within the token's 512-byte name cap. The displayed `name` and the `q`
+  filter use the full name.
+
 ### `/stats/chains`
 
 Source (`StatsChainsScope`, `stats_chains_query.rs`; ADR-009):
