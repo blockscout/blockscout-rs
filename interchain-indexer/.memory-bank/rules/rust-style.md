@@ -125,3 +125,20 @@ match (src_configured, dst_configured) {
 ## Descriptive Parameter Names
 
 Name parameters after semantic role, not position. Prefer `source_chain_id`/`dest_chain_id` over `chain_a`/`chain_b`.
+
+## Filtered Read API Endpoints Have Two Entry Points
+
+A Read API endpoint that takes the cluster filter fields (`home_chain_id`,
+`counterparty_chain_ids`, `bridge_ids`, `include_unindexed_chains`) is written
+once as a private core taking a `ReadScope` (or `ChainStatsScope` for
+per-chain stats) plus its own params. Two thin entry points call it:
+
+- the legacy trait method builds the scope with `ReadScope::from_query`
+  (per-chain stats: from its own params, in its existing parse order);
+- the cluster trait method (`services/*/cluster.rs`) resolves
+  `self.clusters.scope(cluster_id)?` **first**, then builds the same inputs.
+
+A new filtered endpoint gets both, plus an HTTP rule under
+`/api/v1/clusters/{cluster_id}` and a `GetCluster*Request` message that never
+declares a cluster field. Universe derivations (`select_rows`,
+`chain_stats_scope`) live in `services/scope.rs`, never in a handler.

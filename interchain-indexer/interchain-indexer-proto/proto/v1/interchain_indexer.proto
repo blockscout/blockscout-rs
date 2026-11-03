@@ -55,7 +55,7 @@ service InterchainService {
 // every list endpoint. Send `page_token` back unchanged. A token is valid only
 // with the same filters (`home_chain_id`, `counterparty_chain_ids`,
 // `src_chain_ids`, `dst_chain_ids`, `bridge_ids`, `chain_ids`,
-// `include_unindexed_chains`), path scope (tx_hash, address, chain_id) and, for
+// `include_unindexed_chains`), path scope (cluster_id, tx_hash, address, chain_id) and, for
 // stats lists, `q`, `sort` and `order` as the request that produced it. The
 // cursor does not encode them and is not re-validated against them, so
 // changing any of them mid-pagination is unsupported and yields undefined

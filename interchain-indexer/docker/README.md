@@ -130,6 +130,7 @@ Additionally Universal Bridge Indexer resources are mapped to the `8050` TCP por
 - **Main REST endpoints** (see Swagger for full request/response schemas):
   - **GET** `http://localhost:8050/api/v1/interchain/messages` — paginated cross-chain messages (optional query: `page_size`, `page_token`, etc.).
   - **GET** `http://localhost:8050/api/v1/interchain/transfers` — paginated cross-chain transfers.
+  - **GET** `http://localhost:8050/api/v1/clusters/<cluster_id>/interchain/messages` — the same lists scoped by a configured cluster (see the main README, "Cluster-Scoped Read API").
 
 - **Health / Status endpoints**
   - **GET** `http://localhost:8050/health` - overall service health status (should be `SERVING` if all is fine)

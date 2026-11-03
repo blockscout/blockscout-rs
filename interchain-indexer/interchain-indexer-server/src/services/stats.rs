@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use super::{
+    ClusterRegistry,
     chain_info_proto::chain_model_to_proto,
     interchain_service::token_type_to_proto,
     scope::{ChainStatsScope, ReadScope},
@@ -21,11 +22,14 @@ use interchain_indexer_logic::{
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
+mod cluster;
+
 pub struct InterchainStatisticsServiceImpl {
     pub stats: Arc<StatsService>,
     pub api_settings: ApiSettings,
     pub chain_info: Arc<ChainInfoService>,
     pub indexed_chains: Arc<IndexedChains>,
+    pub clusters: Arc<ClusterRegistry>,
 }
 
 impl InterchainStatisticsServiceImpl {
@@ -34,12 +38,14 @@ impl InterchainStatisticsServiceImpl {
         api_settings: ApiSettings,
         chain_info: Arc<ChainInfoService>,
         indexed_chains: Arc<IndexedChains>,
+        clusters: Arc<ClusterRegistry>,
     ) -> Self {
         Self {
             stats,
             api_settings,
             chain_info,
             indexed_chains,
+            clusters,
         }
     }
 }

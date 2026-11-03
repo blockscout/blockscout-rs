@@ -10,13 +10,17 @@ use crate::{
         health_actix::route_health, health_server::HealthServer,
         interchain_admin_service_actix::route_interchain_admin_service,
         interchain_admin_service_server::InterchainAdminServiceServer,
+        interchain_cluster_service_actix::route_interchain_cluster_service,
+        interchain_cluster_service_server::InterchainClusterServiceServer,
+        interchain_cluster_statistics_service_actix::route_interchain_cluster_statistics_service,
+        interchain_cluster_statistics_service_server::InterchainClusterStatisticsServiceServer,
         interchain_service_actix::route_interchain_service,
         interchain_service_server::InterchainServiceServer,
         interchain_statistics_service_server::InterchainStatisticsServiceServer,
         status_service_server::StatusServiceServer,
     },
     services::{
-        HealthService, InterchainAdminServiceImpl, InterchainServiceImpl,
+        ClusterRegistry, HealthService, InterchainAdminServiceImpl, InterchainServiceImpl,
         InterchainStatisticsServiceImpl, StatusServiceImpl, build_replay_profiles,
         collect_indexing_progress,
     },
@@ -282,6 +286,12 @@ impl Router {
             .add_service(InterchainStatisticsServiceServer::from_arc(
                 self.stats_service.clone(),
             ))
+            .add_service(InterchainClusterServiceServer::from_arc(
+                self.interchain_service.clone(),
+            ))
+            .add_service(InterchainClusterStatisticsServiceServer::from_arc(
+                self.stats_service.clone(),
+            ))
             .add_service(StatusServiceServer::from_arc(self.status_service.clone()))
             .add_service(InterchainAdminServiceServer::from_arc(
                 self.admin_service.clone(),
@@ -296,6 +306,12 @@ impl launcher::HttpRouter for Router {
             .configure(|config| route_interchain_service(config, self.interchain_service.clone()));
         service_config.configure(|config| {
             route_interchain_statistics_service(config, self.stats_service.clone())
+        });
+        service_config.configure(|config| {
+            route_interchain_cluster_service(config, self.interchain_service.clone())
+        });
+        service_config.configure(|config| {
+            route_interchain_cluster_statistics_service(config, self.stats_service.clone())
         });
         service_config
             .configure(|config| route_status_service(config, self.status_service.clone()));
@@ -407,6 +423,8 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
             "cluster configured"
         );
     }
+
+    let cluster_registry = Arc::new(ClusterRegistry::new(&clusters));
 
     // Shared by both API services below so the SQL predicate and the response
     // flag are computed from the exact same value.
@@ -527,12 +545,14 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         bridges,
         api_settings.clone(),
         indexed_chains.clone(),
+        cluster_registry.clone(),
     )?);
     let stats_service = Arc::new(InterchainStatisticsServiceImpl::new(
         stats.clone(),
         api_settings,
         chain_info_service.clone(),
         indexed_chains.clone(),
+        cluster_registry.clone(),
     ));
     let status_service = Arc::new(StatusServiceImpl::new(
         indexers.clone(),

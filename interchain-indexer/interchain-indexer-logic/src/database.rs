@@ -2429,11 +2429,23 @@ impl InterchainDatabase {
     /// unbounded result set or picking an arbitrary winner. When `bridge_id` is
     /// `Some`, the bridge predicate is applied to whichever public-ID predicate
     /// is used, so a native/long ID is qualified as safely as a numeric ID.
+    ///
+    /// `scope_filter` (cluster routes) restricts the candidate rows *before* the
+    /// two-candidate ambiguity probe, so rows outside the scope neither match nor
+    /// make an unqualified lookup ambiguous. Transfers of the selected row are
+    /// loaded unfiltered. `None` (legacy route) keeps the unrestricted lookup.
     pub async fn get_crosschain_message(
         &self,
         message_id: Vec<u8>,
         bridge_id: Option<i32>,
+        scope_filter: Option<&ChainBridgeFilter>,
     ) -> anyhow::Result<CrosschainMessageLookup> {
+        // Owned before the transaction: its `for<'c>` closure cannot capture a
+        // borrowed filter. An empty filter adds nothing, as in
+        // `get_crosschain_messages`.
+        let scope_condition = scope_filter
+            .filter(|filter| !filter.is_empty())
+            .map(ChainBridgeFilter::messages_condition);
         self.db
             .transaction(|tx| {
                 Box::pin(async move {
@@ -2450,6 +2462,9 @@ impl InterchainDatabase {
                     };
 
                     let mut query = crosschain_messages::Entity::find().filter(f);
+                    if let Some(condition) = scope_condition {
+                        query = query.filter(condition);
+                    }
                     if let Some(bridge_id) = bridge_id {
                         query = query.filter(crosschain_messages::Column::BridgeId.eq(bridge_id));
                     }
@@ -5359,7 +5374,7 @@ mod tests {
         // Unique numeric ID, unqualified -> Found.
         let (msg, transfers) = expect_found(
             interchain_db
-                .get_crosschain_message(1001i64.to_be_bytes().to_vec(), None)
+                .get_crosschain_message(1001i64.to_be_bytes().to_vec(), None, None)
                 .await
                 .unwrap(),
         );
@@ -5384,7 +5399,7 @@ mod tests {
 
         let (msg, transfers) = expect_found(
             interchain_db
-                .get_crosschain_message(native_id.clone(), None)
+                .get_crosschain_message(native_id.clone(), None, None)
                 .await
                 .unwrap(),
         );
@@ -5395,7 +5410,7 @@ mod tests {
         // only under bridge 1.)
         assert!(matches!(
             interchain_db
-                .get_crosschain_message(1001i64.to_be_bytes().to_vec(), Some(2))
+                .get_crosschain_message(1001i64.to_be_bytes().to_vec(), Some(2), None)
                 .await
                 .unwrap(),
             CrosschainMessageLookup::NotFound
@@ -5404,7 +5419,7 @@ mod tests {
         // Wholly nonexistent numeric ID, unqualified -> NotFound.
         assert!(matches!(
             interchain_db
-                .get_crosschain_message(9999i64.to_be_bytes().to_vec(), None)
+                .get_crosschain_message(9999i64.to_be_bytes().to_vec(), None, None)
                 .await
                 .unwrap(),
             CrosschainMessageLookup::NotFound
@@ -5483,7 +5498,7 @@ mod tests {
         // Unqualified numeric collision -> Ambiguous.
         assert!(matches!(
             interchain_db
-                .get_crosschain_message(id_bytes.clone(), None)
+                .get_crosschain_message(id_bytes.clone(), None, None)
                 .await
                 .unwrap(),
             CrosschainMessageLookup::Ambiguous
@@ -5492,7 +5507,7 @@ mod tests {
         // Qualified with bridge 1 -> that distinct row and only its transfers.
         let (msg, transfers) = expect_found(
             interchain_db
-                .get_crosschain_message(id_bytes.clone(), Some(1))
+                .get_crosschain_message(id_bytes.clone(), Some(1), None)
                 .await
                 .unwrap(),
         );
@@ -5505,7 +5520,7 @@ mod tests {
         // Qualified with bridge 2 -> the other distinct row and only its transfers.
         let (msg, transfers) = expect_found(
             interchain_db
-                .get_crosschain_message(id_bytes, Some(2))
+                .get_crosschain_message(id_bytes, Some(2), None)
                 .await
                 .unwrap(),
         );
@@ -5589,7 +5604,7 @@ mod tests {
         // Unqualified native collision -> Ambiguous.
         assert!(matches!(
             interchain_db
-                .get_crosschain_message(native_id.clone(), None)
+                .get_crosschain_message(native_id.clone(), None, None)
                 .await
                 .unwrap(),
             CrosschainMessageLookup::Ambiguous
@@ -5598,7 +5613,7 @@ mod tests {
         // Qualified with bridge 1 -> that distinct row and only its transfers.
         let (msg, transfers) = expect_found(
             interchain_db
-                .get_crosschain_message(native_id.clone(), Some(1))
+                .get_crosschain_message(native_id.clone(), Some(1), None)
                 .await
                 .unwrap(),
         );
@@ -5612,7 +5627,7 @@ mod tests {
         // Qualified with bridge 2 -> the other distinct row and only its transfers.
         let (msg, transfers) = expect_found(
             interchain_db
-                .get_crosschain_message(native_id, Some(2))
+                .get_crosschain_message(native_id, Some(2), None)
                 .await
                 .unwrap(),
         );
@@ -5622,6 +5637,150 @@ mod tests {
         assert_eq!(transfers.len(), 1);
         assert_eq!(transfers[0].id, 104);
         assert_eq!(transfers[0].bridge_id, 2);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn get_crosschain_message_scope_filter_restricts_candidates_before_the_ambiguity_probe() {
+        let db = init_db(
+            "get_crosschain_message_scope_filter_restricts_candidates_before_the_ambiguity_probe",
+        )
+        .await;
+        fill_mock_interchain_database(&db).await;
+
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        // The mock database has no chain 999, and `dst_chain_id` is a foreign key.
+        chains::Entity::insert(chains::ActiveModel {
+            id: Set(999),
+            name: Set("Unindexed".to_string()),
+            ..Default::default()
+        })
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        // 3101 exists under bridge 1 (1 -> 100) and bridge 2 (1 -> 250);
+        // 3102 exists only under bridge 1 (1 -> 999).
+        crosschain_messages::Entity::insert_many([
+            crosschain_messages::ActiveModel {
+                id: Set(3101),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(100)),
+                ..Default::default()
+            },
+            crosschain_messages::ActiveModel {
+                id: Set(3101),
+                bridge_id: Set(2),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(250)),
+                ..Default::default()
+            },
+            crosschain_messages::ActiveModel {
+                id: Set(3102),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(999)),
+                ..Default::default()
+            },
+        ])
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        let id = |n: i64| n.to_be_bytes().to_vec();
+
+        // Baseline: no filter -> the two bridges collide.
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(id(3101), None, None)
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::Ambiguous
+        ));
+
+        // An empty filter restricts nothing.
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(id(3101), None, Some(&ChainBridgeFilter::default()))
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::Ambiguous
+        ));
+
+        // Restricting to bridge 1 removes the other candidate before the
+        // probe, so the lookup is no longer ambiguous.
+        let by_bridge = ChainBridgeFilter {
+            bridge_ids: Some(vec![1]),
+            ..Default::default()
+        };
+        let (msg, _) = expect_found(
+            interchain_db
+                .get_crosschain_message(id(3101), None, Some(&by_bridge))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(msg.bridge_id, 1);
+
+        // Same through the chain dimension: only bridge 2's row touches 250.
+        let by_chain = ChainBridgeFilter {
+            home_chain_id: Some(250),
+            ..Default::default()
+        };
+        let (msg, _) = expect_found(
+            interchain_db
+                .get_crosschain_message(id(3101), None, Some(&by_chain))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(msg.bridge_id, 2);
+
+        // No candidate left inside the scope -> NotFound.
+        let elsewhere = ChainBridgeFilter {
+            home_chain_id: Some(42),
+            ..Default::default()
+        };
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(id(3101), None, Some(&elsewhere))
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::NotFound
+        ));
+
+        // A bridge qualifier outside the scope also finds nothing.
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(id(3101), Some(2), Some(&by_bridge))
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::NotFound
+        ));
+
+        // The unindexed-chain restriction applies as well: 999 is not indexed
+        // by bridge 1.
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(id(3102), None, None)
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::Found(..)
+        ));
+        let only_indexed = ChainBridgeFilter {
+            only_indexed_by_bridge: Some(vec![(1, vec![1, 100])]),
+            ..Default::default()
+        };
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(id(3102), None, Some(&only_indexed))
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::NotFound
+        ));
     }
 
     fn message_ids(

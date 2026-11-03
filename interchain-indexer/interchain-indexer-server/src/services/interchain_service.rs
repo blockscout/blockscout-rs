@@ -25,6 +25,7 @@ use std::{collections::HashMap, sync::Arc};
 use tonic::{Request, Response, Status};
 
 use super::{
+    ClusterRegistry,
     bridge_proto::bridge_model_to_proto,
     chain_info_proto::chain_model_to_proto,
     scope::ReadScope,
@@ -34,6 +35,8 @@ use super::{
     },
 };
 
+mod cluster;
+
 pub struct InterchainServiceImpl {
     pub db: Arc<InterchainDatabase>,
     pub token_info_service: Arc<TokenInfoService>,
@@ -41,6 +44,7 @@ pub struct InterchainServiceImpl {
     pub bridges_map: HashMap<i32, BridgeInfo>,
     pub api_settings: ApiSettings,
     pub indexed_chains: Arc<IndexedChains>,
+    pub clusters: Arc<ClusterRegistry>,
 }
 
 impl InterchainServiceImpl {
@@ -51,6 +55,7 @@ impl InterchainServiceImpl {
         bridges: Vec<BridgeConfig>,
         api_settings: ApiSettings,
         indexed_chains: Arc<IndexedChains>,
+        clusters: Arc<ClusterRegistry>,
     ) -> anyhow::Result<Self> {
         let bridges_map = bridges
             .into_iter()
@@ -76,6 +81,7 @@ impl InterchainServiceImpl {
             bridges_map,
             api_settings,
             indexed_chains,
+            clusters,
         })
     }
 
@@ -454,6 +460,42 @@ impl InterchainServiceImpl {
         let items = models.into_iter().map(chain_model_to_proto).collect();
         Ok(GetChainsResponse { items })
     }
+
+    /// Core of the bridge directory: `bridge_ids = None` lists every row of
+    /// `bridges` (legacy); `Some` keeps only those ids (cluster).
+    async fn bridges_list(&self, bridge_ids: Option<&[i32]>) -> Result<GetBridgesResponse, Status> {
+        let rows = self.db.get_all_bridges().await.map_err(map_db_error)?;
+        let items = rows
+            .into_iter()
+            .filter(|m| bridge_ids.is_none_or(|ids| ids.contains(&m.id)))
+            .map(|m| bridge_model_to_proto(m, &self.indexed_chains))
+            .collect::<Result<Vec<_>, Status>>()?;
+        Ok(GetBridgesResponse { items })
+    }
+
+    /// Core of message details: `scope_filter = None` is the legacy
+    /// unrestricted lookup; `Some` is a cluster's filter.
+    async fn message_details(
+        &self,
+        message_id: Vec<u8>,
+        bridge_id: Option<i32>,
+        scope_filter: Option<&ChainBridgeFilter>,
+    ) -> Result<InterchainMessage, Status> {
+        match self
+            .db
+            .get_crosschain_message(message_id, bridge_id, scope_filter)
+            .await
+            .map_err(map_db_error)?
+        {
+            CrosschainMessageLookup::Found(message, transfers) => {
+                self.message_model_to_proto(message, transfers).await
+            }
+            CrosschainMessageLookup::NotFound => Err(Status::not_found("Message not found")),
+            CrosschainMessageLookup::Ambiguous => Err(Status::failed_precondition(
+                "Message ID matches multiple bridges; provide bridge_id",
+            )),
+        }
+    }
 }
 
 /// Parses a `0x`-prefixed hex path param; a malformed value is
@@ -503,31 +545,11 @@ impl InterchainService for InterchainServiceImpl {
         request: Request<GetMessageDetailsRequest>,
     ) -> Result<Response<InterchainMessage>, Status> {
         let inner = request.into_inner();
-        let message_id = vec_from_hex_prefixed(&inner.message_id).map_err(|_| {
-            Status::invalid_argument("invalid message_id: expected a 0x-prefixed hex string")
-        })?;
+        let message_id = parse_hex_path("message_id", &inner.message_id)?;
         let bridge_id = checked_bridge_id(inner.bridge_id)?;
-
-        let response = match self
-            .db
-            .get_crosschain_message(message_id, bridge_id)
+        self.message_details(message_id, bridge_id, None)
             .await
-            .map_err(map_db_error)?
-        {
-            CrosschainMessageLookup::Found(message, transfers) => {
-                self.message_model_to_proto(message, transfers).await?
-            }
-            CrosschainMessageLookup::NotFound => {
-                return Err(Status::not_found("Message not found"));
-            }
-            CrosschainMessageLookup::Ambiguous => {
-                return Err(Status::failed_precondition(
-                    "Message ID matches multiple bridges; provide bridge_id",
-                ));
-            }
-        };
-
-        Ok(Response::new(response))
+            .map(Response::new)
     }
 
     async fn get_messages_by_transaction(
@@ -705,12 +727,7 @@ impl InterchainService for InterchainServiceImpl {
         &self,
         _request: Request<GetBridgesRequest>,
     ) -> Result<Response<GetBridgesResponse>, Status> {
-        let rows = self.db.get_all_bridges().await.map_err(map_db_error)?;
-        let items = rows
-            .into_iter()
-            .map(|m| bridge_model_to_proto(m, &self.indexed_chains))
-            .collect::<Result<Vec<_>, Status>>()?;
-        Ok(Response::new(GetBridgesResponse { items }))
+        self.bridges_list(None).await.map(Response::new)
     }
 }
 

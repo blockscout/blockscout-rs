@@ -432,6 +432,90 @@ surface in logs if the log level is raised. Service-owned sinks — the failure
 ledger in Postgres, indexer state served by the status API, and this service's
 own RPC warnings — redact URLs before writing them.
 
+## Cluster-Scoped Read API
+
+A cluster is a named preset of `home_chain_id`, `counterparty_chain_ids`,
+`bridge_ids` and `include_unindexed_chains`, configured as described in
+[Configuration JSON Files](#configuration-json-files). Every cluster is served
+under `/api/v1/clusters/{cluster_id}/…`, so a frontend selects its slice of the
+data with the URL alone and does not repeat the filter set on each call.
+
+### Routes
+
+Each route is a legacy Read API route prefixed with
+`/api/v1/clusters/{cluster_id}`; the 13 routes are:
+
+- the six message and transfer lists: `interchain/messages`,
+  `interchain/messages:byTx/{tx_hash}`, `interchain/messages:byAddress/{address}`,
+  `interchain/transfers`, `interchain/transfers:byTx/{tx_hash}` and
+  `interchain/transfers:byAddress/{address}`;
+- `interchain/chains`, `interchain/bridges` and
+  `interchain/messages/{message_id}` (optional `bridge_id`);
+- `stats/chains`, `stats/chain/{chain_id}/bridged-tokens` and
+  `stats/chain/{chain_id}/messages-paths/{sent,received}`.
+
+They are served over HTTP and over gRPC (`InterchainClusterService` and
+`InterchainClusterStatisticsService`). The request and response shapes are in
+the Swagger.
+
+### Semantics
+
+A cluster route never returns rows outside the cluster:
+
+- **Message and transfer lists** are the legacy route called with the
+  cluster's four fields. The client's `src_chain_ids` / `dst_chain_ids`, `q`
+  and paging work as on the legacy route; the direction filters narrow the
+  cluster's rows by AND.
+- **Chain directories** (`interchain/chains`, `stats/chains`) return the
+  cluster's chain set intersected with the client's `chain_ids`. The chain set
+  is `{home_chain_id} ∪ counterparty_chain_ids`, `counterparty_chain_ids` alone,
+  or every chain when the cluster sets no `counterparty_chain_ids`. An empty
+  intersection is an empty list, never "all chains". The rows are then
+  restricted exactly as on the legacy route (the cluster's bridges, and the
+  unindexed-chain gate).
+- **Per-chain stats** (`bridged-tokens`, `messages-paths/{sent,received}`)
+  derive the focal and peer chains from the cluster and the `{chain_id}` path
+  segment:
+
+  | home | counterparty `S` | path chain `X` | focal | peers |
+  | ---- | ---------------- | -------------- | ----- | ----- |
+  | none | none             | any            | `X`   | none  |
+  | none | `S`              | `X` in `S`     | `X`   | `S`   |
+  | `h`  | none             | `X` = `h`      | `h`   | none  |
+  | `h`  | none             | `X` != `h`     | `X`   | `{h}` |
+  | `h`  | `S`              | `X` = `h`      | `h`   | `S`   |
+  | `h`  | `S`              | `X` in `S`, `X` != `h` | `X` | `{h}` |
+
+  Any other path chain is outside the cluster and gives HTTP 400
+  (`chain_id X is not in cluster <id>`).
+- **Bridges** (`interchain/bridges`) lists the cluster's `bridge_ids`, or every
+  bridge when the cluster sets none.
+- **Message details** apply the cluster's filter inside the lookup. A message
+  outside the cluster is a 404, the same as a missing one, and an id shared
+  with a bridge outside the cluster resolves without `bridge_id`. An id shared
+  by two bridges inside the cluster is still ambiguous (HTTP 400). The
+  message's own transfers are returned unfiltered.
+
+### Errors
+
+An unknown `cluster_id` is HTTP 404 (gRPC `NotFound`) with the message
+`cluster not found: <id>`. The cluster is looked up before anything else is
+validated, so a malformed `page_token` or path parameter under an unknown
+cluster is still this 404.
+
+### Caveats
+
+- The cluster fields (`home_chain_id`, `counterparty_chain_ids`, `bridge_ids`,
+  `include_unindexed_chains`) are not parameters of the cluster routes. If sent
+  as query params they are silently ignored and the result stays within the
+  cluster.
+- A `page_token` is not bound to a cluster. Do not carry a token across
+  clusters, or between a cluster route and the legacy route.
+- The counts of `stats/chains` are not cluster-scoped: each row's
+  `unique_transfer_users_count` is the chain's global deduplicated count or,
+  when the cluster sets `bridge_ids`, the sum of the per-bridge counts of those
+  bridges, which can overcount an address seen through several of them.
+
 ## Envs
 
 ### Main Service Settings

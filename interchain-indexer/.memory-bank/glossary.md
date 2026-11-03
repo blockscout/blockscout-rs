@@ -219,3 +219,23 @@ for “source-indexed” semantics.
 
 Data attached to a message when the destination-side chain is the indexed side
 or when only destination-side observations are available.
+
+## Cluster
+
+An operator-configured named preset of the four cluster filter fields
+(`home_chain_id`, `counterparty_chain_ids`, `bridge_ids`,
+`include_unindexed_chains`), served under `/api/v1/clusters/{cluster_id}/…`.
+Defined in `clusters.json` (see the README) and validated at startup.
+
+## ReadScope
+
+The typed form of the four cluster filter fields that Read API handler cores
+take (`interchain-indexer-server/src/services/scope.rs`). Legacy entry points
+build it from query params; cluster entry points take it from the
+`ClusterRegistry`.
+
+## Universe Semantics
+
+A cluster route never returns rows outside the cluster. Chain directories
+intersect with the cluster chain set, per-chain stats derive focal and peers or
+reject the path chain, and empty intersections are empty.

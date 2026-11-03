@@ -13,6 +13,7 @@ mod utils;
 pub(crate) use admin::{InterchainAdminServiceImpl, build_replay_profiles};
 pub use health::HealthService;
 pub use interchain_service::InterchainServiceImpl;
+pub(crate) use scope::ClusterRegistry;
 pub use stats::InterchainStatisticsServiceImpl;
 pub use status::StatusServiceImpl;
 pub(crate) use status::collect_indexing_progress;

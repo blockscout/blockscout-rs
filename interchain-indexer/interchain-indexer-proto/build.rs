@@ -43,11 +43,17 @@ fn compile(
     // Enum fields that should default to 0 (first variant) when omitted from HTTP query params.
     // Cannot use `optional` in proto3 for these: that changes the generated type to Option<i32>,
     // which conflicts with actix-prost's TryFromInto<Enum> custom deserializer.
+    // prost-build matches these paths by whole name segments, so the cluster twins
+    // (`GetCluster*Request`) need their own entries.
     config
         .field_attribute("GetBridgedTokensRequest.sort", "#[serde(default)]")
         .field_attribute("GetBridgedTokensRequest.order", "#[serde(default)]")
         .field_attribute("GetChainsStatsRequest.sort", "#[serde(default)]")
-        .field_attribute("GetChainsStatsRequest.order", "#[serde(default)]");
+        .field_attribute("GetChainsStatsRequest.order", "#[serde(default)]")
+        .field_attribute("GetClusterBridgedTokensRequest.sort", "#[serde(default)]")
+        .field_attribute("GetClusterBridgedTokensRequest.order", "#[serde(default)]")
+        .field_attribute("GetClusterChainsStatsRequest.sort", "#[serde(default)]")
+        .field_attribute("GetClusterChainsStatsRequest.order", "#[serde(default)]");
     config.compile_protos(protos, includes)?;
     let descriptor_bytes = fs::read(descriptor_file).unwrap();
     let descriptor = FileDescriptorSet::decode(&descriptor_bytes[..]).unwrap();
@@ -70,6 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &[
             "proto/v1/interchain_indexer.proto",
             "proto/v1/stats.proto",
+            "proto/v1/cluster.proto",
             "proto/v1/status.proto",
             "proto/v1/health.proto",
             "proto/v1/admin.proto",
