@@ -59,6 +59,10 @@ pub(crate) const BRIDGES_RULES: ArrayRules = ArrayRules(&[
     ),
 ]);
 
+/// Clusters have no nested object arrays: `counterparty_chain_ids` /
+/// `bridge_ids` are scalar arrays that a leaf JSON array value replaces.
+pub(crate) const CLUSTERS_RULES: ArrayRules = ArrayRules(&[(&[], ArrayRule::Keyed(&["id"]))]);
+
 #[derive(Debug)]
 pub(crate) struct AppliedOverride {
     pub var: String,

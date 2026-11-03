@@ -2,6 +2,7 @@
 
 use crate::{
     auth::WriteApiAuth,
+    config::{load_clusters_from_file, validate_clusters},
     create_provider_pools_from_chains,
     indexers::{IndexingTarget, enumerate_indexing_targets, reconcile_catchup_floors},
     load_bridges_from_file, load_chains_from_file, logging,
@@ -390,6 +391,22 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         bridges.len(),
         settings.bridges_config.display()
     );
+
+    // Fail fast on a bad cluster config: before the (possibly long) stats
+    // backfill and before any DB seeding. Clusters are consumed by the cluster
+    // Read API routes.
+    let clusters = load_clusters_from_file(settings.clusters_config.as_deref())?;
+    validate_clusters(&clusters, &bridges, &indexed_chains)?;
+    for cluster in &clusters {
+        tracing::info!(
+            cluster_id = %cluster.id,
+            home_chain_id = ?cluster.home_chain_id,
+            counterparty_chain_ids = ?cluster.counterparty_chain_ids,
+            bridge_ids = ?cluster.bridge_ids,
+            include_unindexed_chains = cluster.include_unindexed_chains,
+            "cluster configured"
+        );
+    }
 
     // Shared by both API services below so the SQL predicate and the response
     // flag are computed from the exact same value.

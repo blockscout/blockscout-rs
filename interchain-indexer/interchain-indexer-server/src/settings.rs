@@ -19,6 +19,12 @@ use serde::{Deserialize, Serialize};
 pub struct Settings {
     pub chains_config: PathBuf,
     pub bridges_config: PathBuf,
+    /// Optional JSON array of cluster presets (named presets of
+    /// `home_chain_id` / `counterparty_chain_ids` / `bridge_ids` /
+    /// `include_unindexed_chains`). Unset ⇒ clusters come only from
+    /// `INTERCHAIN_INDEXER_CLUSTERS*` env vars; with neither, none are configured.
+    #[serde(default)]
+    pub clusters_config: Option<PathBuf>,
 
     #[serde(default)]
     pub token_info: TokenInfoServiceSettings,
@@ -148,6 +154,7 @@ impl Settings {
         Self {
             chains_config: PathBuf::from("config/omnibridge/chains.json"),
             bridges_config: PathBuf::from("config/omnibridge/bridges.json"),
+            clusters_config: None,
             token_info: TokenInfoServiceSettings::default(),
             chain_info: ChainInfoServiceSettings::default(),
             example_indexer: Default::default(),

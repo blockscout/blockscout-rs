@@ -11,11 +11,17 @@ use interchain_indexer_entity::{
     bridge_contracts, bridges, chains, sea_orm_active_enums::BridgeType,
 };
 use interchain_indexer_logic::{
-    CredentialHeader, NodeConfig, PoolConfig, Secret, build_layered_http_provider, redact_urls,
+    CredentialHeader, IndexedChains, NodeConfig, PoolConfig, Secret, build_layered_http_provider,
+    redact_urls,
 };
 use sea_orm::{ActiveValue, entity::ActiveEnum};
 use serde::{Deserialize, Deserializer, Serialize};
-use std::{collections::HashMap, path::Path, str::FromStr, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+    str::FromStr,
+    time::Duration,
+};
 
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -639,6 +645,183 @@ fn read_config_array(path: &Path, kind: &str) -> Result<serde_json::Value> {
         "{kind} config must be a JSON array: {path:?}"
     );
     Ok(value)
+}
+
+/// One cluster preset (`clusters.json` entry). Field meanings are exactly the
+/// Read API query params of the same names. List fields are `Option` so an env
+/// `null` (which replaces a value but never removes the key) deserializes;
+/// lists are JSON arrays in env too (`…__BRIDGE_IDS=[1,3]`).
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ClusterConfig {
+    /// URL path segment and env key; see `is_valid_cluster_id`.
+    pub id: String,
+    #[serde(default)]
+    pub home_chain_id: Option<i64>,
+    #[serde(default)]
+    pub counterparty_chain_ids: Option<Vec<i64>>,
+    #[serde(default)]
+    pub bridge_ids: Option<Vec<i32>>,
+    #[serde(default)]
+    pub include_unindexed_chains: bool,
+}
+
+/// Env var prefix for overriding/extending the clusters config (see README).
+const CLUSTERS_ENV_PREFIX: &str = "INTERCHAIN_INDEXER_CLUSTERS";
+
+/// Load clusters from the optional JSON file, with `INTERCHAIN_INDEXER_CLUSTERS*`
+/// env overrides deep-merged on top. No file ⇒ `[]` base (env-only config).
+pub fn load_clusters_from_file(path: Option<&Path>) -> Result<Vec<ClusterConfig>> {
+    load_clusters_impl(path, std::env::vars())
+}
+
+fn load_clusters_impl(
+    path: Option<&Path>,
+    vars: impl Iterator<Item = (String, String)>,
+) -> Result<Vec<ClusterConfig>> {
+    let mut value = match path {
+        Some(path) => read_config_array(path, "clusters")?,
+        None => serde_json::Value::Array(Vec::new()),
+    };
+
+    let applied = env_merge::apply_env_overrides(
+        &mut value,
+        CLUSTERS_ENV_PREFIX,
+        vars,
+        &env_merge::CLUSTERS_RULES,
+    )?;
+    log_applied_overrides(&applied, "clusters");
+
+    let serde_json::Value::Array(entries) = value else {
+        bail!("clusters config must be a JSON array (after env overrides)");
+    };
+    // Parse each entry on its own: a whole-array parse would not say which
+    // cluster a serde error belongs to.
+    let clusters = entries
+        .into_iter()
+        .enumerate()
+        .map(|(index, entry)| {
+            let label = cluster_entry_label(index, &entry);
+            serde_json::from_value::<ClusterConfig>(entry).with_context(|| {
+                format!("invalid cluster {label} in the clusters config (after env overrides)")
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    validate_cluster_shapes(&clusters)?;
+
+    Ok(clusters)
+}
+
+/// Error label of a raw clusters entry: its `id` in backticks (a number when
+/// the env injected one, e.g. `INTERCHAIN_INDEXER_CLUSTERS__123__…`), or `#<index>`
+/// when it has no usable `id`.
+fn cluster_entry_label(index: usize, entry: &serde_json::Value) -> String {
+    match entry.get("id") {
+        Some(serde_json::Value::String(id)) => format!("`{id}`"),
+        None | Some(serde_json::Value::Null) => format!("#{index}"),
+        Some(other) => format!("`{other}`"),
+    }
+}
+
+/// Per-cluster structural checks that need no other config. Every message
+/// starts with ``cluster `<id>`:``.
+fn validate_cluster_shapes(clusters: &[ClusterConfig]) -> Result<()> {
+    let mut seen = HashSet::new();
+    for cluster in clusters {
+        let id = &cluster.id;
+        ensure!(
+            is_valid_cluster_id(id),
+            "cluster `{id}`: invalid id; use lowercase letters and digits in groups \
+             separated by a single `_` or `-` (e.g. `gnosis`, `eth-gno`), not a plain integer"
+        );
+        ensure!(
+            seen.insert(id.as_str()),
+            "cluster `{id}`: id is defined more than once"
+        );
+        ensure!(
+            cluster
+                .counterparty_chain_ids
+                .as_ref()
+                .is_none_or(|ids| !ids.is_empty()),
+            "cluster `{id}`: counterparty_chain_ids is an empty list; omit it or set null for no restriction"
+        );
+        ensure!(
+            cluster
+                .bridge_ids
+                .as_ref()
+                .is_none_or(|ids| !ids.is_empty()),
+            "cluster `{id}`: bridge_ids is an empty list; omit it or set null for no restriction"
+        );
+    }
+    Ok(())
+}
+
+/// `[a-z0-9]+([_-][a-z0-9]+)*` and not an `i64`. The id is a URL path segment
+/// and an env path segment: `__` would split the env path, a trailing `_`
+/// breaks it, and an integer-looking segment is injected by `env_merge` as a
+/// JSON number (`coerce_key_value`), so `123` and `-5` are rejected.
+fn is_valid_cluster_id(id: &str) -> bool {
+    id.parse::<i64>().is_err()
+        && id.split(['_', '-']).all(|part| {
+            !part.is_empty()
+                && part
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        })
+}
+
+/// Startup checks against the loaded bridges config and the indexed-chain set
+/// built from it. Every `bridge_ids` entry must be a configured bridge
+/// (disabled bridges count). With `include_unindexed_chains = false`, every
+/// chain of the cluster (`home_chain_id` ∪ `counterparty_chain_ids`) must be
+/// indexed by at least one in-scope bridge — the cluster's `bridge_ids`, or
+/// every configured bridge — otherwise it could only ever return empty
+/// results. Skipped under `AllIndexed` and, for a cluster without
+/// `bridge_ids`, when no bridge is configured at all (the read filters then
+/// restrict nothing either).
+pub fn validate_clusters(
+    clusters: &[ClusterConfig],
+    bridges: &[BridgeConfig],
+    indexed_chains: &IndexedChains,
+) -> Result<()> {
+    let configured: HashSet<i32> = bridges.iter().map(|bridge| bridge.bridge_id).collect();
+    for cluster in clusters {
+        let id = &cluster.id;
+        for bridge_id in cluster.bridge_ids.iter().flatten() {
+            ensure!(
+                configured.contains(bridge_id),
+                "cluster `{id}`: bridge_id {bridge_id} is not in the bridges config"
+            );
+        }
+        if cluster.include_unindexed_chains {
+            continue;
+        }
+        // `AllIndexed`: every chain counts as indexed, nothing to check.
+        let Some(all_configured) = indexed_chains.configured_union() else {
+            continue;
+        };
+        // `selected_configured_union` empty means "no candidates", unlike
+        // `configured_union`'s `Some(empty)` ("no bridge configured, restrict
+        // nothing"); the skip applies only to a cluster without `bridge_ids`.
+        let in_scope = match cluster.bridge_ids.as_deref() {
+            Some(bridge_ids) => indexed_chains.selected_configured_union(bridge_ids),
+            None if all_configured.is_empty() => continue,
+            None => all_configured,
+        };
+        for chain in cluster
+            .home_chain_id
+            .iter()
+            .chain(cluster.counterparty_chain_ids.iter().flatten())
+        {
+            ensure!(
+                in_scope.contains(chain),
+                "cluster `{id}`: chain {chain} is not indexed by any of its bridges and \
+                 include_unindexed_chains is false, so it could only return empty results; \
+                 fix the chain ids or set include_unindexed_chains = true"
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Create layered Alloy providers from ChainConfig definitions.
@@ -2375,5 +2558,315 @@ mod tests {
                 }
             }
         }
+    }
+
+    // --- clusters -----------------------------------------------------------
+
+    fn load_clusters_from_json(json: &str, vars: &[(&str, &str)]) -> Result<Vec<ClusterConfig>> {
+        // The temp file lives until the load returns.
+        let file = write_temp_json(json);
+        load_clusters_impl(Some(file.path()), fixture_vars(vars))
+    }
+
+    fn assert_error_mentions(err: &anyhow::Error, needles: &[&str]) {
+        let message = format!("{err:#}");
+        for needle in needles {
+            assert!(
+                message.contains(needle),
+                "expected {needle:?} in error: {message}"
+            );
+        }
+    }
+
+    fn cluster(id: &str) -> ClusterConfig {
+        ClusterConfig {
+            id: id.to_string(),
+            home_chain_id: None,
+            counterparty_chain_ids: None,
+            bridge_ids: None,
+            include_unindexed_chains: false,
+        }
+    }
+
+    fn bridges_fixture(vars: &[(&str, &str)]) -> Vec<BridgeConfig> {
+        // The temp file lives until the load returns.
+        let file = write_temp_json(BRIDGES_FILE);
+        load_bridges_impl(file.path(), fixture_vars(vars)).unwrap()
+    }
+
+    /// Mirrors how `server::run` builds the indexed-chain set from the bridges.
+    fn indexed_from(bridges: &[BridgeConfig]) -> IndexedChains {
+        IndexedChains::from_bridges(bridges.iter().map(|bridge| {
+            (
+                bridge.bridge_id,
+                bridge.contracts.iter().map(|c| c.chain_id).collect(),
+            )
+        }))
+    }
+
+    #[test]
+    fn test_load_clusters_impl_no_file_no_env_is_empty() {
+        let clusters = load_clusters_impl(None, fixture_vars(&[])).unwrap();
+        assert_eq!(clusters, Vec::<ClusterConfig>::new());
+    }
+
+    #[test]
+    fn test_load_clusters_impl_env_only_cluster_field_by_field() {
+        let clusters = load_clusters_impl(
+            None,
+            fixture_vars(&[
+                ("INTERCHAIN_INDEXER_CLUSTERS__GNOSIS__HOME_CHAIN_ID", "100"),
+                ("INTERCHAIN_INDEXER_CLUSTERS__GNOSIS__BRIDGE_IDS", "[1]"),
+            ]),
+        )
+        .unwrap();
+
+        assert_eq!(
+            clusters,
+            vec![ClusterConfig {
+                id: "gnosis".to_string(),
+                home_chain_id: Some(100),
+                counterparty_chain_ids: None,
+                bridge_ids: Some(vec![1]),
+                include_unindexed_chains: false,
+            }]
+        );
+    }
+
+    #[test]
+    fn test_load_clusters_impl_bare_prefix_array_with_dash_id() {
+        let clusters = load_clusters_impl(
+            None,
+            fixture_vars(&[(
+                "INTERCHAIN_INDEXER_CLUSTERS",
+                r#"[{"id":"eth-gno","counterparty_chain_ids":[1,100]}]"#,
+            )]),
+        )
+        .unwrap();
+
+        assert_eq!(
+            clusters,
+            vec![ClusterConfig {
+                counterparty_chain_ids: Some(vec![1, 100]),
+                ..cluster("eth-gno")
+            }]
+        );
+    }
+
+    #[test]
+    fn test_load_clusters_impl_file_plus_env_patch() {
+        let clusters = load_clusters_from_json(
+            r#"[{"id":"gnosis","home_chain_id":100},{"id":"all"}]"#,
+            &[(
+                "INTERCHAIN_INDEXER_CLUSTERS__GNOSIS__INCLUDE_UNINDEXED_CHAINS",
+                "true",
+            )],
+        )
+        .unwrap();
+
+        assert_eq!(
+            clusters,
+            vec![
+                ClusterConfig {
+                    home_chain_id: Some(100),
+                    include_unindexed_chains: true,
+                    ..cluster("gnosis")
+                },
+                cluster("all"),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_load_clusters_impl_rejects_unknown_field_naming_the_cluster() {
+        let err =
+            load_clusters_from_json(r#"[{"id":"gnosis","brigde_ids":[1]}]"#, &[]).unwrap_err();
+        assert_error_mentions(&err, &["gnosis", "brigde_ids"]);
+
+        let err = load_clusters_impl(
+            None,
+            fixture_vars(&[("INTERCHAIN_INDEXER_CLUSTERS__GNOSIS__BRIGDE_IDS", "[1]")]),
+        )
+        .unwrap_err();
+        assert_error_mentions(&err, &["gnosis", "brigde_ids"]);
+    }
+
+    #[test]
+    fn test_load_clusters_impl_rejects_wrong_type_naming_the_cluster() {
+        let err =
+            load_clusters_from_json(r#"[{"id":"gnosis","home_chain_id":"x"}]"#, &[]).unwrap_err();
+        assert_error_mentions(&err, &["gnosis"]);
+    }
+
+    #[test]
+    fn test_load_clusters_impl_rejects_entry_without_id_naming_the_index() {
+        let err = load_clusters_from_json(r#"[{"id":"a"},{"home_chain_id":1}]"#, &[]).unwrap_err();
+        assert_error_mentions(&err, &["#1", "id"]);
+    }
+
+    #[test]
+    fn test_load_clusters_impl_rejects_env_numeric_id() {
+        // The env path segment `123` is injected as the JSON number 123, which
+        // the typed `id: String` parse rejects.
+        let err = load_clusters_impl(
+            None,
+            fixture_vars(&[("INTERCHAIN_INDEXER_CLUSTERS__123__HOME_CHAIN_ID", "1")]),
+        )
+        .unwrap_err();
+        assert_error_mentions(&err, &["`123`"]);
+    }
+
+    #[test]
+    fn test_load_clusters_impl_rejects_malformed_ids() {
+        for id in ["", "Gnosis", "123", "-5", "a__b", "a_", "_a", "a/b", "a b"] {
+            let json = serde_json::json!([{ "id": id }]).to_string();
+            let err = load_clusters_from_json(&json, &[]).unwrap_err();
+            assert_error_mentions(&err, &[&format!("cluster `{id}`"), "invalid id"]);
+        }
+
+        for id in ["gnosis", "eth-gno", "a_1", "1-2", "x9"] {
+            assert!(is_valid_cluster_id(id), "{id:?} must be a valid cluster id");
+        }
+    }
+
+    #[test]
+    fn test_load_clusters_impl_rejects_duplicate_id() {
+        let err = load_clusters_from_json(r#"[{"id":"a"},{"id":"a"}]"#, &[]).unwrap_err();
+        assert_error_mentions(&err, &["cluster `a`", "defined more than once"]);
+    }
+
+    #[test]
+    fn test_load_clusters_impl_rejects_explicit_empty_lists() {
+        let err = load_clusters_from_json(r#"[{"id":"a","bridge_ids":[]}]"#, &[]).unwrap_err();
+        assert_error_mentions(&err, &["cluster `a`", "bridge_ids", "empty list"]);
+
+        let err = load_clusters_from_json(r#"[{"id":"b","counterparty_chain_ids":[]}]"#, &[])
+            .unwrap_err();
+        assert_error_mentions(
+            &err,
+            &["cluster `b`", "counterparty_chain_ids", "empty list"],
+        );
+    }
+
+    #[test]
+    fn test_load_clusters_impl_accepts_null_lists() {
+        let clusters = load_clusters_from_json(
+            r#"[{"id":"a","bridge_ids":null,"counterparty_chain_ids":null}]"#,
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(clusters, vec![cluster("a")]);
+    }
+
+    #[test]
+    fn test_validate_clusters_rejects_unknown_bridge() {
+        let bridges = bridges_fixture(&[]);
+        let clusters = vec![ClusterConfig {
+            bridge_ids: Some(vec![7]),
+            ..cluster("gnosis")
+        }];
+
+        let err = validate_clusters(&clusters, &bridges, &indexed_from(&bridges)).unwrap_err();
+        assert_error_mentions(
+            &err,
+            &[
+                "cluster `gnosis`",
+                "bridge_id 7 is not in the bridges config",
+            ],
+        );
+    }
+
+    #[test]
+    fn test_validate_clusters_rejects_unindexed_chain_by_default() {
+        let bridges = bridges_fixture(&[]);
+        let indexed = indexed_from(&bridges);
+        let mut clusters = vec![ClusterConfig {
+            home_chain_id: Some(1),
+            ..cluster("eth")
+        }];
+
+        let err = validate_clusters(&clusters, &bridges, &indexed).unwrap_err();
+        assert_error_mentions(&err, &["cluster `eth`", "chain 1 is not indexed"]);
+
+        clusters[0].include_unindexed_chains = true;
+        validate_clusters(&clusters, &bridges, &indexed).unwrap();
+    }
+
+    #[test]
+    fn test_validate_clusters_accepts_indexed_chains() {
+        let bridges = bridges_fixture(&[]);
+        let indexed = indexed_from(&bridges);
+
+        let home_only = vec![ClusterConfig {
+            home_chain_id: Some(100),
+            ..cluster("gnosis")
+        }];
+        validate_clusters(&home_only, &bridges, &indexed).unwrap();
+
+        let counterparty_with_bridge = vec![ClusterConfig {
+            counterparty_chain_ids: Some(vec![100]),
+            bridge_ids: Some(vec![1]),
+            ..cluster("peers")
+        }];
+        validate_clusters(&counterparty_with_bridge, &bridges, &indexed).unwrap();
+    }
+
+    #[test]
+    fn test_validate_clusters_rejects_contract_less_bridge() {
+        let bridges = bridges_fixture(&[(
+            "INTERCHAIN_INDEXER_BRIDGES__2",
+            r#"{
+                "name": "Contract-less",
+                "type": "avalanche_native",
+                "indexer_type": "icm_ictt",
+                "enabled": false,
+                "api_url": null,
+                "ui_url": null,
+                "docs_url": null,
+                "contracts": []
+            }"#,
+        )]);
+        // Chain 100 is indexed by bridge 1, but not by the cluster's bridge 2.
+        let clusters = vec![ClusterConfig {
+            home_chain_id: Some(100),
+            bridge_ids: Some(vec![2]),
+            ..cluster("empty-bridge")
+        }];
+
+        let err = validate_clusters(&clusters, &bridges, &indexed_from(&bridges)).unwrap_err();
+        assert_error_mentions(
+            &err,
+            &["cluster `empty-bridge`", "chain 100 is not indexed"],
+        );
+    }
+
+    #[test]
+    fn test_validate_clusters_accepts_empty_cluster() {
+        let bridges = bridges_fixture(&[]);
+
+        validate_clusters(&[cluster("all")], &bridges, &indexed_from(&bridges)).unwrap();
+    }
+
+    #[test]
+    fn test_validate_clusters_skips_check_under_all_indexed() {
+        let bridges = bridges_fixture(&[]);
+        let clusters = vec![ClusterConfig {
+            home_chain_id: Some(1),
+            ..cluster("eth")
+        }];
+
+        validate_clusters(&clusters, &bridges, &IndexedChains::AllIndexed).unwrap();
+    }
+
+    #[test]
+    fn test_validate_clusters_skips_check_when_no_bridge_is_configured() {
+        let clusters = vec![ClusterConfig {
+            home_chain_id: Some(1),
+            ..cluster("eth")
+        }];
+        let indexed = IndexedChains::from_bridges(Vec::<(i32, Vec<i64>)>::new());
+
+        validate_clusters(&clusters, &[], &indexed).unwrap();
     }
 }
