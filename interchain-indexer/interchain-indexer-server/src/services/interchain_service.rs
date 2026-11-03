@@ -15,8 +15,8 @@ use interchain_indexer_entity::{
     tokens::Model as TokenInfoModel,
 };
 use interchain_indexer_logic::{
-    ChainInfoService, CrosschainMessageLookup, IndexedChains, InterchainDatabase, JoinedTransfer,
-    TokenInfoService,
+    ChainBridgeFilter, ChainInfoService, CrosschainMessageLookup, IndexedChains,
+    InterchainDatabase, JoinedTransfer, TokenInfoService,
     pagination::{MessagesPaginationLogic, TransfersPaginationLogic},
     protocol_metadata::ProtocolMetadata,
     utils::{hex_string_opt, to_hex_prefixed, vec_from_hex_prefixed},
@@ -27,9 +27,10 @@ use tonic::{Request, Response, Status};
 use super::{
     bridge_proto::bridge_model_to_proto,
     chain_info_proto::chain_model_to_proto,
+    scope::ReadScope,
     utils::{
         build_chain_bridge_filter, checked_bridge_id, db_datetime_to_string, list_page_params,
-        map_db_error, page_params, parse_bridge_ids_csv, parse_chain_ids_csv,
+        map_db_error, non_empty, page_params, parse_chain_ids_csv,
     },
 };
 
@@ -323,6 +324,148 @@ impl InterchainServiceImpl {
     }
 }
 
+impl InterchainServiceImpl {
+    /// Core of every messages list route (plain, byTx, byAddress; legacy and
+    /// cluster): keyset query plus rendering. `filter` is already built.
+    async fn messages_page(
+        &self,
+        tx_hash: Option<Vec<u8>>,
+        address: Option<Vec<u8>>,
+        filter: ChainBridgeFilter,
+        page_size: usize,
+        is_last_page: bool,
+        input_pagination: Option<MessagesPaginationLogic>,
+    ) -> Result<GetMessagesResponse, Status> {
+        let (items, output_pagination) = self
+            .db
+            .get_crosschain_messages(
+                tx_hash,
+                address,
+                filter,
+                page_size,
+                is_last_page,
+                input_pagination,
+            )
+            .await
+            .map_err(map_db_error)?;
+        let items = self.messages_logic_to_proto(items).await?;
+        let (next_page_params, prev_page_params) = page_params(output_pagination);
+        Ok(GetMessagesResponse {
+            items,
+            next_page_params,
+            prev_page_params,
+        })
+    }
+
+    /// Core of every transfers list route (plain, byTx, byAddress; legacy and
+    /// cluster): keyset query plus rendering. `filter` is already built.
+    async fn transfers_page(
+        &self,
+        tx_hash: Option<Vec<u8>>,
+        address: Option<Vec<u8>>,
+        filter: ChainBridgeFilter,
+        page_size: usize,
+        is_last_page: bool,
+        input_pagination: Option<TransfersPaginationLogic>,
+    ) -> Result<GetTransfersResponse, Status> {
+        let (items, output_pagination) = self
+            .db
+            .get_crosschain_transfers(
+                tx_hash,
+                address,
+                filter,
+                page_size,
+                is_last_page,
+                input_pagination,
+            )
+            .await
+            .map_err(map_db_error)?;
+        let items = self.joined_transfers_logic_to_proto(items).await?;
+        let (next_page_params, prev_page_params) = page_params(output_pagination);
+        Ok(GetTransfersResponse {
+            items,
+            next_page_params,
+            prev_page_params,
+        })
+    }
+
+    /// Core of the chain directory (legacy and cluster). `requested_rows` is
+    /// the client's `chain_ids` (`None` = all); the scope's chain set narrows
+    /// it (`ReadScope::select_rows`), then the selected bridges' configured
+    /// chains, then the global unindexed gate — in that order, as always.
+    async fn chains_list(
+        &self,
+        scope: &ReadScope,
+        requested_rows: Option<Vec<i64>>,
+    ) -> Result<GetChainsResponse, Status> {
+        let rows = scope.select_rows(requested_rows);
+        let mut bridge_ids = scope.bridge_ids.clone().unwrap_or_default();
+        bridge_ids.sort_unstable();
+        bridge_ids.dedup();
+
+        // Chains the selected bridges index today. Only meaningful (and only
+        // computed) for a non-empty selection: `selected_configured_union`
+        // returns a bare `Vec` where empty means "no candidates", the OPPOSITE
+        // of `configured_union()`'s "restrict nothing". Gate on the parsed
+        // request value, never on the union's emptiness, or `?bridge_ids=999`
+        // would return the whole directory.
+        let selected_configured_chain_ids = if bridge_ids.is_empty() {
+            None
+        } else {
+            Some(self.indexed_chains.selected_configured_union(&bridge_ids))
+        };
+
+        let models = self
+            .chain_info_service
+            .get_all_chains_info()
+            .await
+            .map_err(map_db_error)?;
+
+        let models: Vec<_> = models
+            .into_iter()
+            .filter(|m| rows.as_ref().is_none_or(|rows| rows.contains(&m.id)))
+            .filter(|m| {
+                selected_configured_chain_ids
+                    .as_ref()
+                    .is_none_or(|selected| selected.contains(&m.id))
+            })
+            .collect();
+
+        // The unindexed gate stays last and global: it means "no configured
+        // bridge indexes this chain", never "not indexed by the selected
+        // bridges". Under a non-empty `bridge_ids` it is currently a no-op
+        // (`selected_configured_union ⊆ configured_union`), but that
+        // containment is a property of the current derivation, not a guarantee.
+        let models = if scope.include_unindexed_chains {
+            models
+        } else {
+            match self.indexed_chains.configured_union() {
+                // An empty union can only mean no bridge is configured at all;
+                // emptying the chain directory in that case would be exactly the
+                // retroactive reinterpretation ADR-004 Decision 5 forbids.
+                Some(union) if !union.is_empty() => models
+                    .into_iter()
+                    .filter(|m| union.contains(&m.id))
+                    .collect(),
+                _ => models,
+            }
+        };
+
+        let items = models.into_iter().map(chain_model_to_proto).collect();
+        Ok(GetChainsResponse { items })
+    }
+}
+
+/// Parses a `0x`-prefixed hex path param; a malformed value is
+/// `InvalidArgument("invalid {param}: expected a 0x-prefixed hex string")`.
+fn parse_hex_path(param: &str, value: &str) -> Result<Vec<u8>, Status> {
+    vec_from_hex_prefixed(value).map_err(|_| {
+        Status::invalid_argument(format!(
+            "invalid {param}: expected a 0x-prefixed hex string"
+        ))
+    })
+}
+
 #[async_trait::async_trait]
 impl InterchainService for InterchainServiceImpl {
     async fn get_messages(
@@ -331,39 +474,28 @@ impl InterchainService for InterchainServiceImpl {
     ) -> Result<Response<GetMessagesResponse>, Status> {
         let (inner, input_pagination, page_size, is_last_page) =
             list_page_params!(self, request, MessagesPaginationLogic)?;
-
-        let filter = build_chain_bridge_filter(
+        let scope = ReadScope::from_query(
             inner.home_chain_id,
             inner.counterparty_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+            inner.include_unindexed_chains,
+        )?;
+        let filter = build_chain_bridge_filter(
+            &scope,
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
-            inner.bridge_ids.as_deref(),
             self.indexed_chains.as_ref(),
-            inner.include_unindexed_chains.unwrap_or(false),
         )?;
-
-        let (items, output_pagination) = self
-            .db
-            .get_crosschain_messages(
-                None,
-                None,
-                filter,
-                page_size,
-                is_last_page,
-                input_pagination,
-            )
-            .await
-            .map_err(map_db_error)?;
-
-        let items = self.messages_logic_to_proto(items).await?;
-
-        let (next_page_params, prev_page_params) = page_params(output_pagination);
-        let response = GetMessagesResponse {
-            items,
-            next_page_params,
-            prev_page_params,
-        };
-        Ok(Response::new(response))
+        self.messages_page(
+            None,
+            None,
+            filter,
+            page_size,
+            is_last_page,
+            input_pagination,
+        )
+        .await
+        .map(Response::new)
     }
 
     async fn get_message_details(
@@ -404,43 +536,29 @@ impl InterchainService for InterchainServiceImpl {
     ) -> Result<Response<GetMessagesResponse>, Status> {
         let (inner, input_pagination, page_size, is_last_page) =
             list_page_params!(self, request, MessagesPaginationLogic)?;
-
-        let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(|_| {
-            Status::invalid_argument("invalid tx_hash: expected a 0x-prefixed hex string")
-        })?;
-
-        let filter = build_chain_bridge_filter(
+        let tx_hash = parse_hex_path("tx_hash", &inner.tx_hash)?;
+        let scope = ReadScope::from_query(
             inner.home_chain_id,
             inner.counterparty_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+            inner.include_unindexed_chains,
+        )?;
+        let filter = build_chain_bridge_filter(
+            &scope,
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
-            inner.bridge_ids.as_deref(),
             self.indexed_chains.as_ref(),
-            inner.include_unindexed_chains.unwrap_or(false),
         )?;
-
-        let (items, output_pagination) = self
-            .db
-            .get_crosschain_messages(
-                Some(tx_hash),
-                None,
-                filter,
-                page_size,
-                is_last_page,
-                input_pagination,
-            )
-            .await
-            .map_err(map_db_error)?;
-
-        let items = self.messages_logic_to_proto(items).await?;
-
-        let (next_page_params, prev_page_params) = page_params(output_pagination);
-        let response = GetMessagesResponse {
-            items,
-            next_page_params,
-            prev_page_params,
-        };
-        Ok(Response::new(response))
+        self.messages_page(
+            Some(tx_hash),
+            None,
+            filter,
+            page_size,
+            is_last_page,
+            input_pagination,
+        )
+        .await
+        .map(Response::new)
     }
 
     async fn get_messages_by_address(
@@ -449,43 +567,29 @@ impl InterchainService for InterchainServiceImpl {
     ) -> Result<Response<GetMessagesResponse>, Status> {
         let (inner, input_pagination, page_size, is_last_page) =
             list_page_params!(self, request, MessagesPaginationLogic)?;
-
-        let address = vec_from_hex_prefixed(&inner.address).map_err(|_| {
-            Status::invalid_argument("invalid address: expected a 0x-prefixed hex string")
-        })?;
-
-        let filter = build_chain_bridge_filter(
+        let address = parse_hex_path("address", &inner.address)?;
+        let scope = ReadScope::from_query(
             inner.home_chain_id,
             inner.counterparty_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+            inner.include_unindexed_chains,
+        )?;
+        let filter = build_chain_bridge_filter(
+            &scope,
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
-            inner.bridge_ids.as_deref(),
             self.indexed_chains.as_ref(),
-            inner.include_unindexed_chains.unwrap_or(false),
         )?;
-
-        let (items, output_pagination) = self
-            .db
-            .get_crosschain_messages(
-                None,
-                Some(address),
-                filter,
-                page_size,
-                is_last_page,
-                input_pagination,
-            )
-            .await
-            .map_err(map_db_error)?;
-
-        let items = self.messages_logic_to_proto(items).await?;
-
-        let (next_page_params, prev_page_params) = page_params(output_pagination);
-        let response = GetMessagesResponse {
-            items,
-            next_page_params,
-            prev_page_params,
-        };
-        Ok(Response::new(response))
+        self.messages_page(
+            None,
+            Some(address),
+            filter,
+            page_size,
+            is_last_page,
+            input_pagination,
+        )
+        .await
+        .map(Response::new)
     }
 
     async fn get_transfers(
@@ -494,39 +598,28 @@ impl InterchainService for InterchainServiceImpl {
     ) -> Result<Response<GetTransfersResponse>, Status> {
         let (inner, input_pagination, page_size, is_last_page) =
             list_page_params!(self, request, TransfersPaginationLogic)?;
-
-        let filter = build_chain_bridge_filter(
+        let scope = ReadScope::from_query(
             inner.home_chain_id,
             inner.counterparty_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+            inner.include_unindexed_chains,
+        )?;
+        let filter = build_chain_bridge_filter(
+            &scope,
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
-            inner.bridge_ids.as_deref(),
             self.indexed_chains.as_ref(),
-            inner.include_unindexed_chains.unwrap_or(false),
         )?;
-
-        let (items, output_pagination) = self
-            .db
-            .get_crosschain_transfers(
-                None,
-                None,
-                filter,
-                page_size,
-                is_last_page,
-                input_pagination,
-            )
-            .await
-            .map_err(map_db_error)?;
-
-        let items = self.joined_transfers_logic_to_proto(items).await?;
-
-        let (next_page_params, prev_page_params) = page_params(output_pagination);
-        let response = GetTransfersResponse {
-            items,
-            next_page_params,
-            prev_page_params,
-        };
-        Ok(Response::new(response))
+        self.transfers_page(
+            None,
+            None,
+            filter,
+            page_size,
+            is_last_page,
+            input_pagination,
+        )
+        .await
+        .map(Response::new)
     }
 
     async fn get_transfers_by_transaction(
@@ -535,43 +628,29 @@ impl InterchainService for InterchainServiceImpl {
     ) -> Result<Response<GetTransfersResponse>, Status> {
         let (inner, input_pagination, page_size, is_last_page) =
             list_page_params!(self, request, TransfersPaginationLogic)?;
-
-        let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(|_| {
-            Status::invalid_argument("invalid tx_hash: expected a 0x-prefixed hex string")
-        })?;
-
-        let filter = build_chain_bridge_filter(
+        let tx_hash = parse_hex_path("tx_hash", &inner.tx_hash)?;
+        let scope = ReadScope::from_query(
             inner.home_chain_id,
             inner.counterparty_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+            inner.include_unindexed_chains,
+        )?;
+        let filter = build_chain_bridge_filter(
+            &scope,
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
-            inner.bridge_ids.as_deref(),
             self.indexed_chains.as_ref(),
-            inner.include_unindexed_chains.unwrap_or(false),
         )?;
-
-        let (items, output_pagination) = self
-            .db
-            .get_crosschain_transfers(
-                Some(tx_hash),
-                None,
-                filter,
-                page_size,
-                is_last_page,
-                input_pagination,
-            )
-            .await
-            .map_err(map_db_error)?;
-
-        let items = self.joined_transfers_logic_to_proto(items).await?;
-
-        let (next_page_params, prev_page_params) = page_params(output_pagination);
-        let response = GetTransfersResponse {
-            items,
-            next_page_params,
-            prev_page_params,
-        };
-        Ok(Response::new(response))
+        self.transfers_page(
+            Some(tx_hash),
+            None,
+            filter,
+            page_size,
+            is_last_page,
+            input_pagination,
+        )
+        .await
+        .map(Response::new)
     }
 
     async fn get_transfers_by_address(
@@ -580,43 +659,29 @@ impl InterchainService for InterchainServiceImpl {
     ) -> Result<Response<GetTransfersResponse>, Status> {
         let (inner, input_pagination, page_size, is_last_page) =
             list_page_params!(self, request, TransfersPaginationLogic)?;
-
-        let address = vec_from_hex_prefixed(&inner.address).map_err(|_| {
-            Status::invalid_argument("invalid address: expected a 0x-prefixed hex string")
-        })?;
-
-        let filter = build_chain_bridge_filter(
+        let address = parse_hex_path("address", &inner.address)?;
+        let scope = ReadScope::from_query(
             inner.home_chain_id,
             inner.counterparty_chain_ids.as_deref(),
+            inner.bridge_ids.as_deref(),
+            inner.include_unindexed_chains,
+        )?;
+        let filter = build_chain_bridge_filter(
+            &scope,
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
-            inner.bridge_ids.as_deref(),
             self.indexed_chains.as_ref(),
-            inner.include_unindexed_chains.unwrap_or(false),
         )?;
-
-        let (items, output_pagination) = self
-            .db
-            .get_crosschain_transfers(
-                None,
-                Some(address),
-                filter,
-                page_size,
-                is_last_page,
-                input_pagination,
-            )
-            .await
-            .map_err(map_db_error)?;
-
-        let items = self.joined_transfers_logic_to_proto(items).await?;
-
-        let (next_page_params, prev_page_params) = page_params(output_pagination);
-        let response = GetTransfersResponse {
-            items,
-            next_page_params,
-            prev_page_params,
-        };
-        Ok(Response::new(response))
+        self.transfers_page(
+            None,
+            Some(address),
+            filter,
+            page_size,
+            is_last_page,
+            input_pagination,
+        )
+        .await
+        .map(Response::new)
     }
 
     async fn get_chains(
@@ -625,60 +690,15 @@ impl InterchainService for InterchainServiceImpl {
     ) -> Result<Response<GetChainsResponse>, Status> {
         let inner = request.into_inner();
         let chain_ids = parse_chain_ids_csv("chain_ids", inner.chain_ids.as_deref())?;
-        let mut bridge_ids = parse_bridge_ids_csv(inner.bridge_ids.as_deref())?;
-        bridge_ids.sort_unstable();
-        bridge_ids.dedup();
-
-        // Chains the selected bridges index today. Only meaningful (and only
-        // computed) for a non-empty selection: `selected_configured_union`
-        // returns a bare `Vec` where empty means "no candidates", the OPPOSITE
-        // of `configured_union()`'s "restrict nothing". Gate on the parsed
-        // request value, never on the union's emptiness, or `?bridge_ids=999`
-        // would return the whole directory.
-        let selected_configured_chain_ids = if bridge_ids.is_empty() {
-            None
-        } else {
-            Some(self.indexed_chains.selected_configured_union(&bridge_ids))
-        };
-
-        let models = self
-            .chain_info_service
-            .get_all_chains_info()
+        let scope = ReadScope::from_query(
+            None,
+            None,
+            inner.bridge_ids.as_deref(),
+            inner.include_unindexed_chains,
+        )?;
+        self.chains_list(&scope, non_empty(chain_ids))
             .await
-            .map_err(map_db_error)?;
-
-        let models: Vec<_> = models
-            .into_iter()
-            .filter(|m| chain_ids.is_empty() || chain_ids.contains(&m.id))
-            .filter(|m| {
-                selected_configured_chain_ids
-                    .as_ref()
-                    .is_none_or(|selected| selected.contains(&m.id))
-            })
-            .collect();
-
-        // The unindexed gate stays last and global: it means "no configured
-        // bridge indexes this chain", never "not indexed by the selected
-        // bridges". Under a non-empty `bridge_ids` it is currently a no-op
-        // (`selected_configured_union ⊆ configured_union`), but that
-        // containment is a property of the current derivation, not a guarantee.
-        let models = if inner.include_unindexed_chains.unwrap_or(false) {
-            models
-        } else {
-            match self.indexed_chains.configured_union() {
-                // An empty union can only mean no bridge is configured at all;
-                // emptying the chain directory in that case would be exactly the
-                // retroactive reinterpretation ADR-004 Decision 5 forbids.
-                Some(union) if !union.is_empty() => models
-                    .into_iter()
-                    .filter(|m| union.contains(&m.id))
-                    .collect(),
-                _ => models,
-            }
-        };
-
-        let items = models.into_iter().map(chain_model_to_proto).collect();
-        Ok(Response::new(GetChainsResponse { items }))
+            .map(Response::new)
     }
 
     async fn get_bridges(

@@ -5,6 +5,7 @@ mod bridge_proto;
 mod chain_info_proto;
 mod health;
 mod interchain_service;
+mod scope;
 mod stats;
 mod status;
 mod utils;
