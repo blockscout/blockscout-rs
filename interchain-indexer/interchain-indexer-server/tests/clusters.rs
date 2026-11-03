@@ -7,8 +7,9 @@
 //! route called with the cluster's four filter fields (the legacy route is the
 //! oracle), chain directories and per-chain stats follow universe semantics,
 //! message details are scoped inside the lookup, an unknown cluster is a 404
-//! checked before any other validation, and the cluster fields sent as query
-//! params are ignored.
+//! checked before any other validation the handler does (a param the HTTP
+//! layer cannot parse into its declared type is rejected with 400 earlier), and
+//! the cluster fields sent as query params are ignored.
 //!
 //! One server, one database, deliberately: every check is read-only against
 //! the same seed, and each extra server adds to the test-server port race
@@ -277,6 +278,10 @@ async fn check_stats_parity(base: &Url) {
         "/api/v1/stats/chain/100/messages-paths/received?bridge_ids=1",
     )
     .await;
+    assert!(
+        !cluster["items"].as_array().unwrap().is_empty(),
+        "the received paths must not be vacuously empty: {cluster}"
+    );
     assert_eq!(cluster, legacy, "gnosis parity of received paths");
 
     let cluster = get(base, "/api/v1/clusters/gnosis/stats/chain/1/bridged-tokens").await;
@@ -285,6 +290,10 @@ async fn check_stats_parity(base: &Url) {
         "/api/v1/stats/chain/1/bridged-tokens?counterparty_chain_ids=100&bridge_ids=1",
     )
     .await;
+    assert!(
+        !cluster["items"].as_array().unwrap().is_empty(),
+        "the bridged tokens must not be vacuously empty: {cluster}"
+    );
     assert_eq!(cluster, legacy, "gnosis parity of bridged tokens");
 }
 
@@ -431,7 +440,7 @@ async fn check_unknown_cluster(base: &Url) {
         "stats/chain/1/bridged-tokens".to_string(),
         "stats/chain/1/messages-paths/sent".to_string(),
         "stats/chain/1/messages-paths/received".to_string(),
-        // The lookup comes first: nothing below is validated before it.
+        // The handler resolves the cluster before parsing these string params.
         "interchain/messages?page_token=not*a*token".to_string(),
         "interchain/messages:byTx/not-hex".to_string(),
     ];

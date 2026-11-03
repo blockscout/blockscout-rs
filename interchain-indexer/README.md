@@ -499,9 +499,11 @@ A cluster route never returns rows outside the cluster:
 ### Errors
 
 An unknown `cluster_id` is HTTP 404 (gRPC `NotFound`) with the message
-`cluster not found: <id>`. The cluster is looked up before anything else is
-validated, so a malformed `page_token` or path parameter under an unknown
-cluster is still this 404.
+`cluster not found: <id>`. The cluster is resolved before any other validation
+the handler does, so a malformed `page_token`, CSV, date or hex path value under
+an unknown cluster is still this 404. A param the HTTP layer cannot parse into
+its declared type (for example a non-integer `chain_id` or `page_size`) is
+rejected with 400 first.
 
 ### Caveats
 

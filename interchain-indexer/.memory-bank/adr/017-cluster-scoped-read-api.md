@@ -23,8 +23,8 @@ translation into the legacy query params.
 
 - **Presets.** Clusters are named presets loaded at startup from an optional
   JSON file plus `INTERCHAIN_INDEXER_CLUSTERS*` environment overrides, and
-  strictly validated before anything else starts (see the README,
-  "`clusters.json`").
+  validated at startup, before the stats backfill and DB seeding (see the
+  README, "`clusters.json`").
 - **Routes.** 13 routes under `/api/v1/clusters/{cluster_id}/` (plural, as in
   `multichain-aggregator`): the six message/transfer lists, the chain and bridge
   directories, message details, `stats/chains`, and the per-chain bridged tokens
@@ -129,8 +129,9 @@ derivation and no rejection of a path chain.
 
 - A new filtered endpoint must get both entry points, a `GetCluster*Request`
   message and an HTTP rule.
-- `conversions` must not come back: it would reintroduce the single-use
-  message restriction that lets two services share response messages.
+- `conversions` must not come back: re-enabling `conversions` would again emit
+  duplicate `*Internal` structs as soon as two services share a response
+  message, which the cluster services do.
 - The startup check rejects a cluster chain that only a removed bridge
   observed, unless `include_unindexed_chains = true`.
 

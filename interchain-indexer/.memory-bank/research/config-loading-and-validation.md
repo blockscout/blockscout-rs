@@ -197,7 +197,8 @@ the same shape with these differences:
   in-scope bridge (the cluster's `bridge_ids`, or all configured bridges). The
   chain check is skipped under `AllIndexed` and, for a cluster without
   `bridge_ids`, when no bridge is configured. Each cluster is then logged
-  (`cluster configured`). Nothing else consumes the clusters yet.
+  (`cluster configured`). The clusters then become the `ClusterRegistry` that
+  the cluster Read API routes use (ADR-017).
 
 Custom deserializers:
 - `deserialize_bridge_type` — maps JSON string to `BridgeType` via SeaORM `ActiveEnum`

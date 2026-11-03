@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 //! Cluster entry points of the interchain Read API. Each one resolves the
-//! cluster first (unknown ⇒ NotFound, before any other validation), then
-//! mirrors the legacy entry point with the cluster's `ReadScope` in place of
-//! the cluster query params, and calls the same core.
+//! cluster first (unknown ⇒ NotFound, before any other validation the handler
+//! does), then mirrors the legacy entry point with the cluster's `ReadScope` in
+//! place of the cluster query params, and calls the same core. Params the HTTP
+//! layer cannot parse into their declared type (a non-integer `chain_id` or
+//! `page_size`) are rejected with 400 by the extractors before any handler runs.
 
 use super::{InterchainServiceImpl, parse_hex_path};
 use crate::{
