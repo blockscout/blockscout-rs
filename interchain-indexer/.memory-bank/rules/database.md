@@ -153,6 +153,12 @@ impl From<Config> for entity::ActiveModel {
   the failure to the page boundary (see `gotchas.md`, "Keyset Cursor Keys
   Must Be Bounded By Construction").
 - Marker decode/encode order must be stable and deterministic across pages.
+- Page 1's non-null `prev_page_params` is intentional, not a dead link. It
+  lets a client fetch items newer than the page it holds (poll for new
+  arrivals), so it returns an empty page only while nothing new has arrived.
+  Lists that cannot grow drop it on purpose: messages/transfers `byTx` clear
+  the prev marker on the first page (`database.rs`, "static list"). Do not
+  report it as a bug or remove it because a frontend does not use it.
 
 ## Protocol Metadata
 
