@@ -59,8 +59,9 @@ fn compile(
 /// actix-prost generates a fresh `<Message>Internal` struct and `TryConvert` impl for every
 /// message tree that nests `<Message>`, once per `.proto` file. A message shared across files
 /// (`ChainInfo`, `Pagination`) therefore gets duplicated in the same module. Keep the first
-/// definition and drop the later identical block, up to the next generated struct that
-/// follows it.
+/// definition and drop the second block, up to the struct named as its `end_before`. Every
+/// such block must end right where that struct begins. If `end_before` is generated further
+/// down, everything in between is deleted too, so check the pairs after reordering protos.
 fn dedupe_actix_duplicate_internal_structs(
     out_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {

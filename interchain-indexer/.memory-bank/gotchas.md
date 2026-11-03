@@ -1180,8 +1180,8 @@ same URL would silently become a filter.
 
 Use the read-filter vocabulary instead: `home_chain_id`,
 `counterparty_chain_ids`, `bridge_ids`, `chain_ids`. The only cursor in either
-direction is `page_token`; the response cursor messages are `{ page_token }`
-only, with their removed fields reserved too.
+direction is `page_token`. Every list response uses the shared cursor message
+`Pagination { page_token }`, and its removed fields are reserved too.
 
 ---
 
@@ -3152,7 +3152,11 @@ literal generated text and generated struct order:
 - a new cross-file use of a message needs a new pair;
 - a third file nesting the same message leaves a third copy, because only the
   second one is stripped;
-- if the `end_before` struct moves, the patch is skipped.
+- if the `end_before` struct moves above the duplicate, the patch is skipped
+  and the duplicate stays;
+- if it moves further below, everything between the duplicate and it is
+  deleted along with the duplicate. Reordering RPCs or messages in
+  `stats.proto` can do this.
 
 Every one of these surfaces as a compile error, never as a silent
 miscompile. Check this function first whenever a proto edit breaks the proto
