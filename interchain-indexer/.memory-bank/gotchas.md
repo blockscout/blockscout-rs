@@ -3133,35 +3133,28 @@ icon and Blockscout misses erase ERC-20 icons: re-apply manual icons from
 the new value visible without a restart is described in "Token Cache Writers W1,
 W3 And Admin Invalidation Share The Per-Key Mutex".
 
-## A Message Shared Across `.proto` Files Needs A `build.rs` Dedupe Entry
+## Do Not Re-Enable actix-prost `conversions`
 
-actix-prost (0.3.1) emits a `<Message>Internal` struct plus its `TryConvert`
-impl once per `.proto` file for every message tree that nests `<Message>`. A
-message used from two files therefore gets two identical definitions in the
-one generated module `blockscout.interchain_indexer.v1.rs`, and the proto crate
-fails with `E0428 <Message>Internal defined multiple times` and conflicting
-`Clone`/`Debug` impls.
+Until the `api-clusters` work, the root `Cargo.toml` enabled the
+`conversions` feature of `actix-prost-build`. With it, actix-prost (0.3.1)
+emits a `<Message>Internal` struct plus a `convert_trait::TryConvert` impl for
+every message tree an RPC reaches, and deduplicates them **per service**
+(`ActixGenerator::generate` builds a fresh `ConversionsGenerator` for each
+service). A message reached from two services was therefore generated twice
+into the one module `blockscout.interchain_indexer.v1.rs`, and the proto crate
+failed with `E0428 <Message>Internal defined multiple times`. `ChainInfo` and
+`Pagination` were patched out by a `build.rs` text hack
+(`dedupe_actix_duplicate_internal_structs`) that keyed off literal generated
+text and struct order.
 
-`interchain-indexer-proto/build.rs::dedupe_actix_duplicate_internal_structs`
-patches the generated file after codegen. It removes the second block for each
-listed `(duplicated, end_before)` pair: today `ChainInfo` (up to
-`MessagePathRowInternal`) and `Pagination`, which is shared by all list
-responses (up to `GetBridgedTokensResponseInternal`). The patch keys off
-literal generated text and generated struct order:
+Nothing in this repo used the `*Internal` / `TryConvert` code, and the
+generated actix routes never call it. The feature, the `convert-trait`
+dependency, the unused `convert/convert_options.proto` import and the patch
+were removed; `multichain-aggregator` builds the same way.
 
-- a new cross-file use of a message needs a new pair;
-- a third file nesting the same message leaves a third copy, because only the
-  second one is stripped;
-- if the `end_before` struct moves above the duplicate, the patch is skipped
-  and the duplicate stays;
-- if it moves further below, everything between the duplicate and it is
-  deleted along with the duplicate. Reordering RPCs or messages in
-  `stats.proto` can do this.
-
-Every one of these surfaces as a compile error, never as a silent
-miscompile. Check this function first whenever a proto edit breaks the proto
-crate with duplicate `*Internal` definitions — for example cluster protos
-reusing existing response messages.
+Do not turn the feature back on: the legacy and cluster Read API services
+share every response message, so the duplicate-definition errors would return
+at once. If a conversion is ever needed, write it by hand.
 
 ---
 

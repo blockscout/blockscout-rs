@@ -6,7 +6,6 @@ option go_package = "github.com/blockscout/blockscout-rs/interchain-indexer";
 
 import "google/protobuf/struct.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
-import "convert/convert_options.proto";
 
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
   info: {

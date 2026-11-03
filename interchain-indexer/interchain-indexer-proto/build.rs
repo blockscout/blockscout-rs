@@ -52,54 +52,7 @@ fn compile(
     let descriptor_bytes = fs::read(descriptor_file).unwrap();
     let descriptor = FileDescriptorSet::decode(&descriptor_bytes[..]).unwrap();
     prost_wkt_build::add_serde(out.clone(), descriptor);
-    dedupe_actix_duplicate_internal_structs(&out)?;
     Ok(())
-}
-
-/// actix-prost generates a fresh `<Message>Internal` struct and `TryConvert` impl for every
-/// message tree that nests `<Message>`, once per `.proto` file. A message shared across files
-/// (`ChainInfo`, `Pagination`) therefore gets duplicated in the same module. Keep the first
-/// definition and drop the second block, up to the struct named as its `end_before`. Every
-/// such block must end right where that struct begins. If `end_before` is generated further
-/// down, everything in between is deleted too, so check the pairs after reordering protos.
-fn dedupe_actix_duplicate_internal_structs(
-    out_dir: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let path = out_dir.join("blockscout.interchain_indexer.v1.rs");
-    let content = fs::read_to_string(&path)?;
-    let patched =
-        strip_second_internal_block(&content, "ChainInfoInternal", "MessagePathRowInternal");
-    let patched = strip_second_internal_block(
-        &patched,
-        "PaginationInternal",
-        "GetBridgedTokensResponseInternal",
-    );
-    if patched != content {
-        fs::write(&path, patched)?;
-    }
-    Ok(())
-}
-
-/// Removes the second `pub struct <duplicated>` block (with its `TryConvert` impl), ending right
-/// before `pub struct <end_before>`. Returns `content` unchanged when there is no duplicate.
-fn strip_second_internal_block(content: &str, duplicated: &str, end_before: &str) -> String {
-    let needle = format!("#[derive(Clone, Debug)]\npub struct {duplicated}");
-    let end_needle = format!("#[derive(Clone, Debug)]\npub struct {end_before}");
-    let Some(first) = content.find(&needle) else {
-        return content.to_string();
-    };
-    let search_after = first + needle.len();
-    let Some(rel_second) = content[search_after..].find(&needle) else {
-        return content.to_string();
-    };
-    let second = search_after + rel_second;
-    let Some(rel_end) = content[second..].find(&end_needle) else {
-        return content.to_string();
-    };
-    let mut out = String::with_capacity(content.len().saturating_sub(rel_end));
-    out.push_str(&content[..second]);
-    out.push_str(&content[second + rel_end..]);
-    out
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
