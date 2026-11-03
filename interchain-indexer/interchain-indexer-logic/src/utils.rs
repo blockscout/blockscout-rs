@@ -45,19 +45,6 @@ pub fn to_hex_prefixed(bytes: &[u8]) -> String {
     }
 }
 
-pub fn u64_from_hex_prefixed(hex: &str) -> anyhow::Result<u64> {
-    let s = hex
-        .strip_prefix("0x")
-        .or_else(|| hex.strip_prefix("0X"))
-        .ok_or_else(|| anyhow::anyhow!("Hex value must start with 0x"))?;
-
-    if s.is_empty() {
-        return Err(anyhow::anyhow!("Hex literal is empty"));
-    }
-
-    u64::from_str_radix(s, 16).map_err(|e| anyhow::anyhow!("Invalid hex u64: {}", e))
-}
-
 pub fn hex_string_opt(data: Option<Vec<u8>>) -> Option<String> {
     data.map(|data| to_hex_prefixed(data.as_slice()))
 }

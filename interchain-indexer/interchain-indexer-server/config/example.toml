@@ -69,4 +69,3 @@ run_migrations = true
 [api]
 default_page_size = 50
 max_page_size = 100
-use_pagination_token = true

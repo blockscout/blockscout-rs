@@ -12,25 +12,20 @@ enum SortOrder {
   ASC = 1;
 }
 
-// Pagination for bridged tokens stats only (`page_token` or explicit cursor fields).
-// Does not reuse messages/transfers `Pagination` fields (timestamp, message_id, etc.).
+// Response cursor for `/stats/chain/{chain_id}/bridged-tokens`.
 // Tokens are only valid with the same `counterparty_chain_ids`, `bridge_ids`,
 // `q`, `sort`, and `order` as the request that produced them.
 message BridgedTokensListPagination {
-  optional string page_token = 1;
-  optional string direction = 2;
-  optional int64 asset_id = 3;
-  optional string name = 4;
-  optional bool name_blank = 5;
-  optional uint64 count = 6;
+  string page_token = 1;
+  reserved 2 to 6; // former raw cursor fields
+  reserved "direction", "asset_id", "name", "name_blank", "count";
 }
 
-// Pagination for `/stats/chains` (composite cursor: direction, count, chain_id).
+// Response cursor for `/stats/chains`.
 message StatsChainsListPagination {
-  optional string page_token = 1;
-  optional string direction = 2;
-  optional uint64 count = 3;
-  optional int64 chain_id = 4;
+  string page_token = 1;
+  reserved 2 to 4; // former raw cursor fields
+  reserved "direction", "count", "chain_id";
 }
 
 message GetMessagePathsRequest {
@@ -90,14 +85,14 @@ message GetBridgedTokensRequest {
   // Sort order: DESC[default] / ASC
   SortOrder order = 5;
   
-  // Token-based pagination
+  // Opaque pagination cursor: pass `next_page_params.page_token` or
+  // `prev_page_params.page_token` from a previous response unchanged. Valid
+  // only with the same `chain_id`, `counterparty_chain_ids`, `bridge_ids`,
+  // `include_unindexed_chains`, `q`, `sort`, and `order` as the request that
+  // produced it. A malformed value is rejected with InvalidArgument.
   optional string page_token = 6;
-  // Flat keys matching `BridgedTokensListPagination` / `next_page_params` / `prev_page_params` (for `api.use_pagination_token=false`, pass that dict fields here).
-  optional string direction = 7;
-  optional int64 asset_id = 8;
-  optional string name = 9;
-  optional bool name_blank = 10;
-  optional uint64 count = 11;
+  reserved 7 to 11; // former raw cursor fields
+  reserved "direction", "asset_id", "name", "name_blank", "count";
   // Case-insensitive substring filter on the row display name (`stats_assets.name`).
   optional string q = 12;
   // Comma-separated chain ids. Restricts counterparty chains of the edges
@@ -134,13 +129,14 @@ message GetChainsStatsRequest {
   // Sort order: DESC[default] / ASC
   SortOrder order = 4;
 
-  // token-based pagination
+  // Opaque pagination cursor: pass `next_page_params.page_token` or
+  // `prev_page_params.page_token` from a previous response unchanged. Valid
+  // only with the same `bridge_ids`, `chain_ids`, `q`,
+  // `include_unindexed_chains`, `sort`, and `order` as the request that
+  // produced it. A malformed value is rejected with InvalidArgument.
   optional string page_token = 5;
-
-  // raw pagination fields
-  optional string direction = 6;
-  optional uint64 count = 7;
-  optional int64 chain_id = 8;
+  reserved 6 to 8; // former raw cursor fields
+  reserved "direction", "count", "chain_id";
   // Case-insensitive substring filter on chain name or textual chain id.
   optional string q = 9;
   // Sort field: UNIQUE_TRANSFER_USERS_COUNT[default]
@@ -166,7 +162,7 @@ message GetChainsStatsRequest {
   // `include_unindexed_chains` keeps its global meaning: a chain is unindexed
   // only when NO configured bridge indexes it; the flag controls visibility
   // among the selected bridge candidates described above.
-  // Page tokens and raw cursors are valid only with the same `bridge_ids`,
+  // Page tokens are valid only with the same `bridge_ids`,
   // `chain_ids`, `q`, `include_unindexed_chains`, `sort`, and `order` that
   // produced them.
   optional string bridge_ids = 12;

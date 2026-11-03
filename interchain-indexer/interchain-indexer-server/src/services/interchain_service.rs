@@ -17,9 +17,7 @@ use interchain_indexer_entity::{
 use interchain_indexer_logic::{
     ChainInfoService, CrosschainMessageLookup, IndexedChains, InterchainDatabase, JoinedTransfer,
     TokenInfoService,
-    pagination::{
-        ListMarker, MessagesPaginationLogic, PaginationDirection, TransfersPaginationLogic,
-    },
+    pagination::{ListMarker, MessagesPaginationLogic, TransfersPaginationLogic},
     protocol_metadata::ProtocolMetadata,
     utils::{hex_string_opt, to_hex_prefixed, vec_from_hex_prefixed},
 };
@@ -40,39 +38,12 @@ macro_rules! messages_pagination_params {
         let inner = $request.into_inner();
         let api_settings = &$service.api_settings;
 
-        let input_pagination = if api_settings.use_pagination_token {
-            if let Some(pagination_token) = &inner.page_token {
-                Some(MessagesPaginationLogic::from_token(pagination_token).map_err(map_db_error)?)
-            } else {
-                None
-            }
-        } else {
-            match (
-                inner.timestamp,
-                inner.message_id.clone(),
-                inner.bridge_id,
-                inner.direction.clone(),
-            ) {
-                (Some(timestamp), Some(message_id), Some(bridge_id), Some(direction)) => Some(
-                    MessagesPaginationLogic::new(
-                        timestamp as i64,
-                        message_id,
-                        bridge_id,
-                        PaginationDirection::from_string(&direction).map_err(map_db_error)?,
-                    )
-                    .map_err(map_db_error)?,
-                ),
-
-                (None, None, None, None) => None,
-
-                _ => {
-                    return Err(map_db_error(anyhow!(
-                        "Pagination error: timestamp, message_id, \
-                         bridge_id and direction must be provided together"
-                    )));
-                }
-            }
-        };
+        let input_pagination = inner
+            .page_token
+            .as_deref()
+            .map(MessagesPaginationLogic::from_token)
+            .transpose()
+            .map_err(|e| Status::invalid_argument(format!("invalid page_token: {e}")))?;
 
         let page_size = inner
             .page_size
@@ -90,48 +61,12 @@ macro_rules! transfers_pagination_params {
         let inner = $request.into_inner();
         let api_settings = &$service.api_settings;
 
-        let input_pagination = if api_settings.use_pagination_token {
-            if let Some(pagination_token) = &inner.page_token {
-                Some(TransfersPaginationLogic::from_token(pagination_token).map_err(map_db_error)?)
-            } else {
-                None
-            }
-        } else {
-            match (
-                inner.timestamp,
-                inner.message_id.clone(),
-                inner.bridge_id,
-                inner.index,
-                inner.direction.clone(),
-            ) {
-                (
-                    Some(timestamp),
-                    Some(message_id),
-                    Some(bridge_id),
-                    Some(index),
-                    Some(direction),
-                ) => Some(
-                    TransfersPaginationLogic::new(
-                        timestamp as i64,
-                        message_id,
-                        bridge_id,
-                        index,
-                        PaginationDirection::from_string(&direction).map_err(map_db_error)?,
-                    )
-                    .map_err(map_db_error)?,
-                ),
-
-                (None, None, None, None, None) => None,
-
-                _ => {
-                    return Err(map_db_error(anyhow!(
-                        "Pagination error: timestamp, message_id, \
-                         bridge_id, index and direction must be provided \
-                         together"
-                    )));
-                }
-            }
-        };
+        let input_pagination = inner
+            .page_token
+            .as_deref()
+            .map(TransfersPaginationLogic::from_token)
+            .transpose()
+            .map_err(|e| Status::invalid_argument(format!("invalid page_token: {e}")))?;
 
         let page_size = inner
             .page_size
@@ -470,12 +405,8 @@ impl InterchainService for InterchainServiceImpl {
 
         let response = GetMessagesResponse {
             items,
-            next_page_params: output_pagination
-                .next_marker
-                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
-            prev_page_params: output_pagination
-                .prev_marker
-                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
+            next_page_params: output_pagination.next_marker.map(|p| p.to_proto()),
+            prev_page_params: output_pagination.prev_marker.map(|p| p.to_proto()),
         };
         Ok(Response::new(response))
     }
@@ -550,12 +481,8 @@ impl InterchainService for InterchainServiceImpl {
 
         let response = GetMessagesResponse {
             items,
-            next_page_params: output_pagination
-                .next_marker
-                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
-            prev_page_params: output_pagination
-                .prev_marker
-                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
+            next_page_params: output_pagination.next_marker.map(|p| p.to_proto()),
+            prev_page_params: output_pagination.prev_marker.map(|p| p.to_proto()),
         };
         Ok(Response::new(response))
     }
@@ -598,12 +525,8 @@ impl InterchainService for InterchainServiceImpl {
 
         let response = GetMessagesResponse {
             items,
-            next_page_params: output_pagination
-                .next_marker
-                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
-            prev_page_params: output_pagination
-                .prev_marker
-                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
+            next_page_params: output_pagination.next_marker.map(|p| p.to_proto()),
+            prev_page_params: output_pagination.prev_marker.map(|p| p.to_proto()),
         };
         Ok(Response::new(response))
     }
@@ -642,12 +565,8 @@ impl InterchainService for InterchainServiceImpl {
 
         let response = GetTransfersResponse {
             items,
-            next_page_params: output_pagination
-                .next_marker
-                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
-            prev_page_params: output_pagination
-                .prev_marker
-                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
+            next_page_params: output_pagination.next_marker.map(|p| p.to_proto()),
+            prev_page_params: output_pagination.prev_marker.map(|p| p.to_proto()),
         };
         Ok(Response::new(response))
     }
@@ -690,12 +609,8 @@ impl InterchainService for InterchainServiceImpl {
 
         let response = GetTransfersResponse {
             items,
-            next_page_params: output_pagination
-                .next_marker
-                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
-            prev_page_params: output_pagination
-                .prev_marker
-                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
+            next_page_params: output_pagination.next_marker.map(|p| p.to_proto()),
+            prev_page_params: output_pagination.prev_marker.map(|p| p.to_proto()),
         };
         Ok(Response::new(response))
     }
@@ -738,12 +653,8 @@ impl InterchainService for InterchainServiceImpl {
 
         let response = GetTransfersResponse {
             items,
-            next_page_params: output_pagination
-                .next_marker
-                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
-            prev_page_params: output_pagination
-                .prev_marker
-                .map(|p| p.to_proto(self.api_settings.use_pagination_token)),
+            next_page_params: output_pagination.next_marker.map(|p| p.to_proto()),
+            prev_page_params: output_pagination.prev_marker.map(|p| p.to_proto()),
         };
         Ok(Response::new(response))
     }

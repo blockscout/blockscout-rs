@@ -207,34 +207,10 @@ paths:
           type: boolean
         - name: page_token
           description: |-
-            input pagination token - used by default
-            (packed version of the raw pagination parameters)
-          in: query
-          required: false
-          type: string
-        - name: timestamp
-          description: |-
-            Raw pagination parameters
-            (used when api.use_pagination_token=false)
-
-            Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: message_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-        - name: bridge_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: direction
-          description: Raw pagination field
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same filters and path scope as the request that produced
+            it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
@@ -344,34 +320,10 @@ paths:
           type: boolean
         - name: page_token
           description: |-
-            input pagination token - used by default
-            (packed version of the raw pagination parameters)
-          in: query
-          required: false
-          type: string
-        - name: timestamp
-          description: |-
-            Raw pagination parameters
-            (used when api.use_pagination_token=false)
-
-            Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: message_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-        - name: bridge_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: direction
-          description: Raw pagination field
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same filters and path scope as the request that produced
+            it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
@@ -453,34 +405,10 @@ paths:
           type: boolean
         - name: page_token
           description: |-
-            input pagination token - used by default
-            (packed version of the raw pagination parameters)
-          in: query
-          required: false
-          type: string
-        - name: timestamp
-          description: |-
-            Raw pagination parameters
-            (used when api.use_pagination_token=false)
-
-            Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: message_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-        - name: bridge_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: direction
-          description: Raw pagination field
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same filters and path scope as the request that produced
+            it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
@@ -563,40 +491,10 @@ paths:
           type: boolean
         - name: page_token
           description: |-
-            input pagination token - used by default
-            (packed version of the raw pagination parameters)
-          in: query
-          required: false
-          type: string
-        - name: timestamp
-          description: |-
-            Raw pagination parameters
-            (used when api.use_pagination_token=false)
-
-            Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: message_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-        - name: bridge_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: index
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: direction
-          description: Raw pagination field
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same filters and path scope as the request that produced
+            it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
@@ -678,40 +576,10 @@ paths:
           type: boolean
         - name: page_token
           description: |-
-            input pagination token - used by default
-            (packed version of the raw pagination parameters)
-          in: query
-          required: false
-          type: string
-        - name: timestamp
-          description: |-
-            Raw pagination parameters
-            (used when api.use_pagination_token=false)
-
-            Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: message_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-        - name: bridge_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: index
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: direction
-          description: Raw pagination field
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same filters and path scope as the request that produced
+            it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
@@ -793,40 +661,10 @@ paths:
           type: boolean
         - name: page_token
           description: |-
-            input pagination token - used by default
-            (packed version of the raw pagination parameters)
-          in: query
-          required: false
-          type: string
-        - name: timestamp
-          description: |-
-            Raw pagination parameters
-            (used when api.use_pagination_token=false)
-
-            Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: message_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-        - name: bridge_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: index
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: direction
-          description: Raw pagination field
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same filters and path scope as the request that produced
+            it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
@@ -927,33 +765,15 @@ paths:
             - ASC
           default: DESC
         - name: page_token
-          description: Token-based pagination
+          description: |-
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same `chain_id`, `counterparty_chain_ids`, `bridge_ids`,
+            `include_unindexed_chains`, `q`, `sort`, and `order` as the request that
+            produced it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
-        - name: direction
-          description: Flat keys matching `BridgedTokensListPagination` / `next_page_params` / `prev_page_params` (for `api.use_pagination_token=false`, pass that dict fields here).
-          in: query
-          required: false
-          type: string
-        - name: asset_id
-          in: query
-          required: false
-          type: string
-          format: int64
-        - name: name
-          in: query
-          required: false
-          type: string
-        - name: name_blank
-          in: query
-          required: false
-          type: boolean
-        - name: count
-          in: query
-          required: false
-          type: string
-          format: uint64
         - name: q
           description: Case-insensitive substring filter on the row display name (`stats_assets.name`).
           in: query
@@ -1143,25 +963,15 @@ paths:
             - ASC
           default: DESC
         - name: page_token
-          description: token-based pagination
+          description: |-
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same `bridge_ids`, `chain_ids`, `q`,
+            `include_unindexed_chains`, `sort`, and `order` as the request that
+            produced it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
-        - name: direction
-          description: raw pagination fields
-          in: query
-          required: false
-          type: string
-        - name: count
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: chain_id
-          in: query
-          required: false
-          type: string
-          format: int64
         - name: q
           description: Case-insensitive substring filter on chain name or textual chain id.
           in: query
@@ -1202,7 +1012,7 @@ paths:
             `include_unindexed_chains` keeps its global meaning: a chain is unindexed
             only when NO configured bridge indexes it; the flag controls visibility
             among the selected bridge candidates described above.
-            Page tokens and raw cursors are valid only with the same `bridge_ids`,
+            Page tokens are valid only with the same `bridge_ids`,
             `chain_ids`, `q`, `include_unindexed_chains`, `sort`, and `order` that
             produced them.
           in: query
@@ -1394,21 +1204,8 @@ definitions:
     properties:
       page_token:
         type: string
-      direction:
-        type: string
-      asset_id:
-        type: string
-        format: int64
-      name:
-        type: string
-      name_blank:
-        type: boolean
-      count:
-        type: string
-        format: uint64
     description: |-
-      Pagination for bridged tokens stats only (`page_token` or explicit cursor fields).
-      Does not reuse messages/transfers `Pagination` fields (timestamp, message_id, etc.).
+      Response cursor for `/stats/chain/{chain_id}/bridged-tokens`.
       Tokens are only valid with the same `counterparty_chain_ids`, `bridge_ids`,
       `q`, `sort`, and `order` as the request that produced them.
   v1BridgedTokensSort:
@@ -1695,23 +1492,10 @@ definitions:
     properties:
       page_token:
         type: string
-      timestamp:
-        type: string
-        format: uint64
-      message_id:
-        type: string
-      bridge_id:
-        type: integer
-        format: int64
-      index:
-        type: string
-        format: uint64
-      direction:
-        type: string
     description: |-
-      Cursor for list pagination (request input and next/prev response params).
-      Page tokens and raw cursor fields are only valid within the same complete
-      filter combination (`home_chain_id`, `counterparty_chain_ids`,
+      Cursor returned as `next_page_params` / `prev_page_params` by the messages
+      and transfers list endpoints. The page token is only valid within the same
+      complete filter combination (`home_chain_id`, `counterparty_chain_ids`,
       `src_chain_ids`, `dst_chain_ids`, `bridge_ids`, and any tx_hash/address
       scope). The cursor does not encode these filters and is not re-validated
       against them, so changing any filter mid-pagination is unsupported and
@@ -1918,15 +1702,7 @@ definitions:
     properties:
       page_token:
         type: string
-      direction:
-        type: string
-      count:
-        type: string
-        format: uint64
-      chain_id:
-        type: string
-        format: int64
-    description: 'Pagination for `/stats/chains` (composite cursor: direction, count, chain_id).'
+    description: Response cursor for `/stats/chains`.
   v1StatsChainsSort:
     type: string
     enum:

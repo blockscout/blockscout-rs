@@ -1162,17 +1162,26 @@ logging to see the old/new values of replacements.
 
 ---
 
-## Filter Params Must Not Reuse Pagination Cursor Field Names
+## Former Raw Cursor Fields Are `reserved` — Never Un-Reserve Them
 
-List requests (`GetMessagesRequest`, `GetTransfersRequest`, and their
-byTx/byAddress variants) already use `bridge_id` as a **raw pagination
-cursor** field (proto field 7), and `GetChainsStatsRequest` uses `chain_id`
-(field 8) the same way. A read *filter* with either name would collide with
-cursor semantics for `api.use_pagination_token=false` clients.
+Until 2026-11 the list requests (`GetMessages*Request`,
+`GetTransfers*Request`, `GetBridgedTokensRequest`, `GetChainsStatsRequest`)
+also accepted raw pagination cursor fields (`timestamp`, `message_id`,
+`bridge_id`, `index`, `direction`; `asset_id`, `name`, `name_blank`,
+`count`; `chain_id`) for `api.use_pagination_token=false`. The setting and
+the fields are gone; each request message reserves the old field numbers
+**and names**, so protoc rejects any attempt to reuse them.
 
-The unified read-filter vocabulary avoids both by construction:
-`home_chain_id`, `counterparty_chain_ids`, `bridge_ids`. Never add request
-fields named `bridge_id`/`chain_id` to these messages for non-cursor purposes.
+The names matter, not just the numbers: generated HTTP routes silently drop
+undeclared query params (next gotcha). An old raw-mode client URL such as
+`?bridge_id=2&direction=next` is ignored today (the client gets page 1). If a
+field named `bridge_id` or `chain_id` came back with *filter* semantics, that
+same URL would silently become a filter.
+
+Use the read-filter vocabulary instead: `home_chain_id`,
+`counterparty_chain_ids`, `bridge_ids`, `chain_ids`. The only cursor in either
+direction is `page_token`; the response cursor messages are `{ page_token }`
+only, with their removed fields reserved too.
 
 ---
 

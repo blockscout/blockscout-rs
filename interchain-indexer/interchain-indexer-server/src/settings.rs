@@ -261,7 +261,6 @@ mod tests {
 pub struct ApiSettings {
     pub default_page_size: u32,
     pub max_page_size: u32,
-    pub use_pagination_token: bool,
 }
 
 impl Default for ApiSettings {
@@ -269,7 +268,6 @@ impl Default for ApiSettings {
         Self {
             default_page_size: 50,
             max_page_size: 100,
-            use_pagination_token: true,
         }
     }
 }

@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use std::fmt;
-
 use anyhow::Result;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::NaiveDateTime;
@@ -9,16 +7,13 @@ use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
     BridgedTokensListPagination, Pagination, StatsChainsListPagination,
 };
 
-use crate::utils::{
-    bytes_to_naive_datetime, naive_datetime_to_bytes, naive_datetime_to_nanos,
-    nanos_to_naive_datetime, to_hex_prefixed, u64_from_hex_prefixed,
-};
+use crate::utils::{bytes_to_naive_datetime, naive_datetime_to_bytes};
 
 pub trait ListMarker: Sized {
     fn from_token(t: &str) -> anyhow::Result<Self>;
     fn token(&self) -> anyhow::Result<String>;
 
-    fn to_proto(&self, use_pagination_token: bool) -> Pagination;
+    fn to_proto(&self) -> Pagination;
 
     //fn from_proto(p: ) -> anyhow::Result<Self>;
 }
@@ -44,14 +39,6 @@ pub enum PaginationDirection {
 }
 
 impl PaginationDirection {
-    pub fn from_string(s: &str) -> Result<Self> {
-        match s {
-            "next" => Ok(PaginationDirection::Next),
-            "prev" => Ok(PaginationDirection::Prev),
-            _ => Err(anyhow::anyhow!("Invalid value for direction")),
-        }
-    }
-
     pub fn from_u8(v: u8) -> Result<Self> {
         match v {
             0 => Ok(PaginationDirection::Next),
@@ -68,46 +55,12 @@ impl PaginationDirection {
     }
 }
 
-impl fmt::Display for PaginationDirection {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            PaginationDirection::Next => "next",
-            PaginationDirection::Prev => "prev",
-        };
-        write!(f, "{}", s)
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MessagesPaginationLogic {
     pub timestamp: NaiveDateTime,
     pub message_id: u64,
     pub bridge_id: u32,
     pub direction: PaginationDirection,
-}
-
-impl MessagesPaginationLogic {
-    pub fn new(
-        timestamp_ns: i64,
-        message_id: String,
-        bridge_id: u32,
-        direction: PaginationDirection,
-    ) -> anyhow::Result<Self> {
-        Ok(Self {
-            timestamp: nanos_to_naive_datetime(timestamp_ns)?,
-            message_id: u64_from_hex_prefixed(&message_id)?,
-            bridge_id,
-            direction,
-        })
-    }
-
-    pub fn get_timestamp_ns(&self) -> anyhow::Result<i64> {
-        naive_datetime_to_nanos(self.timestamp)
-    }
-
-    pub fn get_message_id(&self) -> String {
-        to_hex_prefixed(&self.message_id.to_be_bytes())
-    }
 }
 
 impl ListMarker for MessagesPaginationLogic {
@@ -161,57 +114,20 @@ impl ListMarker for MessagesPaginationLogic {
     }
 
     // Create output pagination proto struct
-    fn to_proto(&self, use_pagination_token: bool) -> Pagination {
-        if use_pagination_token {
-            Pagination {
-                page_token: Some(self.token().unwrap()),
-                ..Default::default()
-            }
-        } else {
-            Pagination {
-                timestamp: Some(self.get_timestamp_ns().unwrap() as u64),
-                message_id: Some(self.get_message_id()),
-                bridge_id: Some(self.bridge_id),
-                direction: Some(self.direction.to_string()),
-                ..Default::default()
-            }
+    fn to_proto(&self) -> Pagination {
+        Pagination {
+            page_token: self.token().unwrap(),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TransfersPaginationLogic {
     pub timestamp: NaiveDateTime,
     pub message_id: u64,
     pub bridge_id: u32,
     pub index: u64,
     pub direction: PaginationDirection,
-}
-
-impl TransfersPaginationLogic {
-    pub fn new(
-        timestamp_ns: i64,
-        message_id: String,
-        bridge_id: u32,
-        transfer_id: u64,
-        direction: PaginationDirection,
-    ) -> anyhow::Result<Self> {
-        Ok(Self {
-            timestamp: nanos_to_naive_datetime(timestamp_ns)?,
-            message_id: u64_from_hex_prefixed(&message_id)?,
-            bridge_id,
-            index: transfer_id,
-            direction,
-        })
-    }
-
-    pub fn get_timestamp_ns(&self) -> anyhow::Result<i64> {
-        naive_datetime_to_nanos(self.timestamp)
-    }
-
-    pub fn get_message_id(&self) -> String {
-        to_hex_prefixed(&self.message_id.to_be_bytes())
-    }
 }
 
 impl ListMarker for TransfersPaginationLogic {
@@ -272,21 +188,9 @@ impl ListMarker for TransfersPaginationLogic {
     }
 
     // Create output pagination proto struct
-    fn to_proto(&self, use_pagination_token: bool) -> Pagination {
-        if use_pagination_token {
-            Pagination {
-                page_token: Some(self.token().unwrap()),
-                ..Default::default()
-            }
-        } else {
-            Pagination {
-                timestamp: Some(self.get_timestamp_ns().unwrap() as u64),
-                message_id: Some(self.get_message_id()),
-                bridge_id: Some(self.bridge_id),
-                index: Some(self.index),
-                direction: Some(self.direction.to_string()),
-                ..Default::default()
-            }
+    fn to_proto(&self) -> Pagination {
+        Pagination {
+            page_token: self.token().unwrap(),
         }
     }
 }
@@ -354,7 +258,7 @@ impl StatsSortOrder {
     }
 }
 
-/// Keyset cursor for `/stats/bridged-tokens` (packed into `page_token` or raw `BridgedTokensListPagination`).
+/// Keyset cursor for `/stats/bridged-tokens` (packed into `page_token`).
 /// Does not embed chain, sort, or order — callers must keep request parameters aligned with the query.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BridgedTokensPaginationLogic {
@@ -459,72 +363,17 @@ impl BridgedTokensPaginationLogic {
         Ok(URL_SAFE_NO_PAD.encode(out))
     }
 
-    /// Token mode: only `page_token` is set. Raw mode: `direction` + bridged-tokens cursor fields (see `stats.proto`).
-    pub fn to_list_pagination_proto(
-        &self,
-        use_pagination_token: bool,
-    ) -> BridgedTokensListPagination {
-        if use_pagination_token {
-            BridgedTokensListPagination {
-                page_token: Some(self.token().unwrap_or_default()),
-                ..Default::default()
-            }
-        } else {
-            BridgedTokensListPagination {
-                direction: Some(self.direction.to_string()),
-                asset_id: Some(self.stats_asset_id),
-                name_blank: Some(self.name_blank),
-                name: if self.name_blank {
-                    None
-                } else {
-                    Some(self.name_sort.clone())
-                },
-                count: Some(self.count as u64),
-                ..Default::default()
-            }
+    /// Response cursor: only `page_token`.
+    pub fn to_list_pagination_proto(&self) -> BridgedTokensListPagination {
+        BridgedTokensListPagination {
+            page_token: self.token().unwrap_or_default(),
         }
-    }
-
-    /// Raw continuation: same keys as [`BridgedTokensListPagination`] (request uses the same flattened names as that message).
-    pub fn try_from_list_pagination_proto(
-        lp: &BridgedTokensListPagination,
-    ) -> anyhow::Result<Option<Self>> {
-        let has_cursor = lp.asset_id.is_some()
-            || lp.name_blank.is_some()
-            || lp.count.is_some()
-            || lp.name.as_ref().is_some_and(|s| !s.is_empty());
-        if lp.direction.is_none() && !has_cursor {
-            return Ok(None);
-        }
-        let dir_str = lp.direction.as_deref().ok_or_else(|| {
-            anyhow::anyhow!("direction is required when continuing a page (raw mode)")
-        })?;
-        let direction = PaginationDirection::from_string(dir_str)?;
-        let stats_asset_id = lp
-            .asset_id
-            .ok_or_else(|| anyhow::anyhow!("asset_id is required when paginating (raw mode)"))?;
-        let name_blank = lp
-            .name_blank
-            .ok_or_else(|| anyhow::anyhow!("name_blank is required when paginating (raw mode)"))?;
-        let count = lp.count.map(|c| c as i64).unwrap_or(0);
-        let name_sort = if name_blank {
-            String::new()
-        } else {
-            lp.name.clone().unwrap_or_default()
-        };
-        Ok(Some(Self {
-            direction,
-            stats_asset_id,
-            name_blank,
-            name_sort,
-            count,
-        }))
     }
 }
 
 const SC_PAGE_TOKEN_VERSION: u8 = 1;
 
-/// Keyset cursor for `/stats/chains` (packed into `page_token` or raw `StatsChainsListPagination`).
+/// Keyset cursor for `/stats/chains` (packed into `page_token`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct StatsChainsPaginationLogic {
     pub direction: PaginationDirection,
@@ -560,48 +409,10 @@ impl StatsChainsPaginationLogic {
         Ok(URL_SAFE_NO_PAD.encode(out))
     }
 
-    pub fn to_list_pagination_proto(
-        &self,
-        use_pagination_token: bool,
-    ) -> StatsChainsListPagination {
-        if use_pagination_token {
-            StatsChainsListPagination {
-                page_token: Some(self.token().unwrap_or_default()),
-                ..Default::default()
-            }
-        } else {
-            StatsChainsListPagination {
-                direction: Some(self.direction.to_string()),
-                count: Some(self.count.max(0) as u64),
-                chain_id: Some(self.chain_id),
-                ..Default::default()
-            }
+    pub fn to_list_pagination_proto(&self) -> StatsChainsListPagination {
+        StatsChainsListPagination {
+            page_token: self.token().unwrap_or_default(),
         }
-    }
-
-    pub fn try_from_list_pagination_proto(
-        lp: &StatsChainsListPagination,
-    ) -> anyhow::Result<Option<Self>> {
-        let has_cursor = lp.count.is_some() || lp.chain_id.is_some();
-        if lp.direction.is_none() && !has_cursor {
-            return Ok(None);
-        }
-        let dir_str = lp.direction.as_deref().ok_or_else(|| {
-            anyhow::anyhow!("direction is required when continuing a page (raw mode)")
-        })?;
-        let direction = PaginationDirection::from_string(dir_str)?;
-        let count = lp
-            .count
-            .ok_or_else(|| anyhow::anyhow!("count is required when paginating (raw mode)"))?
-            as i64;
-        let chain_id = lp
-            .chain_id
-            .ok_or_else(|| anyhow::anyhow!("chain_id is required when paginating (raw mode)"))?;
-        Ok(Some(Self {
-            direction,
-            count,
-            chain_id,
-        }))
     }
 }
 
@@ -645,17 +456,90 @@ mod tests {
         );
     }
 
-    #[test]
-    fn stats_chains_raw_pagination_requires_count() {
-        let err = StatsChainsPaginationLogic::try_from_list_pagination_proto(
-            &StatsChainsListPagination {
-                direction: Some("next".to_string()),
-                chain_id: Some(42),
-                ..Default::default()
-            },
-        )
-        .expect_err("missing count must be rejected");
+    /// 2026-01-02T00:30:00Z.
+    fn golden_timestamp() -> NaiveDateTime {
+        chrono::DateTime::from_timestamp(1_767_313_800, 0)
+            .expect("valid timestamp")
+            .naive_utc()
+    }
 
-        assert!(err.to_string().contains("count is required"));
+    // Golden vectors pin the token byte formats: tokens already handed to
+    // clients must keep decoding after any refactor. Never edit a literal to
+    // match a changed encoder.
+
+    #[test]
+    fn messages_page_token_golden_vector() {
+        const TOKEN: &str = "GIbCiZelUAAAAAAAAAASNAAAAAEA";
+        let marker = MessagesPaginationLogic {
+            timestamp: golden_timestamp(),
+            message_id: 0x1234,
+            bridge_id: 1,
+            direction: PaginationDirection::Next,
+        };
+        assert_eq!(marker.token().unwrap(), TOKEN);
+        assert_eq!(MessagesPaginationLogic::from_token(TOKEN).unwrap(), marker);
+    }
+
+    #[test]
+    fn transfers_page_token_golden_vector() {
+        const TOKEN: &str = "GIbCiZelUAAAAAAAAAASNAAAAAEAAAAAAAAABwA";
+        let marker = TransfersPaginationLogic {
+            timestamp: golden_timestamp(),
+            message_id: 0x1234,
+            bridge_id: 1,
+            index: 7,
+            direction: PaginationDirection::Next,
+        };
+        assert_eq!(marker.token().unwrap(), TOKEN);
+        assert_eq!(TransfersPaginationLogic::from_token(TOKEN).unwrap(), marker);
+    }
+
+    #[test]
+    fn stats_chains_page_token_golden_vector() {
+        const TOKEN: &str = "AQAAAAAAAAAAMgAAAAAAAABk";
+        let marker = StatsChainsPaginationLogic {
+            direction: PaginationDirection::Next,
+            count: 50,
+            chain_id: 100,
+        };
+        assert_eq!(marker.token().unwrap(), TOKEN);
+        assert_eq!(
+            StatsChainsPaginationLogic::from_token(TOKEN).unwrap(),
+            marker
+        );
+    }
+
+    #[test]
+    fn bridged_tokens_page_token_golden_vector() {
+        const TOKEN: &str = "AQAAAAAAAAAAKgAABHVzZGMAAAAAAAAABw";
+        let marker = BridgedTokensPaginationLogic {
+            direction: PaginationDirection::Next,
+            stats_asset_id: 42,
+            name_blank: false,
+            name_sort: "usdc".to_string(),
+            count: 7,
+        };
+        assert_eq!(marker.token().unwrap(), TOKEN);
+        assert_eq!(
+            BridgedTokensPaginationLogic::from_token(TOKEN).unwrap(),
+            marker
+        );
+    }
+
+    #[test]
+    fn bridged_tokens_blank_name_page_token_golden_vector() {
+        const TOKEN: &str = "AQEAAAAAAAAAKgEAAAAAAAAAAAAA";
+        let marker = BridgedTokensPaginationLogic {
+            direction: PaginationDirection::Prev,
+            stats_asset_id: 42,
+            name_blank: true,
+            name_sort: String::new(),
+            count: 0,
+        };
+        assert_eq!(marker.token().unwrap(), TOKEN);
+        assert_eq!(
+            BridgedTokensPaginationLogic::from_token(TOKEN).unwrap(),
+            marker
+        );
     }
 }

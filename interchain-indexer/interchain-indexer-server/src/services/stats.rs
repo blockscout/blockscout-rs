@@ -55,26 +55,12 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         let order = StatsSortOrder::from_proto_order(inner.order)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let input_pagination = if self.api_settings.use_pagination_token {
-            if let Some(t) = inner.page_token.as_deref() {
-                let m = BridgedTokensPaginationLogic::from_token(t)
-                    .map_err(|e| Status::invalid_argument(e.to_string()))?;
-                Some(m)
-            } else {
-                None
-            }
-        } else {
-            let lp = BridgedTokensListPagination {
-                page_token: inner.page_token.clone(),
-                direction: inner.direction.clone(),
-                asset_id: inner.asset_id,
-                name: inner.name.clone(),
-                name_blank: inner.name_blank,
-                count: inner.count,
-            };
-            BridgedTokensPaginationLogic::try_from_list_pagination_proto(&lp)
-                .map_err(|e| Status::invalid_argument(e.to_string()))?
-        };
+        let input_pagination = inner
+            .page_token
+            .as_deref()
+            .map(BridgedTokensPaginationLogic::from_token)
+            .transpose()
+            .map_err(|e| Status::invalid_argument(format!("invalid page_token: {e}")))?;
 
         let page_size = inner
             .page_size
@@ -121,15 +107,10 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .await
             .map_err(map_stats_error)?;
 
-        let use_tok = self.api_settings.use_pagination_token;
         let response = GetBridgedTokensResponse {
             items: rows.into_iter().map(bridged_row_to_proto).collect(),
-            next_page_params: pagination
-                .next_marker
-                .map(|m| m.to_list_pagination_proto(use_tok)),
-            prev_page_params: pagination
-                .prev_marker
-                .map(|m| m.to_list_pagination_proto(use_tok)),
+            next_page_params: pagination.next_marker.map(|m| m.to_list_pagination_proto()),
+            prev_page_params: pagination.prev_marker.map(|m| m.to_list_pagination_proto()),
         };
         Ok(Response::new(response))
     }
@@ -145,24 +126,12 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         let order = StatsSortOrder::from_proto_order(inner.order)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let input_pagination = if self.api_settings.use_pagination_token {
-            if let Some(t) = inner.page_token.as_deref() {
-                let m = StatsChainsPaginationLogic::from_token(t)
-                    .map_err(|e| Status::invalid_argument(e.to_string()))?;
-                Some(m)
-            } else {
-                None
-            }
-        } else {
-            let lp = StatsChainsListPagination {
-                page_token: inner.page_token.clone(),
-                direction: inner.direction.clone(),
-                count: inner.count,
-                chain_id: inner.chain_id,
-            };
-            StatsChainsPaginationLogic::try_from_list_pagination_proto(&lp)
-                .map_err(|e| Status::invalid_argument(e.to_string()))?
-        };
+        let input_pagination = inner
+            .page_token
+            .as_deref()
+            .map(StatsChainsPaginationLogic::from_token)
+            .transpose()
+            .map_err(|e| Status::invalid_argument(format!("invalid page_token: {e}")))?;
 
         let page_size = inner
             .page_size
@@ -219,15 +188,10 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .await
             .map_err(map_stats_error)?;
 
-        let use_tok = self.api_settings.use_pagination_token;
         let response = GetChainsStatsResponse {
             items: rows.into_iter().map(stats_chain_row_to_proto).collect(),
-            next_page_params: pagination
-                .next_marker
-                .map(|m| m.to_list_pagination_proto(use_tok)),
-            prev_page_params: pagination
-                .prev_marker
-                .map(|m| m.to_list_pagination_proto(use_tok)),
+            next_page_params: pagination.next_marker.map(|m| m.to_list_pagination_proto()),
+            prev_page_params: pagination.prev_marker.map(|m| m.to_list_pagination_proto()),
         };
         Ok(Response::new(response))
     }
