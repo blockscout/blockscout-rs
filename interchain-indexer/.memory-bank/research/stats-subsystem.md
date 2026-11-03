@@ -29,9 +29,8 @@ represented as simple counters or line-chart series. In this repo, those read
 models are materialized into `stats_*` tables and exposed via dedicated stats
 endpoints.
 
-The subsystem is not uniform. It has three refresh modes:
+The subsystem is not uniform. It has two refresh modes:
 
-- direct request-time queries over canonical tables
 - incremental projection into `stats_*` tables on every flushed batch, with
   countability decided per row rather than by the flush being final
 - periodic full recomputation for per-chain user counters
@@ -55,14 +54,9 @@ union-find problem with eager merge, not by refusing on any two-different-
 assets conflict; the only remaining refusal is two different tokens landing on
 one chain inside the same asset.
 
-The stats API surface also mixes two output shapes:
-
-- simple request-time counters over canonical data
-- richer interchain-specific read models such as bridged-token tables,
-  directional message paths, and ranked chain stats
-
-That split is useful for understanding why this subsystem exists even though
-not every `/stats/*` endpoint is backed by a durable projected table.
+The stats API surface is interchain-specific read models only: bridged-token
+tables, directional message paths, and ranked chain stats. The former
+request-time counters were removed; see "Supported API Endpoints".
 
 For the deeper runtime semantics of incremental directional message projection,
 processed markers, and startup catch-up for `stats_messages*`, see
@@ -74,7 +68,6 @@ This subsystem is easy to misunderstand because `/stats/*` endpoints do not all
 behave the same way:
 
 - some endpoints are backed by precomputed tables
-- some are live scans over canonical tables
 - some refresh on every flushed batch, final or `Partial`
 - one refreshes on a background period
 - since ADR-004, "counted" no longer means "protocol-complete" — it can also
@@ -126,8 +119,6 @@ Operationally, this affects:
 ### API contracts
 
 - `InterchainStatisticsService`
-- `GetCommonStatistics*`
-- `GetDailyStatistics*`
 - `GetBridgedTokens*`
 - `GetChainsStats*`
 - `GetMessagePaths*`
@@ -189,27 +180,24 @@ User-provided product context:
 - the main reason this subsystem exists is that some interchain stats outputs
   do not fit a generic counters / line-chart model
 
-That product framing matches the code structure here: the repo contains both
-simple counter-style endpoints and richer interchain-specific read models that
-need dedicated tables, joins, pagination, and directional or asset-aware
-aggregation rules.
+That product framing matches the code structure here: the repo contains
+interchain-specific read models that need dedicated tables, joins,
+pagination, and directional or asset-aware aggregation rules.
 
 ## Supported API Endpoints
 
-**Status update, 2026-09-09.** `/api/v1/stats/common` and `/api/v1/stats/daily`
-are **deprecated and no longer query anything**. Their handlers still parse and
-validate the request and echo back `timestamp` / `date`, but the count fields
-are hard-zeroed, so every description of them below as a "request-time live DB
-read" is historical: it explains the queries that were removed and that the
-stats service in interchain mode now precomputes. `InterchainDatabase::
-get_total_counters` / `get_daily_counters` still exist, exercised only by the
-parity tests, and are to be deleted together with the two endpoints. Everything
-else in this note is current.
+**Removed (2026-11).** `/api/v1/stats/common` and `/api/v1/stats/daily`
+were deprecated on 2026-09-09 (hard-zeroed, no query) and are now
+removed from the HTTP routes, the gRPC service, `stats.proto`, and the
+DB layer (`get_total_counters` / `get_daily_counters` are gone). The
+stats service in interchain mode owns those numbers. Historically they
+counted canonical tables per request: totals with
+`init_timestamp < timestamp`, daily with `init_timestamp` in
+`[day_start, next_day_start)`, under the same chain/bridge filters as
+the list endpoints.
 
 Defined in `stats.proto` and HTTP-mapped in `api_config_http.yaml`:
 
-- `/api/v1/stats/common` (deprecated, returns zero counters)
-- `/api/v1/stats/daily` (deprecated, returns zero counters)
 - `/api/v1/stats/chain/{chain_id}/bridged-tokens`
 - `/api/v1/stats/chains`
 - `/api/v1/stats/chain/{chain_id}/messages-paths/sent`
@@ -231,7 +219,8 @@ The embedded stats subsystem uses four effective data-source patterns.
 
 ### 1. Canonical interchain tables
 
-Used directly by request-time queries:
+Source of the incremental projection and the periodic recomputation. No stats
+endpoint reads them at request time:
 
 - `crosschain_messages`
 - `crosschain_transfers`
@@ -393,8 +382,6 @@ transfer, not a conflict. See `gotchas.md` for the full read.
 
 | Endpoint | Data source | Freshness model | Refresh trigger | Configurable period |
 | --- | --- | --- | --- | --- |
-| `/api/v1/stats/common` | None — deprecated, counters hard-zeroed (was: direct query over `crosschain_messages` + `crosschain_transfers`) | No data | Never | No |
-| `/api/v1/stats/daily` | None — deprecated, counters hard-zeroed (was: direct query over `crosschain_messages` + `crosschain_transfers`) | No data | Never | No |
 | `/api/v1/stats/chain/{chain_id}/bridged-tokens` | `stats_asset_edges` + `stats_assets` + `stats_asset_tokens` + `tokens` | Pre-calculated, near-realtime | Projection during flushed batch (final or `Partial`) | Indirectly via buffer maintenance interval |
 | `/api/v1/stats/chain/{chain_id}/messages-paths/sent` | `stats_messages` or `stats_messages_days` | Pre-calculated, near-realtime | Projection during flushed batch | Indirectly via buffer maintenance interval |
 | `/api/v1/stats/chain/{chain_id}/messages-paths/received` | `stats_messages` or `stats_messages_days` | Pre-calculated, near-realtime | Projection during flushed batch | Indirectly via buffer maintenance interval |
@@ -481,58 +468,7 @@ chains of `SUM(per_bridge_count) - global_distinct_count`, per domain).
 pure `overlap_transition` decision that warns once when overlap appears and
 logs once when it recovers — see "Gauges / Metrics" below.
 
-### 5. Two endpoints used to bypass derived stats tables entirely
-
-`/stats/common` and `/stats/daily` queried canonical tables directly on every
-request. As of 2026-09-09 they are deprecated and query nothing at all.
-
-Code-derived fact:
-
-- they never read `stats_*` aggregate tables; they now read no table
-
-User/product context:
-
-- these were early POC-style endpoints, inefficient on large datasets, which is
-  why they were retired in favour of the stats service in interchain mode
-
 ## Endpoint-by-Endpoint Calculation Rules
-
-### `/stats/common` (deprecated)
-
-Current behavior:
-
-- parse and validate the request, including the chain/bridge filters, so a
-  malformed query still fails with `400`
-- echo `timestamp` back
-- answer `total_messages = 0`, `total_transfers = 0`
-- issue no query
-
-Historical calculation, still implemented in
-`InterchainDatabase::get_total_counters` and covered by the parity tests until
-that method is deleted with the endpoint:
-
-- source `crosschain_messages` and `crosschain_transfers` joined through messages
-- build a message filter using `init_timestamp < timestamp`
-- optionally apply source and destination chain filters at DB-layer helpers
-- count matching message rows, then matching transfer rows through the join
-
-### `/stats/daily` (deprecated)
-
-Current behavior:
-
-- parse and validate the request as `/stats/common` does
-- answer `date` = the UTC day of the request timestamp, computed in the handler
-- answer `daily_messages = 0`, `daily_transfers = 0`
-- issue no query
-
-Historical calculation, still implemented in
-`InterchainDatabase::get_daily_counters` and covered by the parity tests until
-that method is deleted with the endpoint:
-
-- source `crosschain_messages` and `crosschain_transfers`
-- derive the UTC day from the request timestamp
-- filter messages where `init_timestamp` falls within `[day_start, next_day_start)`
-- count distinct message primary keys, then total joined transfers
 
 ### `/stats/chain/{chain_id}/messages-paths/sent`
 
@@ -730,19 +666,6 @@ Zero-chain visibility is service-wide and configurable:
 
 ## Refresh and Recalculation Model
 
-### Live request-time queries
-
-Endpoints:
-
-- `/stats/common` (deprecated)
-- `/stats/daily` (deprecated)
-
-Behavior:
-
-- used to execute direct DB queries every request, with no separate
-  recalculation schedule
-- since deprecation they execute no query and answer zero counters
-
 ### Incremental near-realtime projection
 
 Endpoints:
@@ -873,9 +796,6 @@ Different source of candidate rows:
 - `/stats/chains` (both scopes) can lag until the next recomputation cycle;
   both `stats_chains` and `stats_chains_by_bridge` always lag by the same
   amount, since one worker rebuilds both in one transaction
-- `/stats/common` and `/stats/daily` used to be slow on large canonical tables
-  because they issued request-time scans / counts; deprecated and hard-zeroed,
-  they can no longer be a source of load — or of numbers
 - enabling startup backfill on a large database can noticeably increase startup
   time
 - token metadata for bridged tokens can remain partially blank until async
@@ -914,8 +834,6 @@ Useful operational signals:
 
 ## Edge Cases / Gotchas
 
-- `/stats/common` and `/stats/daily` belong to the same API service, but unlike
-  the richer stats endpoints they are not backed by derived stats tables
 - `unique_message_users_count` exists in both `stats_chains` and
   `stats_chains_by_bridge` but is not exposed by the current `/stats/chains`
   API response; it still participates in the `include_zero_chains = false`
@@ -955,7 +873,6 @@ filter):
 
 | Endpoint | chain / counterparty | bridge | unindexed-chain filter | notes |
 | --- | --- | --- | --- | --- |
-| `/stats/common`, `/stats/daily` | yes (canonical WHERE) | yes (canonical WHERE) | n/a (not eligibility-gated) | counted per request from canonical tables |
 | `GetMessages*`, `GetTransfers*` (canonical list endpoints) | yes | yes | **yes** (`include_unindexed_chains`, `ChainBridgeFilter.only_indexed_by_bridge`) | rows also carry `has_unindexed_chain` |
 | message-paths (sent/received) | yes | yes | **yes** (`push_indexed_pairs_predicate`) | bridge filter + collapse over `stats_messages` / `stats_messages_days` |
 | bridged-tokens | yes | yes | **yes** | bridge filter inside the `stats_asset_edges` aggregate, collapsed per asset |
@@ -977,10 +894,9 @@ filter):
   itself would make the *unfiltered* answer a sum, which would regress its
   exactness once bridges overlap.
 - **Chain/counterparty filters are cheap exactly where aggregation happens
-  at query time**: `/stats/common` and `/stats/daily` count canonical tables
-  per request (WHERE-clause change); bridged-tokens aggregates
-  `stats_asset_edges` per request, so a counterparty (src/dst set) and bridge
-  condition is read-side only; message-paths accepts `chain_id` +
+  at query time**: bridged-tokens aggregates `stats_asset_edges` per request,
+  so a counterparty (src/dst set) and bridge condition is read-side only;
+  message-paths accepts `chain_id` +
   `counterparty_chain_ids` + `bridge_ids`, composed through `AND`.
 - **The unindexed-chain filter is also cheap at query time.** It renders as an
   additional `OR`/`NOT IN` disjunct built from `IndexedChains`
@@ -1026,21 +942,11 @@ Update this note when:
 - `IndexedChains::may_observe` semantics, or its callers, change
 - asset union-find merge or decimals-conflict handling changes
 - startup backfill or periodic recompute behavior changes
-- `/stats/common` or `/stats/daily` are finally removed (they are already
-  deprecated and answer zeros; see the status note above)
 - the product boundary between embedded interchain stats and the standalone
   stats service changes
 
 ## Open Questions
 
-- **Resolved by the 2026-09-09 deprecation:** `/stats/common` and `/stats/daily`
-  are neither. They stopped being request-time canonical-table queries and were
-  not reprojected here either — the counts are hard-zeroed in the handlers, no
-  query is issued, and the stats service in interchain mode owns the real
-  numbers. What remains is a removal, not a design question: delete both
-  endpoints, their RPCs and messages, and
-  `InterchainDatabase::get_total_counters` / `get_daily_counters` in the next
-  API iteration.
 - Should `unique_message_users_count` be exposed through the public API?
 - If projection logic changes materially, what is the canonical full
   reprojection playbook beyond the current `stats_processed = 0` catch-up path?

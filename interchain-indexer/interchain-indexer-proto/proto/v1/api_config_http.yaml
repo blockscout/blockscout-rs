@@ -35,12 +35,6 @@ http:
 
     #################### Statistics ####################
 
-    - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetCommonStatistics
-      get: /api/v1/stats/common
-
-    - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetDailyStatistics
-      get: /api/v1/stats/daily
-
     - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetBridgedTokens
       get: /api/v1/stats/chain/{chain_id}/bridged-tokens
 
