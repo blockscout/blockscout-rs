@@ -12,22 +12,6 @@ enum SortOrder {
   ASC = 1;
 }
 
-// Response cursor for `/stats/chain/{chain_id}/bridged-tokens`.
-// Tokens are only valid with the same `counterparty_chain_ids`, `bridge_ids`,
-// `q`, `sort`, and `order` as the request that produced them.
-message BridgedTokensListPagination {
-  string page_token = 1;
-  reserved 2 to 6; // former raw cursor fields
-  reserved "direction", "asset_id", "name", "name_blank", "count";
-}
-
-// Response cursor for `/stats/chains`.
-message StatsChainsListPagination {
-  string page_token = 1;
-  reserved 2 to 4; // former raw cursor fields
-  reserved "direction", "count", "chain_id";
-}
-
 message GetMessagePathsRequest {
   // The home (focal) chain.
   int64 chain_id = 1;
@@ -192,8 +176,8 @@ message StatsBridgedTokenRow {
 
 message GetBridgedTokensResponse {
   repeated StatsBridgedTokenRow items = 1;
-  optional BridgedTokensListPagination next_page_params = 2;
-  optional BridgedTokensListPagination prev_page_params = 3;
+  optional Pagination next_page_params = 2;
+  optional Pagination prev_page_params = 3;
 }
 
 message StatsChainRow {
@@ -206,6 +190,6 @@ message StatsChainRow {
 
 message GetChainsStatsResponse {
   repeated StatsChainRow items = 1;
-  optional StatsChainsListPagination next_page_params = 2;
-  optional StatsChainsListPagination prev_page_params = 3;
+  optional Pagination next_page_params = 2;
+  optional Pagination prev_page_params = 3;
 }

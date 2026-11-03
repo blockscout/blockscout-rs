@@ -12,7 +12,7 @@ mod helpers;
 
 use blockscout_service_launcher::test_server;
 use interchain_indexer_entity::{chains, stats_chains, stats_chains_by_bridge};
-use interchain_indexer_logic::StatsChainsPaginationLogic;
+use interchain_indexer_logic::{StatsChainsPaginationLogic, pagination::ListMarker};
 use reqwest::StatusCode;
 use sea_orm::{ActiveValue::Set, EntityTrait};
 

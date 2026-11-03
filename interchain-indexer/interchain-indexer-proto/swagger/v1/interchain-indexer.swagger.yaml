@@ -1199,15 +1199,6 @@ definitions:
         type: integer
         format: int64
         description: Bridge id usable in bridge_ids filters.
-  v1BridgedTokensListPagination:
-    type: object
-    properties:
-      page_token:
-        type: string
-    description: |-
-      Response cursor for `/stats/chain/{chain_id}/bridged-tokens`.
-      Tokens are only valid with the same `counterparty_chain_ids`, `bridge_ids`,
-      `q`, `sort`, and `order` as the request that produced them.
   v1BridgedTokensSort:
     type: string
     enum:
@@ -1297,9 +1288,9 @@ definitions:
           type: object
           $ref: '#/definitions/v1StatsBridgedTokenRow'
       next_page_params:
-        $ref: '#/definitions/v1BridgedTokensListPagination'
+        $ref: '#/definitions/v1Pagination'
       prev_page_params:
-        $ref: '#/definitions/v1BridgedTokensListPagination'
+        $ref: '#/definitions/v1Pagination'
   v1GetBridgesResponse:
     type: object
     properties:
@@ -1325,9 +1316,9 @@ definitions:
           type: object
           $ref: '#/definitions/v1StatsChainRow'
       next_page_params:
-        $ref: '#/definitions/v1StatsChainsListPagination'
+        $ref: '#/definitions/v1Pagination'
       prev_page_params:
-        $ref: '#/definitions/v1StatsChainsListPagination'
+        $ref: '#/definitions/v1Pagination'
   v1GetIndexingProgressResponse:
     type: object
     properties:
@@ -1493,13 +1484,15 @@ definitions:
       page_token:
         type: string
     description: |-
-      Cursor returned as `next_page_params` / `prev_page_params` by the messages
-      and transfers list endpoints. The page token is only valid within the same
-      complete filter combination (`home_chain_id`, `counterparty_chain_ids`,
-      `src_chain_ids`, `dst_chain_ids`, `bridge_ids`, and any tx_hash/address
-      scope). The cursor does not encode these filters and is not re-validated
-      against them, so changing any filter mid-pagination is unsupported and
-      yields undefined results; callers must restart pagination when filters change.
+      Opaque keyset cursor returned as `next_page_params` / `prev_page_params` by
+      every list endpoint. Send `page_token` back unchanged. A token is valid only
+      with the same filters (`home_chain_id`, `counterparty_chain_ids`,
+      `src_chain_ids`, `dst_chain_ids`, `bridge_ids`, `chain_ids`,
+      `include_unindexed_chains`), path scope (tx_hash, address, chain_id) and, for
+      stats lists, `q`, `sort` and `order` as the request that produced it. The
+      cursor does not encode them and is not re-validated against them, so
+      changing any of them mid-pagination is unsupported and yields undefined
+      results; callers must restart pagination when they change.
   v1RescanBlockRange:
     type: object
     properties:
@@ -1697,12 +1690,6 @@ definitions:
       unique_transfer_users_count:
         type: string
         format: uint64
-  v1StatsChainsListPagination:
-    type: object
-    properties:
-      page_token:
-        type: string
-    description: Response cursor for `/stats/chains`.
   v1StatsChainsSort:
     type: string
     enum:

@@ -3,19 +3,12 @@
 use anyhow::Result;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::NaiveDateTime;
-use interchain_indexer_proto::blockscout::interchain_indexer::v1::{
-    BridgedTokensListPagination, Pagination, StatsChainsListPagination,
-};
 
 use crate::utils::{bytes_to_naive_datetime, naive_datetime_to_bytes};
 
 pub trait ListMarker: Sized {
     fn from_token(t: &str) -> anyhow::Result<Self>;
     fn token(&self) -> anyhow::Result<String>;
-
-    fn to_proto(&self) -> Pagination;
-
-    //fn from_proto(p: ) -> anyhow::Result<Self>;
 }
 
 pub struct OutputPagination<P> {
@@ -112,13 +105,6 @@ impl ListMarker for MessagesPaginationLogic {
 
         Ok(URL_SAFE_NO_PAD.encode(buf))
     }
-
-    // Create output pagination proto struct
-    fn to_proto(&self) -> Pagination {
-        Pagination {
-            page_token: self.token().unwrap(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -185,13 +171,6 @@ impl ListMarker for TransfersPaginationLogic {
         buf[28] = self.direction.to_u8();
 
         Ok(URL_SAFE_NO_PAD.encode(buf))
-    }
-
-    // Create output pagination proto struct
-    fn to_proto(&self) -> Pagination {
-        Pagination {
-            page_token: self.token().unwrap(),
-        }
     }
 }
 
@@ -275,8 +254,8 @@ pub struct BridgedTokensPaginationLogic {
 const BT_PAGE_TOKEN_VERSION: u8 = 1;
 const BT_MAX_NAME_CURSOR_BYTES: usize = 512;
 
-impl BridgedTokensPaginationLogic {
-    pub fn from_token(token: &str) -> anyhow::Result<Self> {
+impl ListMarker for BridgedTokensPaginationLogic {
+    fn from_token(token: &str) -> anyhow::Result<Self> {
         let decoded = URL_SAFE_NO_PAD
             .decode(token)
             .map_err(|e| anyhow::anyhow!("Invalid base64 token: {e}"))?;
@@ -347,7 +326,7 @@ impl BridgedTokensPaginationLogic {
         })
     }
 
-    pub fn token(&self) -> anyhow::Result<String> {
+    fn token(&self) -> anyhow::Result<String> {
         let name_bytes = self.name_sort.as_bytes();
         if name_bytes.len() > BT_MAX_NAME_CURSOR_BYTES {
             return Err(anyhow::anyhow!("name cursor exceeds max length"));
@@ -362,13 +341,6 @@ impl BridgedTokensPaginationLogic {
         out.extend_from_slice(&self.count.to_be_bytes());
         Ok(URL_SAFE_NO_PAD.encode(out))
     }
-
-    /// Response cursor: only `page_token`.
-    pub fn to_list_pagination_proto(&self) -> BridgedTokensListPagination {
-        BridgedTokensListPagination {
-            page_token: self.token().unwrap_or_default(),
-        }
-    }
 }
 
 const SC_PAGE_TOKEN_VERSION: u8 = 1;
@@ -381,8 +353,8 @@ pub struct StatsChainsPaginationLogic {
     pub chain_id: i64,
 }
 
-impl StatsChainsPaginationLogic {
-    pub fn from_token(token: &str) -> anyhow::Result<Self> {
+impl ListMarker for StatsChainsPaginationLogic {
+    fn from_token(token: &str) -> anyhow::Result<Self> {
         let decoded = URL_SAFE_NO_PAD
             .decode(token)
             .map_err(|e| anyhow::anyhow!("Invalid base64 token: {e}"))?;
@@ -400,19 +372,13 @@ impl StatsChainsPaginationLogic {
         })
     }
 
-    pub fn token(&self) -> anyhow::Result<String> {
+    fn token(&self) -> anyhow::Result<String> {
         let mut out = [0u8; 18];
         out[0] = SC_PAGE_TOKEN_VERSION;
         out[1] = self.direction.to_u8();
         out[2..10].copy_from_slice(&self.count.to_be_bytes());
         out[10..18].copy_from_slice(&self.chain_id.to_be_bytes());
         Ok(URL_SAFE_NO_PAD.encode(out))
-    }
-
-    pub fn to_list_pagination_proto(&self) -> StatsChainsListPagination {
-        StatsChainsListPagination {
-            page_token: self.token().unwrap_or_default(),
-        }
     }
 }
 

@@ -52,13 +52,15 @@ service InterchainService {
 }
 
 
-// Cursor returned as `next_page_params` / `prev_page_params` by the messages
-// and transfers list endpoints. The page token is only valid within the same
-// complete filter combination (`home_chain_id`, `counterparty_chain_ids`,
-// `src_chain_ids`, `dst_chain_ids`, `bridge_ids`, and any tx_hash/address
-// scope). The cursor does not encode these filters and is not re-validated
-// against them, so changing any filter mid-pagination is unsupported and
-// yields undefined results; callers must restart pagination when filters change.
+// Opaque keyset cursor returned as `next_page_params` / `prev_page_params` by
+// every list endpoint. Send `page_token` back unchanged. A token is valid only
+// with the same filters (`home_chain_id`, `counterparty_chain_ids`,
+// `src_chain_ids`, `dst_chain_ids`, `bridge_ids`, `chain_ids`,
+// `include_unindexed_chains`), path scope (tx_hash, address, chain_id) and, for
+// stats lists, `q`, `sort` and `order` as the request that produced it. The
+// cursor does not encode them and is not re-validated against them, so
+// changing any of them mid-pagination is unsupported and yields undefined
+// results; callers must restart pagination when they change.
 message Pagination {
   string page_token = 1;
   reserved 2 to 6; // former raw cursor fields

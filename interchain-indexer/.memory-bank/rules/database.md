@@ -132,11 +132,22 @@ impl From<Config> for entity::ActiveModel {
 
 ## Pagination
 
-- Use `ListMarker` trait for cursor-based pagination
-- Token format: `BASE64(direction | timestamp | id | bridge_id)`
-- Never expose internal IDs; use opaque tokens
-- Cursor marker fields must exactly match the SQL `ORDER BY` + tie-breaker fields
-- Marker decode/encode order must be stable and deterministic across pages
+- Every list cursor is a marker type implementing `ListMarker`
+  (`from_token` / `token`, `interchain-indexer-logic/src/pagination.rs`).
+- Tokens are base64url (no padding) over a fixed per-marker binary layout,
+  pinned by the golden-vector tests in `pagination.rs`. Changing a layout
+  invalidates every token already handed to clients — treat it as an API
+  change, and never edit a golden literal to match a changed encoder.
+- Handlers parse request cursors only through `list_page_params!` /
+  `parse_page_token` (malformed token → `InvalidArgument`) and emit only
+  through `page_params` (a marker that fails to encode is logged and that side
+  omitted; the page is still served). Never hand-roll either side.
+- The response cursor is the shared proto `Pagination { string page_token = 1 }`.
+  Never add raw cursor fields to requests or responses (see `gotchas.md`,
+  "Former Raw Cursor Fields Are `reserved`").
+- Never expose internal IDs; use opaque tokens.
+- Cursor marker fields must exactly match the SQL `ORDER BY` + tie-breaker fields.
+- Marker decode/encode order must be stable and deterministic across pages.
 
 ## Protocol Metadata
 

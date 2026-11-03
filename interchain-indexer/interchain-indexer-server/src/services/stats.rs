@@ -3,7 +3,7 @@
 use super::{
     chain_info_proto::chain_model_to_proto,
     interchain_service::token_type_to_proto,
-    utils::{non_empty, parse_bridge_ids_csv, parse_chain_ids_csv},
+    utils::{list_page_params, non_empty, page_params, parse_bridge_ids_csv, parse_chain_ids_csv},
 };
 use crate::{
     // `TokenType` is nested in `TokenInfo` so its value names do not squat the
@@ -49,24 +49,13 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         &self,
         request: Request<GetBridgedTokensRequest>,
     ) -> Result<Response<GetBridgedTokensResponse>, Status> {
-        let inner = request.into_inner();
+        let (inner, input_pagination, page_size, last_page) =
+            list_page_params!(self, request, BridgedTokensPaginationLogic)?;
         let include_unindexed = inner.include_unindexed_chains.unwrap_or(false);
         let sort = BridgedTokensSortField::from_proto_sort(inner.sort);
         let order = StatsSortOrder::from_proto_order(inner.order)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let input_pagination = inner
-            .page_token
-            .as_deref()
-            .map(BridgedTokensPaginationLogic::from_token)
-            .transpose()
-            .map_err(|e| Status::invalid_argument(format!("invalid page_token: {e}")))?;
-
-        let page_size = inner
-            .page_size
-            .unwrap_or(self.api_settings.default_page_size)
-            .clamp(1, self.api_settings.max_page_size) as usize;
-        let last_page = inner.last_page.unwrap_or(false);
         let q = normalize_stats_q(inner.q.as_deref());
         let counterparty = non_empty(parse_chain_ids_csv(
             "counterparty_chain_ids",
@@ -107,10 +96,11 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .await
             .map_err(map_stats_error)?;
 
+        let (next_page_params, prev_page_params) = page_params(pagination);
         let response = GetBridgedTokensResponse {
             items: rows.into_iter().map(bridged_row_to_proto).collect(),
-            next_page_params: pagination.next_marker.map(|m| m.to_list_pagination_proto()),
-            prev_page_params: pagination.prev_marker.map(|m| m.to_list_pagination_proto()),
+            next_page_params,
+            prev_page_params,
         };
         Ok(Response::new(response))
     }
@@ -119,25 +109,14 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         &self,
         request: Request<GetChainsStatsRequest>,
     ) -> Result<Response<GetChainsStatsResponse>, Status> {
-        let inner = request.into_inner();
+        let (inner, input_pagination, page_size, last_page) =
+            list_page_params!(self, request, StatsChainsPaginationLogic)?;
         let include_unindexed = inner.include_unindexed_chains.unwrap_or(false);
         let chain_ids = parse_chain_ids_csv("chain_ids", inner.chain_ids.as_deref())?;
         let sort = StatsChainsSortField::from_proto_sort(inner.sort);
         let order = StatsSortOrder::from_proto_order(inner.order)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
-        let input_pagination = inner
-            .page_token
-            .as_deref()
-            .map(StatsChainsPaginationLogic::from_token)
-            .transpose()
-            .map_err(|e| Status::invalid_argument(format!("invalid page_token: {e}")))?;
-
-        let page_size = inner
-            .page_size
-            .unwrap_or(self.api_settings.default_page_size)
-            .clamp(1, self.api_settings.max_page_size) as usize;
-        let last_page = inner.last_page.unwrap_or(false);
         let q = normalize_stats_q(inner.q.as_deref());
 
         // `None` = no restriction (opt-in, or an `AllIndexed` configuration).
@@ -188,10 +167,11 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
             .await
             .map_err(map_stats_error)?;
 
+        let (next_page_params, prev_page_params) = page_params(pagination);
         let response = GetChainsStatsResponse {
             items: rows.into_iter().map(stats_chain_row_to_proto).collect(),
-            next_page_params: pagination.next_marker.map(|m| m.to_list_pagination_proto()),
-            prev_page_params: pagination.prev_marker.map(|m| m.to_list_pagination_proto()),
+            next_page_params,
+            prev_page_params,
         };
         Ok(Response::new(response))
     }

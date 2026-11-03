@@ -3132,3 +3132,29 @@ icon and Blockscout misses erase ERC-20 icons: re-apply manual icons from
 `write_api_audit_log` (`runbooks/write-api.md`). The cache protocol that makes
 the new value visible without a restart is described in "Token Cache Writers W1,
 W3 And Admin Invalidation Share The Per-Key Mutex".
+
+## A Message Shared Across `.proto` Files Needs A `build.rs` Dedupe Entry
+
+actix-prost (0.3.1) emits a `<Message>Internal` struct plus its `TryConvert`
+impl once per `.proto` file for every message tree that nests `<Message>`. A
+message used from two files therefore gets two identical definitions in the
+one generated module `blockscout.interchain_indexer.v1.rs`, and the proto crate
+fails with `E0428 <Message>Internal defined multiple times` and conflicting
+`Clone`/`Debug` impls.
+
+`interchain-indexer-proto/build.rs::dedupe_actix_duplicate_internal_structs`
+patches the generated file after codegen. It removes the second block for each
+listed `(duplicated, end_before)` pair: today `ChainInfo` (up to
+`MessagePathRowInternal`) and `Pagination`, which is shared by all list
+responses (up to `GetBridgedTokensResponseInternal`). The patch keys off
+literal generated text and generated struct order:
+
+- a new cross-file use of a message needs a new pair;
+- a third file nesting the same message leaves a third copy, because only the
+  second one is stripped;
+- if the `end_before` struct moves, the patch is skipped.
+
+Every one of these surfaces as a compile error, never as a silent
+miscompile. Check this function first whenever a proto edit breaks the proto
+crate with duplicate `*Internal` definitions — for example cluster protos
+reusing existing response messages.

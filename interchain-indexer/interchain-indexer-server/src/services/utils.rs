@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
+use crate::proto::Pagination;
 use chrono::NaiveDateTime;
-use interchain_indexer_logic::{ChainBridgeFilter, IndexedChains, protocol_metadata};
+use interchain_indexer_logic::{
+    ChainBridgeFilter, IndexedChains,
+    pagination::{ListMarker, OutputPagination},
+    protocol_metadata,
+};
 use sea_orm::JsonValue;
 use tonic::Status;
 
@@ -131,13 +136,167 @@ pub fn checked_bridge_id(bridge_id: Option<u32>) -> Result<Option<i32>, Status> 
         .map_err(|_| Status::invalid_argument("bridge_id exceeds the supported int32 range"))
 }
 
+/// Decodes an optional request `page_token`. A malformed token is client
+/// input (`InvalidArgument`), never an internal error, and is not logged.
+pub fn parse_page_token<M: ListMarker>(page_token: Option<&str>) -> Result<Option<M>, Status> {
+    page_token
+        .map(M::from_token)
+        .transpose()
+        .map_err(|e| Status::invalid_argument(format!("invalid page_token: {e}")))
+}
+
+/// Renders both sides of an `OutputPagination` into the shared response
+/// cursor. Infallible by design: a side whose marker cannot be encoded is
+/// logged here (the handling point) and omitted, so the page itself is still
+/// served. Reachable in practice through a bridged-tokens asset whose name
+/// exceeds the 512-byte cursor cap; omitting the side keeps the page visible
+/// (the items beyond it stay unreachable, as before).
+pub fn page_params<M: ListMarker + std::fmt::Debug>(
+    pagination: OutputPagination<M>,
+) -> (Option<Pagination>, Option<Pagination>) {
+    (
+        encode_page_token(pagination.next_marker),
+        encode_page_token(pagination.prev_marker),
+    )
+}
+
+fn encode_page_token<M: ListMarker + std::fmt::Debug>(marker: Option<M>) -> Option<Pagination> {
+    let marker = marker?;
+    marker
+        .token()
+        .inspect_err(|e| tracing::error!(err = ?e, marker = ?marker, "failed to encode page token"))
+        .ok()
+        .map(|page_token| Pagination { page_token })
+}
+
+/// Parses the pagination fields every list request shares by name
+/// (`page_token`, `page_size`, `last_page`) and returns
+/// `(inner, input_pagination, page_size, is_last_page)`. A macro, not a fn:
+/// the request types share these field names but no trait.
+macro_rules! list_page_params {
+    ($service:expr, $request:expr, $marker:ty) => {{
+        let inner = $request.into_inner();
+        let input_pagination =
+            $crate::services::utils::parse_page_token::<$marker>(inner.page_token.as_deref())?;
+        let page_size = inner
+            .page_size
+            .unwrap_or($service.api_settings.default_page_size)
+            .clamp(1, $service.api_settings.max_page_size) as usize;
+        let is_last_page = inner.last_page.unwrap_or(false);
+        Ok::<_, tonic::Status>((inner, input_pagination, page_size, is_last_page))
+    }};
+}
+pub(crate) use list_page_params;
+
 #[cfg(test)]
 mod tests {
     use super::{
         build_chain_bridge_filter, checked_bridge_id, db_datetime_to_string, non_empty,
-        parse_bridge_ids_csv, parse_chain_ids_csv,
+        page_params, parse_bridge_ids_csv, parse_chain_ids_csv, parse_page_token,
     };
-    use interchain_indexer_logic::IndexedChains;
+    use interchain_indexer_logic::{
+        IndexedChains,
+        pagination::{
+            BridgedTokensPaginationLogic, ListMarker, MessagesPaginationLogic, OutputPagination,
+            PaginationDirection, StatsChainsPaginationLogic,
+        },
+    };
+
+    fn messages_marker(direction: PaginationDirection, message_id: u64) -> MessagesPaginationLogic {
+        MessagesPaginationLogic {
+            timestamp: chrono::DateTime::from_timestamp(1_767_313_800, 0)
+                .expect("valid timestamp")
+                .naive_utc(),
+            message_id,
+            bridge_id: 1,
+            direction,
+        }
+    }
+
+    fn bridged_tokens_marker(name_sort: String) -> BridgedTokensPaginationLogic {
+        BridgedTokensPaginationLogic {
+            direction: PaginationDirection::Next,
+            stats_asset_id: 42,
+            name_blank: false,
+            name_sort,
+            count: 7,
+        }
+    }
+
+    #[test]
+    fn parse_page_token_absent_is_none() {
+        assert_eq!(
+            parse_page_token::<MessagesPaginationLogic>(None).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_page_token_rejects_malformed_as_invalid_argument() {
+        let err = parse_page_token::<MessagesPaginationLogic>(Some("not*a*token"))
+            .expect_err("must reject malformed token");
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("invalid page_token"));
+    }
+
+    #[test]
+    fn parse_page_token_decodes_valid_token() {
+        let parsed =
+            parse_page_token::<StatsChainsPaginationLogic>(Some("AQAAAAAAAAAAMgAAAAAAAABk"))
+                .unwrap();
+        assert_eq!(
+            parsed,
+            Some(StatsChainsPaginationLogic {
+                direction: PaginationDirection::Next,
+                count: 50,
+                chain_id: 100,
+            })
+        );
+    }
+
+    #[test]
+    fn page_params_none_sides_stay_none() {
+        let (next, prev) = page_params::<StatsChainsPaginationLogic>(OutputPagination::default());
+        assert_eq!(next, None);
+        assert_eq!(prev, None);
+    }
+
+    #[test]
+    fn page_params_encodes_both_sides() {
+        let next_marker = messages_marker(PaginationDirection::Next, 0x1234);
+        let prev_marker = messages_marker(PaginationDirection::Prev, 0x1200);
+        let (next, prev) = page_params(OutputPagination {
+            next_marker: Some(next_marker),
+            prev_marker: Some(prev_marker),
+        });
+        assert_eq!(
+            next.expect("next side is encoded").page_token,
+            next_marker.token().unwrap()
+        );
+        assert_eq!(
+            prev.expect("prev side is encoded").page_token,
+            prev_marker.token().unwrap()
+        );
+    }
+
+    #[test]
+    fn page_params_omits_only_the_side_that_fails_to_encode() {
+        // 513 bytes is over the 512-byte bridged-tokens name cursor cap, so
+        // `token()` errs for this marker.
+        let next_marker = bridged_tokens_marker("x".repeat(513));
+        let prev_marker = bridged_tokens_marker("usdc".to_string());
+        assert!(next_marker.token().is_err());
+
+        let (next, prev) = page_params(OutputPagination {
+            next_marker: Some(next_marker),
+            prev_marker: Some(prev_marker.clone()),
+        });
+        assert_eq!(next, None);
+        assert_eq!(
+            prev.expect("prev side is still encoded").page_token,
+            prev_marker.token().unwrap()
+        );
+    }
 
     /// `db_datetime_to_string` delegates to
     /// `interchain_indexer_logic::protocol_metadata::rfc3339_millis_z`, so the

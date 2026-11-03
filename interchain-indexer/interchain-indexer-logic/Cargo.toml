@@ -26,7 +26,6 @@ hex = { workspace = true }
 hex-literal = { workspace = true }
 interchain-indexer-entity = { workspace = true }
 interchain-indexer-filters = { workspace = true }
-interchain-indexer-proto = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 moka = { workspace = true }

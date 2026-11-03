@@ -17,7 +17,7 @@ use interchain_indexer_entity::{
 use interchain_indexer_logic::{
     ChainInfoService, CrosschainMessageLookup, IndexedChains, InterchainDatabase, JoinedTransfer,
     TokenInfoService,
-    pagination::{ListMarker, MessagesPaginationLogic, TransfersPaginationLogic},
+    pagination::{MessagesPaginationLogic, TransfersPaginationLogic},
     protocol_metadata::ProtocolMetadata,
     utils::{hex_string_opt, to_hex_prefixed, vec_from_hex_prefixed},
 };
@@ -28,56 +28,10 @@ use super::{
     bridge_proto::bridge_model_to_proto,
     chain_info_proto::chain_model_to_proto,
     utils::{
-        build_chain_bridge_filter, checked_bridge_id, db_datetime_to_string, map_db_error,
-        parse_bridge_ids_csv, parse_chain_ids_csv,
+        build_chain_bridge_filter, checked_bridge_id, db_datetime_to_string, list_page_params,
+        map_db_error, page_params, parse_bridge_ids_csv, parse_chain_ids_csv,
     },
 };
-
-macro_rules! messages_pagination_params {
-    ($service:expr, $request:expr) => {{
-        let inner = $request.into_inner();
-        let api_settings = &$service.api_settings;
-
-        let input_pagination = inner
-            .page_token
-            .as_deref()
-            .map(MessagesPaginationLogic::from_token)
-            .transpose()
-            .map_err(|e| Status::invalid_argument(format!("invalid page_token: {e}")))?;
-
-        let page_size = inner
-            .page_size
-            .unwrap_or(api_settings.default_page_size)
-            .clamp(1, api_settings.max_page_size) as usize;
-
-        let is_last_page = inner.last_page.unwrap_or(false);
-
-        Ok::<_, tonic::Status>((inner, input_pagination, page_size, is_last_page))
-    }};
-}
-
-macro_rules! transfers_pagination_params {
-    ($service:expr, $request:expr) => {{
-        let inner = $request.into_inner();
-        let api_settings = &$service.api_settings;
-
-        let input_pagination = inner
-            .page_token
-            .as_deref()
-            .map(TransfersPaginationLogic::from_token)
-            .transpose()
-            .map_err(|e| Status::invalid_argument(format!("invalid page_token: {e}")))?;
-
-        let page_size = inner
-            .page_size
-            .unwrap_or(api_settings.default_page_size)
-            .clamp(1, api_settings.max_page_size) as usize;
-
-        let is_last_page = inner.last_page.unwrap_or(false);
-
-        Ok::<_, tonic::Status>((inner, input_pagination, page_size, is_last_page))
-    }};
-}
 
 pub struct InterchainServiceImpl {
     pub db: Arc<InterchainDatabase>,
@@ -376,7 +330,7 @@ impl InterchainService for InterchainServiceImpl {
         request: Request<GetMessagesRequest>,
     ) -> Result<Response<GetMessagesResponse>, Status> {
         let (inner, input_pagination, page_size, is_last_page) =
-            messages_pagination_params!(self, request)?;
+            list_page_params!(self, request, MessagesPaginationLogic)?;
 
         let filter = build_chain_bridge_filter(
             inner.home_chain_id,
@@ -403,10 +357,11 @@ impl InterchainService for InterchainServiceImpl {
 
         let items = self.messages_logic_to_proto(items).await?;
 
+        let (next_page_params, prev_page_params) = page_params(output_pagination);
         let response = GetMessagesResponse {
             items,
-            next_page_params: output_pagination.next_marker.map(|p| p.to_proto()),
-            prev_page_params: output_pagination.prev_marker.map(|p| p.to_proto()),
+            next_page_params,
+            prev_page_params,
         };
         Ok(Response::new(response))
     }
@@ -448,7 +403,7 @@ impl InterchainService for InterchainServiceImpl {
         request: Request<GetMessagesByTransactionRequest>,
     ) -> Result<Response<GetMessagesResponse>, Status> {
         let (inner, input_pagination, page_size, is_last_page) =
-            messages_pagination_params!(self, request)?;
+            list_page_params!(self, request, MessagesPaginationLogic)?;
 
         let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(|_| {
             Status::invalid_argument("invalid tx_hash: expected a 0x-prefixed hex string")
@@ -479,10 +434,11 @@ impl InterchainService for InterchainServiceImpl {
 
         let items = self.messages_logic_to_proto(items).await?;
 
+        let (next_page_params, prev_page_params) = page_params(output_pagination);
         let response = GetMessagesResponse {
             items,
-            next_page_params: output_pagination.next_marker.map(|p| p.to_proto()),
-            prev_page_params: output_pagination.prev_marker.map(|p| p.to_proto()),
+            next_page_params,
+            prev_page_params,
         };
         Ok(Response::new(response))
     }
@@ -492,7 +448,7 @@ impl InterchainService for InterchainServiceImpl {
         request: Request<GetMessagesByAddressRequest>,
     ) -> Result<Response<GetMessagesResponse>, Status> {
         let (inner, input_pagination, page_size, is_last_page) =
-            messages_pagination_params!(self, request)?;
+            list_page_params!(self, request, MessagesPaginationLogic)?;
 
         let address = vec_from_hex_prefixed(&inner.address).map_err(|_| {
             Status::invalid_argument("invalid address: expected a 0x-prefixed hex string")
@@ -523,10 +479,11 @@ impl InterchainService for InterchainServiceImpl {
 
         let items = self.messages_logic_to_proto(items).await?;
 
+        let (next_page_params, prev_page_params) = page_params(output_pagination);
         let response = GetMessagesResponse {
             items,
-            next_page_params: output_pagination.next_marker.map(|p| p.to_proto()),
-            prev_page_params: output_pagination.prev_marker.map(|p| p.to_proto()),
+            next_page_params,
+            prev_page_params,
         };
         Ok(Response::new(response))
     }
@@ -536,7 +493,7 @@ impl InterchainService for InterchainServiceImpl {
         request: Request<GetTransfersRequest>,
     ) -> Result<Response<GetTransfersResponse>, Status> {
         let (inner, input_pagination, page_size, is_last_page) =
-            transfers_pagination_params!(self, request)?;
+            list_page_params!(self, request, TransfersPaginationLogic)?;
 
         let filter = build_chain_bridge_filter(
             inner.home_chain_id,
@@ -563,10 +520,11 @@ impl InterchainService for InterchainServiceImpl {
 
         let items = self.joined_transfers_logic_to_proto(items).await?;
 
+        let (next_page_params, prev_page_params) = page_params(output_pagination);
         let response = GetTransfersResponse {
             items,
-            next_page_params: output_pagination.next_marker.map(|p| p.to_proto()),
-            prev_page_params: output_pagination.prev_marker.map(|p| p.to_proto()),
+            next_page_params,
+            prev_page_params,
         };
         Ok(Response::new(response))
     }
@@ -576,7 +534,7 @@ impl InterchainService for InterchainServiceImpl {
         request: Request<GetTransfersByTransactionRequest>,
     ) -> Result<Response<GetTransfersResponse>, Status> {
         let (inner, input_pagination, page_size, is_last_page) =
-            transfers_pagination_params!(self, request)?;
+            list_page_params!(self, request, TransfersPaginationLogic)?;
 
         let tx_hash = vec_from_hex_prefixed(&inner.tx_hash).map_err(|_| {
             Status::invalid_argument("invalid tx_hash: expected a 0x-prefixed hex string")
@@ -607,10 +565,11 @@ impl InterchainService for InterchainServiceImpl {
 
         let items = self.joined_transfers_logic_to_proto(items).await?;
 
+        let (next_page_params, prev_page_params) = page_params(output_pagination);
         let response = GetTransfersResponse {
             items,
-            next_page_params: output_pagination.next_marker.map(|p| p.to_proto()),
-            prev_page_params: output_pagination.prev_marker.map(|p| p.to_proto()),
+            next_page_params,
+            prev_page_params,
         };
         Ok(Response::new(response))
     }
@@ -620,7 +579,7 @@ impl InterchainService for InterchainServiceImpl {
         request: Request<GetTransfersByAddressRequest>,
     ) -> Result<Response<GetTransfersResponse>, Status> {
         let (inner, input_pagination, page_size, is_last_page) =
-            transfers_pagination_params!(self, request)?;
+            list_page_params!(self, request, TransfersPaginationLogic)?;
 
         let address = vec_from_hex_prefixed(&inner.address).map_err(|_| {
             Status::invalid_argument("invalid address: expected a 0x-prefixed hex string")
@@ -651,10 +610,11 @@ impl InterchainService for InterchainServiceImpl {
 
         let items = self.joined_transfers_logic_to_proto(items).await?;
 
+        let (next_page_params, prev_page_params) = page_params(output_pagination);
         let response = GetTransfersResponse {
             items,
-            next_page_params: output_pagination.next_marker.map(|p| p.to_proto()),
-            prev_page_params: output_pagination.prev_marker.map(|p| p.to_proto()),
+            next_page_params,
+            prev_page_params,
         };
         Ok(Response::new(response))
     }
