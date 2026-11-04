@@ -24,7 +24,7 @@ mod sql_gen {
 
         fn with_non_empty_label(&mut self) -> &mut Self;
 
-        fn with_not_expired(&mut self) -> &mut Self;
+        fn with_not_expired(&mut self, protocol: &Protocol) -> &mut Self;
 
         fn with_resolved_names(&mut self) -> &mut Self;
     }
@@ -38,8 +38,8 @@ mod sql_gen {
             self.and_where(Expr::cust(DOMAIN_NONEMPTY_LABEL_WHERE_CLAUSE))
         }
 
-        fn with_not_expired(&mut self) -> &mut SelectStatement {
-            self.and_where(Expr::cust(DOMAIN_NOT_EXPIRED_WHERE_CLAUSE))
+        fn with_not_expired(&mut self, protocol: &Protocol) -> &mut SelectStatement {
+            self.and_where(Expr::cust(active_domain_where_clause(protocol)))
         }
 
         fn with_resolved_names(&mut self) -> &mut SelectStatement {
@@ -123,6 +123,21 @@ pub const DOMAIN_NOT_EXPIRED_WHERE_CLAUSE: &str = r#"
 )
 "#;
 
+// Only active domain/forward lookups use this grace. Primary-name reverse
+// lookups must continue to end at the canonical expiry_date.
+fn active_domain_where_clause(protocol: &Protocol) -> String {
+    let grace = protocol.info.forward_resolution_grace_period_seconds;
+    if grace == 0 {
+        DOMAIN_NOT_EXPIRED_WHERE_CLAUSE.to_owned()
+    } else {
+        // Keep expiry_date bare so an expiry index remains usable. Flooring the
+        // wall-clock second mirrors the integer timestamp used by the contract.
+        format!(
+            "(expiry_date IS NULL OR expiry_date >= floor(extract(epoch from now())) - {grace})"
+        )
+    }
+}
+
 // TODO: rewrite to sea_query generation
 #[instrument(
     skip_all,
@@ -139,7 +154,10 @@ pub async fn get_domain(
     only_active: bool,
 ) -> Result<Option<DetailedDomain>, DbErr> {
     let only_active_clause = if only_active {
-        format!("AND {DOMAIN_NOT_EXPIRED_WHERE_CLAUSE}")
+        format!(
+            "AND {}",
+            active_domain_where_clause(domain_name.deployed_protocol.protocol)
+        )
     } else {
         String::new()
     };
@@ -193,7 +211,7 @@ pub async fn find_domains(
     only_active: bool,
     pagination: Option<&DomainPaginationInput>,
 ) -> Result<Vec<Domain>, DbErr> {
-    let queries = match &input {
+    let queries: Vec<(&Protocol, SelectStatement)> = match &input {
         FindDomainsInput::Names(names) => {
             let unique_protocols = names
                 .iter()
@@ -208,7 +226,10 @@ pub async fn find_domains(
                 .values()
                 .map(|protocol| {
                     let mut query = sql_gen::domain_select(protocol.protocol);
-                    query.and_where(Expr::cust("id = ANY($1)")).to_owned()
+                    (
+                        protocol.protocol,
+                        query.and_where(Expr::cust("id = ANY($1)")).to_owned(),
+                    )
                 })
                 .collect::<Vec<_>>()
         }
@@ -216,17 +237,20 @@ pub async fn find_domains(
             .iter()
             .map(|protocol| {
                 let mut query = sql_gen::domain_select(protocol);
-                query
-                    .with_non_empty_label()
-                    .with_resolved_names()
-                    .to_owned()
+                (
+                    *protocol,
+                    query
+                        .with_non_empty_label()
+                        .with_resolved_names()
+                        .to_owned(),
+                )
             })
             .collect::<Vec<_>>(),
     };
-    let queries = queries.into_iter().map(|mut q| {
+    let queries = queries.into_iter().map(|(protocol, mut q)| {
         let mut q = q.with_block_range().to_owned();
         if only_active {
-            q.with_not_expired().to_owned()
+            q.with_not_expired(protocol).to_owned()
         } else {
             q
         }
@@ -339,7 +363,7 @@ fn gen_sql_select_domains_by_address(
         .with_non_empty_label()
         .with_resolved_names();
     if only_active {
-        q = q.with_not_expired();
+        q = q.with_not_expired(protocol);
     };
 
     // No `$1 <> $1` sentinel here: it is opaque to the planner, so in a generic
@@ -366,6 +390,13 @@ fn gen_sql_select_domains_by_address(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        protocols::{DeployedProtocol, Network, Tld},
+        test_utils::{insert_rensa_fixture_domain, mocked_blockscout_client},
+    };
+    use nonempty::nonempty;
+    use sqlx::PgPool;
+    use std::sync::Arc;
 
     fn address_filter_sql(resolved_to: bool, owned_by: bool) -> String {
         let protocol = Protocol {
@@ -415,5 +446,152 @@ mod tests {
         );
         assert!(owned_only.contains("(owner = $1)"), "{owned_only}");
         assert!(owned_only.contains("(wrapped_owner = $1)"), "{owned_only}");
+    }
+
+    #[test]
+    fn zero_grace_preserves_existing_active_filter() {
+        let protocol = Protocol::default();
+        assert_eq!(
+            active_domain_where_clause(&protocol),
+            DOMAIN_NOT_EXPIRED_WHERE_CLAUSE
+        );
+    }
+
+    #[test]
+    fn configured_grace_keeps_expiry_column_indexable() {
+        let mut protocol = Protocol::default();
+        protocol.info.forward_resolution_grace_period_seconds = 7_776_000;
+        let clause = active_domain_where_clause(&protocol);
+        assert!(clause.contains("expiry_date >= floor(extract(epoch from now())) - 7776000"));
+        assert!(!clause.contains("expiry_date +"));
+    }
+
+    #[sqlx::test(migrations = "tests/migrations")]
+    async fn configured_forward_grace_preserves_real_expiry_across_lookup_paths(pool: PgPool) {
+        // Insert a .rns record in the Graph-node fixture and use the same
+        // protocol settings as production Rensa.
+        let mut protocol = Protocol::default();
+        protocol.info.slug = "rensa".into();
+        protocol.info.tld_list = nonempty![Tld::new("rns")];
+        protocol.info.forward_resolution_grace_period_seconds = 7_776_000;
+        protocol.subgraph_schema = "sgd1".into();
+        let owner = "0xd8da6bf26964af9d7eed9e03e53415d37aa96045";
+        let id = insert_rensa_fixture_domain(&pool, owner).await;
+        let network = Network {
+            network_id: 1,
+            blockscout_client: Arc::new(mocked_blockscout_client().await),
+            use_protocols: vec!["rensa".into()],
+            rpc_url: None,
+        };
+        let name = DomainNameOnProtocol::from_str(
+            "rensa.rns",
+            DeployedProtocol {
+                protocol: &protocol,
+                deployment_network: &network,
+            },
+        )
+        .unwrap();
+        assert_eq!(name.inner.id(), id);
+        let address: Address = owner.parse().unwrap();
+        let address_input = LookupAddressInput {
+            address,
+            resolved_to: true,
+            owned_by: false,
+            only_active: true,
+            network_id: Some(1),
+            protocols: None,
+            all_protocols: false,
+            pagination: Default::default(),
+        };
+        let mut active_address_count = None;
+
+        for (seconds_from_now, expected_forward, expected_expired) in [
+            (600_i64, true, false),
+            (-600, true, true),
+            (-7_776_001, false, true),
+        ] {
+            let expiry: i64 = sqlx::query_scalar(
+                "UPDATE sgd1.domain SET expiry_date = floor(extract(epoch from now())) + $1 \
+                 WHERE id = $2 AND block_range @> 2147483647 RETURNING expiry_date::bigint",
+            )
+            .bind(seconds_from_now)
+            .bind(&id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+            let detail = get_domain(&pool, &name, true).await.unwrap();
+            assert_eq!(detail.is_some(), expected_forward);
+            let raw = get_domain(&pool, &name, false).await.unwrap().unwrap();
+            assert_eq!(raw.expiry_date.unwrap().timestamp(), expiry);
+            assert_eq!(raw.is_expired, expected_expired);
+
+            let domains = find_domains(
+                &pool,
+                FindDomainsInput::Protocols(vec![&protocol]),
+                true,
+                None,
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                domains.iter().any(|domain| domain.id == id),
+                expected_forward
+            );
+            let by_name = find_domains(
+                &pool,
+                FindDomainsInput::Names(vec![name.clone()]),
+                true,
+                None,
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                by_name.iter().any(|domain| domain.id == id),
+                expected_forward
+            );
+
+            let resolved = find_resolved_addresses(&pool, nonempty![&protocol], &address_input)
+                .await
+                .unwrap();
+            assert_eq!(
+                resolved.iter().any(|domain| domain.id == id),
+                expected_forward
+            );
+
+            let count =
+                count_domains_by_address(&pool, nonempty![&protocol], address, true, true, false)
+                    .await
+                    .unwrap();
+            if let Some(active_count) = active_address_count {
+                assert_eq!(count, active_count - i64::from(!expected_forward));
+            } else {
+                active_address_count = Some(count);
+            }
+        }
+
+        // An omitted/zero grace value retains the exact existing predicate.
+        let mut legacy_protocol = protocol.clone();
+        legacy_protocol.info.forward_resolution_grace_period_seconds = 0;
+        let legacy_name = DomainNameOnProtocol::from_str(
+            "rensa.rns",
+            DeployedProtocol {
+                protocol: &legacy_protocol,
+                deployment_network: &network,
+            },
+        )
+        .unwrap();
+        sqlx::query(
+            "UPDATE sgd1.domain SET expiry_date = floor(extract(epoch from now())) - 600 \
+             WHERE id = $1 AND block_range @> 2147483647",
+        )
+        .bind(&id)
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(get_domain(&pool, &legacy_name, true)
+            .await
+            .unwrap()
+            .is_none());
     }
 }

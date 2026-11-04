@@ -1,0 +1,16 @@
+{
+  "name": "rensa-bens-subgraph",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "test:compile": "asc tests/mapping.test.ts node_modules/@graphprotocol/graph-ts/global/global.ts --baseDir . --lib node_modules --runtime stub --noEmit",
+    "test": "graph test"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "0.98.1",
+    "@graphprotocol/graph-ts": "0.38.2",
+    "matchstick-as": "0.6.0"
+  }
+}
