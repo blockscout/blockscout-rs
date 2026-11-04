@@ -68,6 +68,11 @@ mod sql_gen {
     }
 }
 
+// Subgraphs store `ttl` and `expiry_date` as raw uint64 seconds, and names that
+// never expire carry type(uint64).max (~1.8e19). `to_timestamp` rejects such
+// values with "timestamp out of range" (22008), failing the whole query for
+// every domain it scans. Values past 9999-12-31T23:59:59Z (253402300799) are
+// therefore clamped in filters and returned as NULL ("no expiry").
 const DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE: &str = r#"
 vid,
 block_range,
@@ -79,7 +84,7 @@ parent,
 subdomain_count,
 resolved_address,
 resolver,
-to_timestamp(ttl) as ttl,
+CASE WHEN ttl <= 253402300799 THEN to_timestamp(ttl) END as ttl,
 is_migrated,
 stored_offchain,
 resolved_with_wildcard,
@@ -88,8 +93,8 @@ to_timestamp(created_at) as registration_date,
 owner,
 registrant,
 wrapped_owner,
-to_timestamp(expiry_date) as expiry_date,
-COALESCE(to_timestamp(expiry_date) < now(), false) AS is_expired,
+CASE WHEN expiry_date <= 253402300799 THEN to_timestamp(expiry_date) END as expiry_date,
+COALESCE(to_timestamp(LEAST(expiry_date, 253402300799)) < now(), false) AS is_expired,
 token_id::text as token_id
 "#;
 
@@ -105,8 +110,8 @@ owner,
 wrapped_owner,
 stored_offchain,
 resolved_with_wildcard,
-to_timestamp(expiry_date) as expiry_date,
-COALESCE(to_timestamp(expiry_date) < now(), false) AS is_expired
+CASE WHEN expiry_date <= 253402300799 THEN to_timestamp(expiry_date) END as expiry_date,
+COALESCE(to_timestamp(LEAST(expiry_date, 253402300799)) < now(), false) AS is_expired
 "#;
 
 // `block_range @>` is special sql syntax for fast filtering int4range
@@ -116,10 +121,11 @@ pub const DOMAIN_BLOCK_RANGE_WHERE_CLAUSE: &str = "block_range @> 2147483647";
 
 pub const DOMAIN_NONEMPTY_LABEL_WHERE_CLAUSE: &str = "label_name IS NOT NULL";
 
+// See `DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE` for the clamp.
 pub const DOMAIN_NOT_EXPIRED_WHERE_CLAUSE: &str = r#"
 (
     expiry_date is null
-    OR to_timestamp(expiry_date) > now()
+    OR to_timestamp(LEAST(expiry_date, 253402300799)) > now()
 )
 "#;
 
