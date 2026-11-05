@@ -267,12 +267,11 @@ impl InterchainStatisticsServiceImpl {
         let pairs = (!scope.include_unindexed_chains)
             .then(|| self.indexed_chains.configured_pairs(bridges))
             .flatten();
-        let union = pairs.as_ref().map(|p| {
-            let mut ids: Vec<i64> = p.iter().flat_map(|(_, c)| c.iter().copied()).collect();
-            ids.sort_unstable();
-            ids.dedup();
-            ids
-        });
+        // Zero-row candidates: see `zero_row_chains` for the two meanings of an
+        // empty union.
+        let union = pairs
+            .as_deref()
+            .and_then(|p| zero_row_chains(p, bridges.is_some()));
 
         let rows = if outgoing {
             self.stats
@@ -316,6 +315,18 @@ impl InterchainStatisticsServiceImpl {
 
         Ok(GetMessagePathsResponse { items })
     }
+}
+
+/// Chains that may get an invented zero row in message paths: the union of
+/// the in-scope bridges' configured chains. With a bridge selection, an empty
+/// union (unknown ids, or bridges without contracts) means no candidate, so
+/// no zero rows. Without one, it can only mean no bridge is configured at
+/// all, which restricts nothing (ADR-004 Decision 5): `None`.
+fn zero_row_chains(pairs: &[(i32, Vec<i64>)], has_bridge_selection: bool) -> Option<Vec<i64>> {
+    let mut ids: Vec<i64> = pairs.iter().flat_map(|(_, c)| c.iter().copied()).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    (has_bridge_selection || !ids.is_empty()).then_some(ids)
 }
 
 /// Parses a legacy `GetMessagePathsRequest` in the order the handlers have
@@ -417,7 +428,28 @@ fn map_stats_error(err: anyhow::Error) -> Status {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_stats_q, parse_optional_utc_date};
+    use super::{normalize_stats_q, parse_optional_utc_date, zero_row_chains};
+
+    #[test]
+    fn test_zero_row_chains_table() {
+        let pairs = vec![(1, vec![100, 1]), (2, vec![100, 250])];
+        let empty: Vec<(i32, Vec<i64>)> = vec![];
+        let contractless = vec![(5, vec![])];
+        let cases = [
+            (&pairs, false, Some(vec![1, 100, 250])),
+            (&empty, false, None),
+            (&empty, true, Some(vec![])),
+            (&contractless, true, Some(vec![])),
+            (&pairs, true, Some(vec![1, 100, 250])),
+        ];
+        for (pairs, selected, expected) in cases {
+            assert_eq!(
+                zero_row_chains(pairs, selected),
+                expected,
+                "pairs={pairs:?} selected={selected}"
+            );
+        }
+    }
 
     #[test]
     fn parse_optional_utc_date_accepts_valid_yyyy_mm_dd() {

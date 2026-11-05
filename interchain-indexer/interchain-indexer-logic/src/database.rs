@@ -364,28 +364,38 @@ pub(crate) fn push_indexed_pairs_predicate(
 /// NOT NULL` escape, a bare `c.id IN (..)` would delete that row outright
 /// instead of merely denying it a zero row — see coding-task-2b item 5.
 ///
-/// No-op when `ids` is `None` or empty, mirroring `push_in_predicate`.
-/// Advances `*placeholder` by `ids.len()`, same as every other predicate-
-/// pushing block in this file — this is the last predicate built in both call
-/// sites today, but the counter must stay correct regardless of what a future
-/// change appends afterward.
+/// `ids` contract:
+/// - `None` is a no-op: no restriction. This is how the caller encodes
+///   "restrict nothing" (opt-in, `AllIndexed`, or no bridge configured at all).
+/// - `Some(empty)` means no chain is a zero-row candidate, so only real rows
+///   survive (`sm.messages_count IS NOT NULL`). It binds no value and leaves
+///   the placeholder untouched. This deliberately differs from
+///   `push_in_predicate`, whose empty no-op is the "no bridge configured"
+///   convention for real rows.
+/// - A non-empty list advances `*placeholder` by `ids.len()`, same as every
+///   other predicate-pushing block in this file. This is the last predicate
+///   built in both call sites today, but the counter must stay correct
+///   regardless of what a future change appends afterward.
 fn push_zero_chains_guard_predicate(
     where_parts: &mut Vec<String>,
     values: &mut Vec<Value>,
     placeholder: &mut usize,
     ids: Option<&[i64]>,
 ) {
-    if let Some(ids) = ids.filter(|ids| !ids.is_empty()) {
-        let start = *placeholder;
-        let placeholders: Vec<String> = (0..ids.len()).map(|i| format!("${}", start + i)).collect();
-        for id in ids {
-            values.push(Value::BigInt(Some(*id)));
+    match ids {
+        None => {}
+        Some([]) => where_parts.push("sm.messages_count IS NOT NULL".to_string()),
+        Some(ids) => {
+            let start = *placeholder;
+            let placeholders: Vec<String> =
+                (0..ids.len()).map(|i| format!("${}", start + i)).collect();
+            values.extend(ids.iter().map(|id| Value::BigInt(Some(*id))));
+            where_parts.push(format!(
+                "(c.id IN ({}) OR sm.messages_count IS NOT NULL)",
+                placeholders.join(", ")
+            ));
+            *placeholder += ids.len();
         }
-        where_parts.push(format!(
-            "(c.id IN ({}) OR sm.messages_count IS NOT NULL)",
-            placeholders.join(", ")
-        ));
-        *placeholder += ids.len();
     }
 }
 
@@ -4065,7 +4075,7 @@ mod tests {
     }
 
     #[test]
-    fn test_push_zero_chains_guard_predicate_empty_ids_is_noop() {
+    fn test_push_zero_chains_guard_predicate_empty_ids_keeps_real_rows_only() {
         let mut where_parts: Vec<String> = Vec::new();
         let mut values: Vec<Value> = Vec::new();
         let mut placeholder = 1usize;
@@ -4077,9 +4087,31 @@ mod tests {
             Some(&[]),
         );
 
-        assert!(where_parts.is_empty());
+        assert_eq!(
+            where_parts,
+            vec!["sm.messages_count IS NOT NULL".to_string()]
+        );
         assert!(values.is_empty());
-        assert_eq!(placeholder, 1);
+        assert_eq!(placeholder, 1, "placeholder must stay untouched");
+    }
+
+    #[test]
+    fn test_push_zero_chains_guard_predicate_empty_ids_contiguous_with_predicate_after() {
+        let mut where_parts = vec!["dst_chain_id IN ($1, $2)".to_string()];
+        let mut values = vec![Value::BigInt(Some(1)), Value::BigInt(Some(2))];
+        let mut placeholder = 3usize;
+
+        push_zero_chains_guard_predicate(
+            &mut where_parts,
+            &mut values,
+            &mut placeholder,
+            Some(&[]),
+        );
+        where_parts.push(format!("dummy_col = ${placeholder}"));
+
+        assert_eq!(where_parts[1], "sm.messages_count IS NOT NULL");
+        assert_eq!(where_parts[2], "dummy_col = $3");
+        assert_eq!(values.len(), 2);
     }
 
     #[test]
@@ -12396,6 +12428,74 @@ mod tests {
             !rows.iter().any(|r| r.dst_chain_id == 1000),
             "a chain outside the union with no counts must get no zero row: {rows:?}"
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn message_paths_zero_chains_empty_union_invents_no_zero_rows() {
+        // A bridge selection naming only a bridge absent from the config:
+        // pairs and union are both `Some([])`. No chain is a zero-row
+        // candidate, but the bridge's real row (permissive arm) must stay.
+        let _db = init_db("message_paths_zero_chains_empty_union").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 7).await;
+        interchain_db
+            .upsert_chains(
+                [1, 100, 250, 999]
+                    .into_iter()
+                    .map(|id| chains::ActiveModel {
+                        id: Set(id),
+                        name: Set(format!("Chain{id}")),
+                        ..Default::default()
+                    })
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(7, 1, 100, 5)
+            .await
+            .unwrap();
+        stats_messages_days::Entity::insert(stats_messages_days::ActiveModel {
+            bridge_id: Set(7),
+            date: Set(NaiveDate::from_ymd_opt(2026, 3, 1).unwrap()),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(100),
+            messages_count: Set(5),
+            ..Default::default()
+        })
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        let expected = vec![MessagePathStatsRow {
+            src_chain_id: 1,
+            dst_chain_id: 100,
+            messages_count: 5,
+        }];
+
+        // All-time query, outgoing.
+        let all_time = interchain_db
+            .get_outgoing_message_paths(1, None, None, None, Some(&[7]), true, Some(&[]), Some(&[]))
+            .await
+            .unwrap();
+        assert_eq!(all_time, expected, "no zero rows for an empty union");
+
+        // Bounded query, incoming.
+        let bounded = interchain_db
+            .get_incoming_message_paths(
+                100,
+                Some(NaiveDate::from_ymd_opt(2026, 2, 1).unwrap()),
+                Some(NaiveDate::from_ymd_opt(2026, 4, 1).unwrap()),
+                None,
+                Some(&[7]),
+                true,
+                Some(&[]),
+                Some(&[]),
+            )
+            .await
+            .unwrap();
+        assert_eq!(bounded, expected, "no zero rows for an empty union");
     }
 
     #[tokio::test]

@@ -572,6 +572,50 @@ async fn check_bridge_selection(base: &Url) {
     .await;
     assert_eq!(disjoint["items"], json!([]), "{disjoint}");
 
+    // Message paths: a selection whose bridges index no chain invents no zero
+    // rows, and cluster `all` agrees with the legacy route.
+    let received = "stats/chain/100/messages-paths/received";
+    let legacy_unknown = get(base, &format!("/api/v1/{received}?bridge_ids=12345")).await;
+    assert_eq!(legacy_unknown["items"], json!([]), "{legacy_unknown}");
+    let cluster_unknown = get(
+        base,
+        &format!("/api/v1/clusters/all/{received}?bridge_ids=12345"),
+    )
+    .await;
+    assert_eq!(cluster_unknown, legacy_unknown, "all unknown bridge paths");
+
+    // The opt-in keeps the zero rows.
+    let opt_in = get(
+        base,
+        &format!("/api/v1/{received}?bridge_ids=12345&include_unindexed_chains=true"),
+    )
+    .await;
+    let opt_in_items = opt_in["items"].as_array().unwrap();
+    assert!(!opt_in_items.is_empty(), "{opt_in}");
+    assert!(
+        opt_in_items
+            .iter()
+            .all(|item| item["messages_count"] == json!("0")),
+        "{opt_in}"
+    );
+
+    // Bridge 2 (DB-only) keeps its one real row and gets no zero row for 999.
+    let legacy_two = get(base, &format!("/api/v1/{received}?bridge_ids=2")).await;
+    let two_items = legacy_two["items"].as_array().unwrap();
+    assert_eq!(two_items.len(), 1, "{legacy_two}");
+    assert_eq!(
+        two_items[0]["source_chain"]["id"],
+        json!("1"),
+        "{legacy_two}"
+    );
+    assert_ne!(two_items[0]["messages_count"], json!("0"), "{legacy_two}");
+    let cluster_two = get(
+        base,
+        &format!("/api/v1/clusters/all/{received}?bridge_ids=2"),
+    )
+    .await;
+    assert_eq!(cluster_two, legacy_two, "all bridge 2 paths");
+
     // Errors. The path chain and the cluster are checked before the selection;
     // every param is validated before a disjoint selection short-circuits.
     for (route, status) in [

@@ -2158,6 +2158,18 @@ on a fresh database), not to this predicate. Do not remove it again on a
 similar report — verify the snapshot actually has rows for the
 bridge/chain pair in question first.
 
+**An empty union has two meanings in message paths.** `message_paths`
+(`services/stats.rs`) feeds `push_zero_chains_guard_predicate` a union of the
+in-scope bridges' configured chains. Empty with no `bridge_ids` means no bridge
+is configured at all: restrict nothing (`None`, ADR-004 Decision 5). Empty with
+a `bridge_ids` selection (unknown ids, or bridges without contracts) means no
+zero-row candidates: `zero_row_chains` yields `Some([])` and the guard renders
+`sm.messages_count IS NOT NULL`, so only real rows remain. Before this was told
+apart, `?bridge_ids=<unknown>` with `include_unindexed_chains=false` padded
+every directory chain with a zero row. Do not collapse it back into the
+`push_in_predicate` empty no-op, which stays for real rows. `chains_list` and
+`chains_stats_page` make the same distinction.
+
 **Placeholder numbering, fixed alongside the above.** The `chain_ids`
 predicate in `list_stats_chains` hardcoded `$1, $2, ...` instead of deriving
 from `values.len()`, silently mis-binding once `Bridges` scope's own bridge-id
