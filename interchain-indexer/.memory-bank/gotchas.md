@@ -1202,11 +1202,14 @@ endpoint cannot honor it yet, and return
 for non-blank values.
 
 **Cluster routes are the deliberate exception.** `/api/v1/clusters/{cluster_id}/…`
-request messages do not declare `home_chain_id`, `counterparty_chain_ids`,
-`bridge_ids` or `include_unindexed_chains`: the cluster preset supplies them,
-and a client sending them gets them silently ignored. That is safe only because
-the result stays bounded by the cluster. Never add a cluster field to a
-`GetCluster*Request` message — the preset would become client-overridable.
+request messages do not declare `home_chain_id`, `counterparty_chain_ids` or
+`include_unindexed_chains`: the cluster preset supplies them, and a client
+sending them gets them silently ignored. That is safe only because the result
+stays bounded by the cluster. `bridge_ids` is declared, as a client selection
+that `narrow_bridges` intersects with the cluster's own bridges (a disjoint
+selection is an empty response, never "all bridges"). Never add one of the
+other three to a `GetCluster*Request` message — the preset would become
+client-overridable.
 
 ---
 

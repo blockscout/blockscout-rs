@@ -140,5 +140,8 @@ per-chain stats) plus its own params. Two thin entry points call it:
 
 A new filtered endpoint gets both, plus an HTTP rule under
 `/api/v1/clusters/{cluster_id}` and a `GetCluster*Request` message that never
-declares a cluster field. Universe derivations (`select_rows`,
-`chain_stats_scope`) live in `services/scope.rs`, never in a handler.
+declares `home_chain_id`, `counterparty_chain_ids` or
+`include_unindexed_chains`. A `bridge_ids` it declares is applied with
+`narrow_bridges`, never in place of the cluster's set. Universe derivations
+(`select_rows`, `chain_stats_scope`, `narrow_bridges`) live in
+`services/scope.rs`, never in a handler.

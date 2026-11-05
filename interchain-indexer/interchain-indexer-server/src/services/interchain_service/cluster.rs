@@ -3,20 +3,51 @@
 //! Cluster entry points of the interchain Read API. Each one resolves the
 //! cluster first (unknown ⇒ NotFound, before any other validation the handler
 //! does), then mirrors the legacy entry point with the cluster's `ReadScope` in
-//! place of the cluster query params, and calls the same core. Params the HTTP
+//! place of the cluster query params (except `bridge_ids`, a client selection
+//! that narrows the scope's bridges), and calls the same core. Params the HTTP
 //! layer cannot parse into their declared type (a non-integer `chain_id` or
 //! `page_size`) are rejected with 400 by the extractors before any handler runs.
 
 use super::{InterchainServiceImpl, parse_hex_path};
 use crate::{
     proto::{interchain_cluster_service_server::InterchainClusterService, *},
-    services::utils::{
-        build_chain_bridge_filter, checked_bridge_id, list_page_params, non_empty,
-        parse_chain_ids_csv,
+    services::{
+        scope::ReadScope,
+        utils::{
+            build_chain_bridge_filter, checked_bridge_id, list_page_params, non_empty,
+            parse_bridge_ids_csv, parse_chain_ids_csv,
+        },
     },
 };
-use interchain_indexer_logic::pagination::{MessagesPaginationLogic, TransfersPaginationLogic};
+use interchain_indexer_logic::{
+    ChainBridgeFilter,
+    pagination::{MessagesPaginationLogic, TransfersPaginationLogic},
+};
 use tonic::{Request, Response, Status};
+
+impl InterchainServiceImpl {
+    /// The list filter of a cluster request, or `None` when the client's
+    /// `bridge_ids` share no bridge with the cluster. Every param is validated
+    /// in both cases.
+    fn cluster_list_filter(
+        &self,
+        scope: &ReadScope,
+        bridge_ids: Option<&str>,
+        src_chain_ids: Option<&str>,
+        dst_chain_ids: Option<&str>,
+    ) -> Result<Option<ChainBridgeFilter>, Status> {
+        let selection = non_empty(parse_bridge_ids_csv(bridge_ids)?);
+        let narrowed = scope.narrow_bridges(selection);
+        // A disjoint selection still validates src/dst against the cluster scope.
+        let filter = build_chain_bridge_filter(
+            narrowed.as_ref().unwrap_or(scope),
+            src_chain_ids,
+            dst_chain_ids,
+            self.indexed_chains.as_ref(),
+        )?;
+        Ok(narrowed.map(|_| filter))
+    }
+}
 
 #[async_trait::async_trait]
 impl InterchainClusterService for InterchainServiceImpl {
@@ -27,9 +58,12 @@ impl InterchainClusterService for InterchainServiceImpl {
         let scope = self.clusters.scope(&request.get_ref().cluster_id)?;
         let inner = request.into_inner();
         let chain_ids = parse_chain_ids_csv("chain_ids", inner.chain_ids.as_deref())?;
-        self.chains_list(scope, non_empty(chain_ids))
-            .await
-            .map(Response::new)
+        let selection = non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?);
+        match scope.narrow_bridges(selection) {
+            Some(scope) => self.chains_list(&scope, non_empty(chain_ids)).await,
+            None => Ok(GetChainsResponse::default()),
+        }
+        .map(Response::new)
     }
 
     async fn get_bridges(
@@ -49,21 +83,26 @@ impl InterchainClusterService for InterchainServiceImpl {
         let scope = self.clusters.scope(&request.get_ref().cluster_id)?;
         let (inner, input_pagination, page_size, is_last_page) =
             list_page_params!(self, request, MessagesPaginationLogic)?;
-        let filter = build_chain_bridge_filter(
+        let filter = self.cluster_list_filter(
             scope,
+            inner.bridge_ids.as_deref(),
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
-            self.indexed_chains.as_ref(),
         )?;
-        self.messages_page(
-            None,
-            None,
-            filter,
-            page_size,
-            is_last_page,
-            input_pagination,
-        )
-        .await
+        match filter {
+            Some(filter) => {
+                self.messages_page(
+                    None,
+                    None,
+                    filter,
+                    page_size,
+                    is_last_page,
+                    input_pagination,
+                )
+                .await
+            }
+            None => Ok(GetMessagesResponse::default()),
+        }
         .map(Response::new)
     }
 
@@ -91,21 +130,26 @@ impl InterchainClusterService for InterchainServiceImpl {
         let (inner, input_pagination, page_size, is_last_page) =
             list_page_params!(self, request, MessagesPaginationLogic)?;
         let tx_hash = parse_hex_path("tx_hash", &inner.tx_hash)?;
-        let filter = build_chain_bridge_filter(
+        let filter = self.cluster_list_filter(
             scope,
+            inner.bridge_ids.as_deref(),
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
-            self.indexed_chains.as_ref(),
         )?;
-        self.messages_page(
-            Some(tx_hash),
-            None,
-            filter,
-            page_size,
-            is_last_page,
-            input_pagination,
-        )
-        .await
+        match filter {
+            Some(filter) => {
+                self.messages_page(
+                    Some(tx_hash),
+                    None,
+                    filter,
+                    page_size,
+                    is_last_page,
+                    input_pagination,
+                )
+                .await
+            }
+            None => Ok(GetMessagesResponse::default()),
+        }
         .map(Response::new)
     }
 
@@ -117,21 +161,26 @@ impl InterchainClusterService for InterchainServiceImpl {
         let (inner, input_pagination, page_size, is_last_page) =
             list_page_params!(self, request, MessagesPaginationLogic)?;
         let address = parse_hex_path("address", &inner.address)?;
-        let filter = build_chain_bridge_filter(
+        let filter = self.cluster_list_filter(
             scope,
+            inner.bridge_ids.as_deref(),
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
-            self.indexed_chains.as_ref(),
         )?;
-        self.messages_page(
-            None,
-            Some(address),
-            filter,
-            page_size,
-            is_last_page,
-            input_pagination,
-        )
-        .await
+        match filter {
+            Some(filter) => {
+                self.messages_page(
+                    None,
+                    Some(address),
+                    filter,
+                    page_size,
+                    is_last_page,
+                    input_pagination,
+                )
+                .await
+            }
+            None => Ok(GetMessagesResponse::default()),
+        }
         .map(Response::new)
     }
 
@@ -142,21 +191,26 @@ impl InterchainClusterService for InterchainServiceImpl {
         let scope = self.clusters.scope(&request.get_ref().cluster_id)?;
         let (inner, input_pagination, page_size, is_last_page) =
             list_page_params!(self, request, TransfersPaginationLogic)?;
-        let filter = build_chain_bridge_filter(
+        let filter = self.cluster_list_filter(
             scope,
+            inner.bridge_ids.as_deref(),
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
-            self.indexed_chains.as_ref(),
         )?;
-        self.transfers_page(
-            None,
-            None,
-            filter,
-            page_size,
-            is_last_page,
-            input_pagination,
-        )
-        .await
+        match filter {
+            Some(filter) => {
+                self.transfers_page(
+                    None,
+                    None,
+                    filter,
+                    page_size,
+                    is_last_page,
+                    input_pagination,
+                )
+                .await
+            }
+            None => Ok(GetTransfersResponse::default()),
+        }
         .map(Response::new)
     }
 
@@ -168,21 +222,26 @@ impl InterchainClusterService for InterchainServiceImpl {
         let (inner, input_pagination, page_size, is_last_page) =
             list_page_params!(self, request, TransfersPaginationLogic)?;
         let tx_hash = parse_hex_path("tx_hash", &inner.tx_hash)?;
-        let filter = build_chain_bridge_filter(
+        let filter = self.cluster_list_filter(
             scope,
+            inner.bridge_ids.as_deref(),
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
-            self.indexed_chains.as_ref(),
         )?;
-        self.transfers_page(
-            Some(tx_hash),
-            None,
-            filter,
-            page_size,
-            is_last_page,
-            input_pagination,
-        )
-        .await
+        match filter {
+            Some(filter) => {
+                self.transfers_page(
+                    Some(tx_hash),
+                    None,
+                    filter,
+                    page_size,
+                    is_last_page,
+                    input_pagination,
+                )
+                .await
+            }
+            None => Ok(GetTransfersResponse::default()),
+        }
         .map(Response::new)
     }
 
@@ -194,21 +253,26 @@ impl InterchainClusterService for InterchainServiceImpl {
         let (inner, input_pagination, page_size, is_last_page) =
             list_page_params!(self, request, TransfersPaginationLogic)?;
         let address = parse_hex_path("address", &inner.address)?;
-        let filter = build_chain_bridge_filter(
+        let filter = self.cluster_list_filter(
             scope,
+            inner.bridge_ids.as_deref(),
             inner.src_chain_ids.as_deref(),
             inner.dst_chain_ids.as_deref(),
-            self.indexed_chains.as_ref(),
         )?;
-        self.transfers_page(
-            None,
-            Some(address),
-            filter,
-            page_size,
-            is_last_page,
-            input_pagination,
-        )
-        .await
+        match filter {
+            Some(filter) => {
+                self.transfers_page(
+                    None,
+                    Some(address),
+                    filter,
+                    page_size,
+                    is_last_page,
+                    input_pagination,
+                )
+                .await
+            }
+            None => Ok(GetTransfersResponse::default()),
+        }
         .map(Response::new)
     }
 }

@@ -159,6 +159,17 @@ paths:
           in: query
           required: false
           type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+            The rows are then restricted to the chains the selected bridges index
+            today, as on GET /api/v1/interchain/chains.
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainClusterService
   /api/v1/clusters/{cluster_id}/interchain/messages:
@@ -215,6 +226,15 @@ paths:
             Comma-separated destination chain ids. Narrows the cluster's messages
             through AND (messages whose dst_chain_id is in this set). A destination
             filter excludes messages with a NULL destination.
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
           in: query
           required: false
           type: string
@@ -312,6 +332,15 @@ paths:
           in: query
           required: false
           type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainClusterService
   /api/v1/clusters/{cluster_id}/interchain/messages:byTx/{tx_hash}:
@@ -367,6 +396,15 @@ paths:
             Comma-separated destination chain ids. Narrows the cluster's messages
             through AND (messages whose dst_chain_id is in this set). A destination
             filter excludes messages with a NULL destination.
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
           in: query
           required: false
           type: string
@@ -429,6 +467,15 @@ paths:
           in: query
           required: false
           type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainClusterService
   /api/v1/clusters/{cluster_id}/interchain/transfers:byAddress/{address}:
@@ -487,6 +534,15 @@ paths:
           in: query
           required: false
           type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainClusterService
   /api/v1/clusters/{cluster_id}/interchain/transfers:byTx/{tx_hash}:
@@ -542,6 +598,15 @@ paths:
             Comma-separated destination chain ids. Narrows the cluster's transfers
             through AND, matched by the transfer's own token destination chain
             (token_dst_chain_id).
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
           in: query
           required: false
           type: string
@@ -610,14 +675,23 @@ paths:
           description: |-
             Opaque pagination cursor: pass `next_page_params.page_token` or
             `prev_page_params.page_token` from a previous response unchanged. Valid
-            only with the same cluster, `chain_id`, `q`, `sort` and `order` as the
-            request that produced it. A malformed value is rejected with
-            InvalidArgument.
+            only with the same cluster, `chain_id`, `bridge_ids`, `q`, `sort` and
+            `order` as the request that produced it. A malformed value is rejected
+            with InvalidArgument.
           in: query
           required: false
           type: string
         - name: q
           description: Case-insensitive substring filter on the row display name (`stats_assets.name`).
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
           in: query
           required: false
           type: string
@@ -659,6 +733,15 @@ paths:
           in: query
           required: false
           type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainClusterStatisticsService
   /api/v1/clusters/{cluster_id}/stats/chain/{chain_id}/messages-paths/sent:
@@ -697,6 +780,15 @@ paths:
           in: query
           required: false
           type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainClusterStatisticsService
   /api/v1/clusters/{cluster_id}/stats/chains:
@@ -705,8 +797,9 @@ paths:
         Per-chain statistics, rows restricted to the cluster's chains (and
         `chain_ids`). The unique_transfer_users_count of each row is NOT scoped to
         the cluster: it is the chain's global deduplicated count or, when the
-        cluster sets bridge_ids, the sum of the per-bridge counts of those bridges
-        (which can overcount an address seen through several of them).
+        request's effective bridge set is non-empty (the cluster's bridge_ids
+        narrowed by the bridge_ids param), the sum of the per-bridge counts of
+        those bridges (which can overcount an address seen through several of them).
       operationId: InterchainClusterStatisticsService_GetChainsStats
       responses:
         "200":
@@ -753,9 +846,9 @@ paths:
           description: |-
             Opaque pagination cursor: pass `next_page_params.page_token` or
             `prev_page_params.page_token` from a previous response unchanged. Valid
-            only with the same cluster, `chain_ids`, `q`, `sort` and `order` as the
-            request that produced it. A malformed value is rejected with
-            InvalidArgument.
+            only with the same cluster, `chain_ids`, `bridge_ids`, `q`, `sort` and
+            `order` as the request that produced it. A malformed value is rejected
+            with InvalidArgument.
           in: query
           required: false
           type: string
@@ -772,6 +865,15 @@ paths:
           enum:
             - UNIQUE_TRANSFER_USERS_COUNT
           default: UNIQUE_TRANSFER_USERS_COUNT
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
       tags:
         - InterchainClusterStatisticsService
   /api/v1/interchain/bridges:

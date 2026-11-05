@@ -11,8 +11,10 @@ import "v1/stats.proto";
 // preset of home_chain_id, counterparty_chain_ids, bridge_ids and
 // include_unindexed_chains; every route applies it and otherwise behaves like
 // the route of the same name under /api/v1/interchain. An unknown cluster_id
-// returns NotFound (HTTP 404). The preset's fields are not parameters here: if
-// sent anyway they are ignored, and results stay within the cluster.
+// returns NotFound (HTTP 404). The preset's fields are not parameters here,
+// except bridge_ids, which narrows the request inside the cluster's bridges;
+// home_chain_id, counterparty_chain_ids and include_unindexed_chains are
+// ignored if sent, and results stay within the cluster.
 service InterchainClusterService {
   // Chain directory restricted to the cluster's chains (and `chain_ids`).
   rpc GetChains(GetClusterChainsRequest) returns (GetChainsResponse) {}
@@ -42,8 +44,9 @@ service InterchainClusterStatisticsService {
   // Per-chain statistics, rows restricted to the cluster's chains (and
   // `chain_ids`). The unique_transfer_users_count of each row is NOT scoped to
   // the cluster: it is the chain's global deduplicated count or, when the
-  // cluster sets bridge_ids, the sum of the per-bridge counts of those bridges
-  // (which can overcount an address seen through several of them).
+  // request's effective bridge set is non-empty (the cluster's bridge_ids
+  // narrowed by the bridge_ids param), the sum of the per-bridge counts of
+  // those bridges (which can overcount an address seen through several of them).
   rpc GetChainsStats(GetClusterChainsStatsRequest) returns (GetChainsStatsResponse) {}
   // Outgoing message paths of `chain_id` within the cluster; `chain_id` rules
   // as in GetBridgedTokens.
@@ -64,6 +67,13 @@ message GetClusterChainsRequest {
   // cluster's bridges index today and, unless the cluster sets
   // include_unindexed_chains, to chains some configured bridge indexes.
   optional string chain_ids = 2;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  // The rows are then restricted to the chains the selected bridges index
+  // today, as on GET /api/v1/interchain/chains.
+  optional string bridge_ids = 3;
 }
 
 message GetClusterBridgesRequest {
@@ -90,6 +100,11 @@ message GetClusterMessagesRequest {
   // through AND (messages whose dst_chain_id is in this set). A destination
   // filter excludes messages with a NULL destination.
   optional string dst_chain_ids = 7;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 8;
 }
 
 message GetClusterMessageDetailsRequest {
@@ -121,6 +136,11 @@ message GetClusterMessagesByTransactionRequest {
   // through AND (messages whose dst_chain_id is in this set). A destination
   // filter excludes messages with a NULL destination.
   optional string dst_chain_ids = 7;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 8;
 }
 
 message GetClusterMessagesByAddressRequest {
@@ -143,6 +163,11 @@ message GetClusterMessagesByAddressRequest {
   // through AND (messages whose dst_chain_id is in this set). A destination
   // filter excludes messages with a NULL destination.
   optional string dst_chain_ids = 7;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 8;
 }
 
 message GetClusterTransfersRequest {
@@ -165,6 +190,11 @@ message GetClusterTransfersRequest {
   // through AND, matched by the transfer's own token destination chain
   // (token_dst_chain_id).
   optional string dst_chain_ids = 7;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 8;
 }
 
 message GetClusterTransfersByTransactionRequest {
@@ -187,6 +217,11 @@ message GetClusterTransfersByTransactionRequest {
   // through AND, matched by the transfer's own token destination chain
   // (token_dst_chain_id).
   optional string dst_chain_ids = 7;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 8;
 }
 
 message GetClusterTransfersByAddressRequest {
@@ -209,6 +244,11 @@ message GetClusterTransfersByAddressRequest {
   // through AND, matched by the transfer's own token destination chain
   // (token_dst_chain_id).
   optional string dst_chain_ids = 7;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 8;
 }
 
 message GetClusterBridgedTokensRequest {
@@ -225,12 +265,17 @@ message GetClusterBridgedTokensRequest {
   SortOrder order = 6;
   // Opaque pagination cursor: pass `next_page_params.page_token` or
   // `prev_page_params.page_token` from a previous response unchanged. Valid
-  // only with the same cluster, `chain_id`, `q`, `sort` and `order` as the
-  // request that produced it. A malformed value is rejected with
-  // InvalidArgument.
+  // only with the same cluster, `chain_id`, `bridge_ids`, `q`, `sort` and
+  // `order` as the request that produced it. A malformed value is rejected
+  // with InvalidArgument.
   optional string page_token = 7;
   // Case-insensitive substring filter on the row display name (`stats_assets.name`).
   optional string q = 8;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 9;
 }
 
 message GetClusterChainsStatsRequest {
@@ -246,14 +291,19 @@ message GetClusterChainsStatsRequest {
   SortOrder order = 5;
   // Opaque pagination cursor: pass `next_page_params.page_token` or
   // `prev_page_params.page_token` from a previous response unchanged. Valid
-  // only with the same cluster, `chain_ids`, `q`, `sort` and `order` as the
-  // request that produced it. A malformed value is rejected with
-  // InvalidArgument.
+  // only with the same cluster, `chain_ids`, `bridge_ids`, `q`, `sort` and
+  // `order` as the request that produced it. A malformed value is rejected
+  // with InvalidArgument.
   optional string page_token = 6;
   // Case-insensitive substring filter on chain name or textual chain id.
   optional string q = 7;
   // Sort field: UNIQUE_TRANSFER_USERS_COUNT[default]
   StatsChainsSort sort = 8;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 9;
 }
 
 message GetClusterMessagePathsRequest {
@@ -262,4 +312,9 @@ message GetClusterMessagePathsRequest {
   int64 chain_id = 2;
   optional string from_date = 3; // YYYY-MM-DD
   optional string to_date = 4;   // YYYY-MM-DD
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 5;
 }

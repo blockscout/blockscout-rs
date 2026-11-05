@@ -44,14 +44,20 @@ translation into the legacy query params.
   runs first in every cluster entry point.
 - **Two cluster services.** `cluster.proto` defines
   `InterchainClusterService` and `InterchainClusterStatisticsService`, with
-  `GetCluster*Request` messages that carry `cluster_id` and never declare a
-  cluster field. Two services could share response messages only after the
-  unused actix-prost `conversions` feature was dropped.
+  `GetCluster*Request` messages that carry `cluster_id` and never declare
+  `home_chain_id`, `counterparty_chain_ids` or `include_unindexed_chains`.
+  Every message whose legacy twin has `bridge_ids` declares it too, as a client
+  selection narrowed inside the cluster's bridges, because the frontend
+  filters its lists by bridge. Two services could share response messages only
+  after the unused actix-prost `conversions` feature was dropped.
 - **Behavior at the edges.** An unknown cluster is gRPC `NotFound` / HTTP 404
-  (`cluster not found: <id>`). The cluster fields are not parameters, so sent
-  as query params they are silently ignored (the generated routes drop unknown
-  params) and the result stays cluster-scoped. Page tokens are not bound to a
-  cluster. The counts of `/stats/chains` are global or per-bridge, not
+  (`cluster not found: <id>`). The other three cluster fields are not
+  parameters, so sent as query params they are silently ignored (the generated
+  routes drop unknown params) and the result stays cluster-scoped. A
+  `bridge_ids` selection runs as `selection ∩ cluster bridges` (as sent when
+  the cluster sets none). A disjoint one returns an empty response, never "all
+  bridges", and ids outside the cluster are ignored, not rejected. Page tokens
+  are not bound to a cluster. The counts of `/stats/chains` are global or per-bridge, not
   cluster-scoped.
 
 ## Alternatives Considered

@@ -9,7 +9,9 @@
 //! message details are scoped inside the lookup, an unknown cluster is a 404
 //! checked before any other validation the handler does (a param the HTTP
 //! layer cannot parse into its declared type is rejected with 400 earlier), and
-//! the cluster fields sent as query params are ignored.
+//! `bridge_ids` is a client selection narrowed inside the cluster's bridges
+//! (a disjoint one is an empty response), and the other three cluster fields
+//! sent as query params are ignored.
 //!
 //! One server, one database, deliberately: every check is read-only against
 //! the same seed, and each extra server adds to the test-server port race
@@ -45,6 +47,7 @@ const ADDRESS: &str = "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
 
 const CLUSTERS: &str = r#"[
   { "id": "gnosis", "home_chain_id": 100, "bridge_ids": [1] },
+  { "id": "gno-eth", "home_chain_id": 100, "counterparty_chain_ids": [1], "bridge_ids": [1] },
   { "id": "pair", "counterparty_chain_ids": [1, 100] },
   { "id": "wide", "counterparty_chain_ids": [1, 100], "include_unindexed_chains": true },
   { "id": "all" }
@@ -458,11 +461,178 @@ async fn check_unknown_cluster(base: &Url) {
     }
 }
 
+async fn check_bridge_selection(base: &Url) {
+    for suffix in list_suffixes() {
+        let gnosis = format!("/api/v1/clusters/gnosis/interchain/{suffix}");
+        let plain = get(base, &gnosis).await;
+        assert!(
+            !plain["items"].as_array().unwrap().is_empty(),
+            "{suffix}: the gnosis list must not be vacuously empty: {plain}"
+        );
+        for selection in ["1", "1,2"] {
+            let body = get(base, &format!("{gnosis}?bridge_ids={selection}")).await;
+            assert_eq!(body, plain, "{suffix}: gnosis bridge_ids={selection}");
+        }
+
+        // Disjoint from the cluster: no rows, although the bridge has some.
+        let legacy = get(base, &format!("/api/v1/interchain/{suffix}?bridge_ids=2")).await;
+        assert!(
+            !legacy["items"].as_array().unwrap().is_empty(),
+            "{suffix}: legacy bridge 2 must have rows: {legacy}"
+        );
+        let disjoint = get(base, &format!("{gnosis}?bridge_ids=2")).await;
+        assert_eq!(
+            disjoint["items"],
+            json!([]),
+            "{suffix}: disjoint {disjoint}"
+        );
+        assert!(
+            disjoint["next_page_params"].is_null(),
+            "{suffix}: {disjoint}"
+        );
+        assert!(
+            disjoint["prev_page_params"].is_null(),
+            "{suffix}: {disjoint}"
+        );
+
+        // No cluster bridge set: the selection is taken as sent.
+        let cluster = get(
+            base,
+            &format!("/api/v1/clusters/pair/interchain/{suffix}?bridge_ids=2"),
+        )
+        .await;
+        let legacy = get(
+            base,
+            &format!("/api/v1/interchain/{suffix}?counterparty_chain_ids=1,100&bridge_ids=2"),
+        )
+        .await;
+        assert!(
+            !cluster["items"].as_array().unwrap().is_empty(),
+            "{suffix}: pair bridge 2 must have rows: {cluster}"
+        );
+        assert_eq!(cluster, legacy, "{suffix}: pair bridge_ids=2");
+
+        let cluster = get(
+            base,
+            &format!("/api/v1/clusters/all/interchain/{suffix}?bridge_ids=2"),
+        )
+        .await;
+        let legacy = get(base, &format!("/api/v1/interchain/{suffix}?bridge_ids=2")).await;
+        assert_eq!(cluster, legacy, "{suffix}: all bridge_ids=2");
+    }
+
+    // Chain directory.
+    let cluster = get(base, "/api/v1/clusters/pair/interchain/chains?bridge_ids=1").await;
+    let legacy = get(
+        base,
+        "/api/v1/interchain/chains?chain_ids=1,100&bridge_ids=1",
+    )
+    .await;
+    assert!(
+        !cluster["items"].as_array().unwrap().is_empty(),
+        "pair chains must not be vacuously empty: {cluster}"
+    );
+    assert_eq!(cluster, legacy, "pair chains bridge_ids=1");
+    let disjoint = get(
+        base,
+        "/api/v1/clusters/gnosis/interchain/chains?bridge_ids=2",
+    )
+    .await;
+    assert_eq!(disjoint["items"], json!([]), "{disjoint}");
+
+    // Chains stats.
+    let cluster = get(base, "/api/v1/clusters/all/stats/chains?bridge_ids=1").await;
+    let legacy = get(base, "/api/v1/stats/chains?bridge_ids=1").await;
+    assert_eq!(cluster, legacy, "all stats/chains bridge_ids=1");
+    let disjoint = get(base, "/api/v1/clusters/gnosis/stats/chains?bridge_ids=2").await;
+    assert_eq!(disjoint["items"], json!([]), "{disjoint}");
+    assert!(disjoint["next_page_params"].is_null(), "{disjoint}");
+    assert!(disjoint["prev_page_params"].is_null(), "{disjoint}");
+
+    // Per-chain stats.
+    let cluster = get(
+        base,
+        "/api/v1/clusters/pair/stats/chain/1/bridged-tokens?bridge_ids=2",
+    )
+    .await;
+    let legacy = get(
+        base,
+        "/api/v1/stats/chain/1/bridged-tokens?counterparty_chain_ids=1,100&bridge_ids=2",
+    )
+    .await;
+    assert!(
+        !cluster["items"].as_array().unwrap().is_empty(),
+        "pair bridged tokens of bridge 2 must not be vacuously empty: {cluster}"
+    );
+    assert_eq!(cluster, legacy, "pair bridged-tokens bridge_ids=2");
+    let disjoint = get(
+        base,
+        "/api/v1/clusters/gnosis/stats/chain/1/messages-paths/sent?bridge_ids=2",
+    )
+    .await;
+    assert_eq!(disjoint["items"], json!([]), "{disjoint}");
+
+    // Errors. The path chain and the cluster are checked before the selection;
+    // every param is validated before a disjoint selection short-circuits.
+    for (route, status) in [
+        (
+            // A path chain outside the cluster is 400 even with a disjoint
+            // selection. `gnosis` has no chain set (any path chain is inside),
+            // so this needs a cluster with both a chain set and bridges.
+            "/api/v1/clusters/gno-eth/stats/chain/999/messages-paths/sent?bridge_ids=2",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "/api/v1/clusters/gnosis/interchain/messages?bridge_ids=x",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "/api/v1/clusters/gnosis/interchain/messages?bridge_ids=2&src_chain_ids=x",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "/api/v1/clusters/gnosis/interchain/chains?bridge_ids=2&chain_ids=x",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "/api/v1/clusters/gnosis/stats/chains?bridge_ids=2&chain_ids=x",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "/api/v1/clusters/gnosis/stats/chain/1/bridged-tokens?bridge_ids=2&page_token=bad",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "/api/v1/clusters/gnosis/stats/chain/1/messages-paths/sent?bridge_ids=2&from_date=bad",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "/api/v1/clusters/nope/interchain/messages?bridge_ids=x",
+            StatusCode::NOT_FOUND,
+        ),
+    ] {
+        let (got, body) = helpers::get_raw(base, route).await;
+        assert_eq!(got, status, "{route}: {body}");
+    }
+    let (_, body) = helpers::get_raw(
+        base,
+        "/api/v1/clusters/gnosis/interchain/messages?bridge_ids=x",
+    )
+    .await;
+    assert!(
+        body["message"]
+            .as_str()
+            .unwrap()
+            .contains("invalid bridge_ids value"),
+        "{body}"
+    );
+}
+
 async fn check_foreign_params_are_ignored(base: &Url) {
     let with_foreign = get(
         base,
         "/api/v1/clusters/gnosis/interchain/messages?home_chain_id=1&counterparty_chain_ids=999\
-         &bridge_ids=999&include_unindexed_chains=true",
+         &include_unindexed_chains=true",
     )
     .await;
     let plain = get(base, "/api/v1/clusters/gnosis/interchain/messages").await;
@@ -529,6 +699,7 @@ async fn cluster_routes_apply_the_cluster_scope() {
     check_bridges(&base).await;
     check_details(&base).await;
     check_unknown_cluster(&base).await;
+    check_bridge_selection(&base).await;
     check_foreign_params_are_ignored(&base).await;
     check_paging(&base).await;
     check_serde_defaults(&base).await;

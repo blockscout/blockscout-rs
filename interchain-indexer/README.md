@@ -462,8 +462,13 @@ the Swagger.
 
 A cluster route never returns rows outside the cluster:
 
+- **Client `bridge_ids`**, on every route whose legacy twin has it, narrows the
+  cluster's bridges: the request runs with the selected bridges the cluster
+  contains, or with the selection as sent when the cluster sets no
+  `bridge_ids`. A selection that shares no bridge with the cluster returns an
+  empty response (see Caveats).
 - **Message and transfer lists** are the legacy route called with the
-  cluster's four fields. The client's `src_chain_ids` / `dst_chain_ids`, `q`
+  cluster's four fields, `bridge_ids` narrowed as above. The client's `src_chain_ids` / `dst_chain_ids`, `q`
   and paging work as on the legacy route; the direction filters narrow the
   cluster's rows by AND.
 - **Chain directories** (`interchain/chains`, `stats/chains`) return the
@@ -507,16 +512,21 @@ rejected with 400 first.
 
 ### Caveats
 
-- The cluster fields (`home_chain_id`, `counterparty_chain_ids`, `bridge_ids`,
-  `include_unindexed_chains`) are not parameters of the cluster routes. If sent
+- The cluster fields `home_chain_id`, `counterparty_chain_ids` and
+  `include_unindexed_chains` are not parameters of the cluster routes. If sent
   as query params they are silently ignored and the result stays within the
   cluster.
+- `bridge_ids` is a client selection inside the cluster: the request runs with
+  the selected bridges that the cluster contains (the selection as sent when the
+  cluster sets no `bridge_ids`). Ids outside the cluster are ignored, and a
+  selection with none inside returns an empty list, never all bridges.
 - A `page_token` is not bound to a cluster. Do not carry a token across
   clusters, or between a cluster route and the legacy route.
 - The counts of `stats/chains` are not cluster-scoped: each row's
   `unique_transfer_users_count` is the chain's global deduplicated count or,
-  when the cluster sets `bridge_ids`, the sum of the per-bridge counts of those
-  bridges, which can overcount an address seen through several of them.
+  when the request's effective bridge set is non-empty, the sum of the
+  per-bridge counts of those bridges, which can overcount an address seen
+  through several of them.
 
 ## Envs
 

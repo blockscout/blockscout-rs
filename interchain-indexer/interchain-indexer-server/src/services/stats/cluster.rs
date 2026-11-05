@@ -3,14 +3,16 @@
 //! Cluster entry points of the statistics Read API (see
 //! `interchain_service/cluster.rs` for the shared rules). Per-chain routes
 //! derive their focal/peer scope from the cluster and reject a path chain
-//! outside it with InvalidArgument.
+//! outside it with InvalidArgument. The `bridge_ids` param is a client
+//! selection narrowing the cluster's bridges; a selection sharing none with
+//! the cluster matches no rows (the response type's `Default`).
 
 use super::{InterchainStatisticsServiceImpl, normalize_stats_q, parse_optional_utc_date};
 use crate::{
     proto::{interchain_cluster_statistics_service_server::InterchainClusterStatisticsService, *},
     services::{
         scope::{ChainStatsScope, ReadScope},
-        utils::{list_page_params, non_empty, parse_chain_ids_csv},
+        utils::{list_page_params, non_empty, parse_bridge_ids_csv, parse_chain_ids_csv},
     },
 };
 use interchain_indexer_logic::{
@@ -48,8 +50,14 @@ impl InterchainStatisticsServiceImpl {
         )?;
         let from_date = parse_optional_utc_date(inner.from_date.as_deref())?;
         let to_date = parse_optional_utc_date(inner.to_date.as_deref())?;
-        self.message_paths(&scope, from_date, to_date, outgoing)
-            .await
+        let selection = non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?);
+        match scope.narrow_bridges(selection) {
+            Some(scope) => {
+                self.message_paths(&scope, from_date, to_date, outgoing)
+                    .await
+            }
+            None => Ok(GetMessagePathsResponse::default()),
+        }
     }
 }
 
@@ -73,18 +81,24 @@ impl InterchainClusterStatisticsService for InterchainStatisticsServiceImpl {
         let order = StatsSortOrder::from_proto_order(inner.order)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         let q = normalize_stats_q(inner.q.as_deref());
-        self.bridged_tokens_page(
-            &scope,
-            StatsListQuery {
-                sort,
-                order,
-                page_size,
-                last_page,
-                input_pagination,
-                q,
-            },
-        )
-        .await
+        let selection = non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?);
+        match scope.narrow_bridges(selection) {
+            Some(scope) => {
+                self.bridged_tokens_page(
+                    &scope,
+                    StatsListQuery {
+                        sort,
+                        order,
+                        page_size,
+                        last_page,
+                        input_pagination,
+                        q,
+                    },
+                )
+                .await
+            }
+            None => Ok(GetBridgedTokensResponse::default()),
+        }
         .map(Response::new)
     }
 
@@ -100,19 +114,25 @@ impl InterchainClusterStatisticsService for InterchainStatisticsServiceImpl {
         let order = StatsSortOrder::from_proto_order(inner.order)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         let q = normalize_stats_q(inner.q.as_deref());
-        self.chains_stats_page(
-            scope,
-            non_empty(chain_ids),
-            StatsListQuery {
-                sort,
-                order,
-                page_size,
-                last_page,
-                input_pagination,
-                q,
-            },
-        )
-        .await
+        let selection = non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?);
+        match scope.narrow_bridges(selection) {
+            Some(scope) => {
+                self.chains_stats_page(
+                    &scope,
+                    non_empty(chain_ids),
+                    StatsListQuery {
+                        sort,
+                        order,
+                        page_size,
+                        last_page,
+                        input_pagination,
+                        q,
+                    },
+                )
+                .await
+            }
+            None => Ok(GetChainsStatsResponse::default()),
+        }
         .map(Response::new)
     }
 

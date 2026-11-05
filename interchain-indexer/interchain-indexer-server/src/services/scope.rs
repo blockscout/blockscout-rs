@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 //! Typed read scope shared by the legacy Read API entry points and (from the
-//! cluster work on) the cluster entry points. A scope is the four "cluster
+//! cluster work on) the cluster entry points. A cluster scope is fixed by the
+//! config, except that a cluster request may narrow its `bridge_ids` to a
+//! client selection (`narrow_bridges`). A scope is the four "cluster
 //! filter fields" — `home_chain_id`, `counterparty_chain_ids`, `bridge_ids`,
 //! `include_unindexed_chains` — after parsing. Handler cores take a scope, so
 //! filter semantics live in one place regardless of where the scope came from.
@@ -156,6 +158,51 @@ impl ReadScope {
     }
 }
 
+/// Bridges a cluster-scoped request runs with: the client `selection` inside
+/// the cluster's own bridges `own`. Outer `None` ⇒ the selection shares no
+/// bridge with the cluster, so the request matches no rows — never "all
+/// bridges".
+///
+/// | own        | selection | result                                  |
+/// | any        | —         | `own`                                   |
+/// | —          | `s`       | `s` as sent                             |
+/// | `o`        | `s`       | `s ∩ o` sorted + deduplicated, else outer `None` |
+fn narrow_bridge_ids(own: Option<&[i32]>, selection: Option<Vec<i32>>) -> Option<Option<Vec<i32>>> {
+    match (own, selection) {
+        (own, None) => Some(own.map(<[i32]>::to_vec)),
+        (None, selection) => Some(selection),
+        (Some(own), Some(selection)) => {
+            let mut ids: Vec<i32> = selection
+                .into_iter()
+                .filter(|id| own.contains(id))
+                .collect();
+            ids.sort_unstable();
+            ids.dedup();
+            (!ids.is_empty()).then_some(Some(ids))
+        }
+    }
+}
+
+impl ReadScope {
+    /// Narrows the scope's bridges to the client `selection`, **cluster entry
+    /// points only**. `None` ⇒ no rows.
+    pub fn narrow_bridges(&self, selection: Option<Vec<i32>>) -> Option<ReadScope> {
+        narrow_bridge_ids(self.bridge_ids.as_deref(), selection).map(|bridge_ids| ReadScope {
+            bridge_ids,
+            ..self.clone()
+        })
+    }
+}
+
+impl ChainStatsScope {
+    /// Narrows the scope's bridges to the client `selection`, **cluster entry
+    /// points only**. `None` ⇒ no rows.
+    pub fn narrow_bridges(self, selection: Option<Vec<i32>>) -> Option<ChainStatsScope> {
+        narrow_bridge_ids(self.bridge_ids.as_deref(), selection)
+            .map(|bridge_ids| ChainStatsScope { bridge_ids, ..self })
+    }
+}
+
 /// Configured clusters by id, built once at startup.
 #[derive(Debug, Default)]
 pub struct ClusterRegistry {
@@ -182,7 +229,7 @@ impl ClusterRegistry {
 
 #[cfg(test)]
 mod tests {
-    use super::{ClusterRegistry, ReadScope};
+    use super::{ChainStatsScope, ClusterRegistry, ReadScope, narrow_bridge_ids};
     use crate::config::ClusterConfig;
     use tonic::Code;
 
@@ -388,5 +435,62 @@ mod tests {
 
         let scope = registry.scope("known").expect("a configured cluster");
         assert_eq!(scope.bridge_ids, Some(vec![1, 3]));
+    }
+
+    #[test]
+    fn test_narrow_bridge_ids_table_rows() {
+        // no selection keeps the cluster's set (or none)
+        assert_eq!(narrow_bridge_ids(None, None), Some(None));
+        assert_eq!(
+            narrow_bridge_ids(Some(&[1, 3]), None),
+            Some(Some(vec![1, 3]))
+        );
+        // no cluster set: selection as sent (order and duplicates kept)
+        assert_eq!(
+            narrow_bridge_ids(None, Some(vec![3, 1, 3])),
+            Some(Some(vec![3, 1, 3]))
+        );
+        // intersection, sorted and deduplicated
+        assert_eq!(
+            narrow_bridge_ids(Some(&[1, 2, 3]), Some(vec![3, 9, 1, 3])),
+            Some(Some(vec![1, 3]))
+        );
+        // disjoint: no rows
+        assert_eq!(narrow_bridge_ids(Some(&[1]), Some(vec![2])), None);
+    }
+
+    #[test]
+    fn test_narrow_bridges_copies_other_fields_unchanged() {
+        let scope = ReadScope {
+            home_chain_id: Some(100),
+            counterparty_chain_ids: Some(vec![1, 2]),
+            bridge_ids: Some(vec![1, 3]),
+            include_unindexed_chains: true,
+        };
+        let narrowed = scope.narrow_bridges(Some(vec![3, 7])).unwrap();
+        assert_eq!(
+            narrowed,
+            ReadScope {
+                bridge_ids: Some(vec![3]),
+                ..scope.clone()
+            }
+        );
+        assert_eq!(scope.narrow_bridges(Some(vec![7])), None);
+
+        let stats = ChainStatsScope {
+            chain_id: 5,
+            counterparty_chain_ids: Some(vec![1]),
+            bridge_ids: Some(vec![1, 3]),
+            include_unindexed_chains: true,
+        };
+        let narrowed = stats.clone().narrow_bridges(Some(vec![3, 7])).unwrap();
+        assert_eq!(
+            narrowed,
+            ChainStatsScope {
+                bridge_ids: Some(vec![3]),
+                ..stats.clone()
+            }
+        );
+        assert_eq!(stats.narrow_bridges(Some(vec![7])), None);
     }
 }
