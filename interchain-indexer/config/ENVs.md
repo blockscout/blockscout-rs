@@ -6,8 +6,8 @@ This file doubles as the shared reference for the whole `config/` tree: grammar,
 
 | Set | Contents | Document |
 | --- | --- | --- |
-| `config/full-mainnet` | AMB/Omnibridge + Avalanche ICTT on C-Chain, mainnet (subnets added per deployment); clusters `ethereum`, `gnosis` | [ENVs.md](full-mainnet/ENVs.md) |
-| `config/full-testnet` | AMB/Omnibridge + xDai bridge, testnet; clusters `sepolia`, `chiado` | [ENVs.md](full-testnet/ENVs.md) |
+| `config/full-mainnet` | AMB/Omnibridge + Avalanche ICTT on C-Chain, mainnet (subnets added per deployment); clusters `ethereum`, `gnosis`, `multichain` | [ENVs.md](full-mainnet/ENVs.md) |
+| `config/full-testnet` | AMB/Omnibridge + xDai bridge, testnet; clusters `sepolia`, `chiado`, `multichain` | [ENVs.md](full-testnet/ENVs.md) |
 | `config/omnibridge` | AMB/Omnibridge only, mainnet + testnet | [ENVs.md](omnibridge/ENVs.md) |
 | `config/avalanche` | Avalanche ICM/ICTT only: C-Chain, NUMINE, Henesys | [ENVs.md](avalanche/ENVs.md) |
 | `config/xdai` | xDai bridge only, mainnet + testnet | [ENVs.md](xdai/ENVs.md) |

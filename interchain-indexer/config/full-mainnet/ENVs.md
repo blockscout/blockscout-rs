@@ -22,6 +22,7 @@ Every block below stands alone. Copy a chain block to add that chain, a bridge b
 | --- | --- | --- |
 | `ethereum` | `1` | all |
 | `gnosis` | `100` | `1`, `3` |
+| `multichain` | — | all |
 
 The Avalanche side ships with C-Chain only, deliberately: bridge `2` has
 `process_unknown_chains: true`, so subnets are indexed through their C-Chain
@@ -40,8 +41,8 @@ INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/full-mainnet/bridges.json
 INTERCHAIN_INDEXER__CLUSTERS_CONFIG=config/full-mainnet/clusters.json  # optional
 ```
 
-Without `INTERCHAIN_INDEXER__CLUSTERS_CONFIG` the `ethereum` and `gnosis`
-clusters are not loaded; clusters then come only from the environment (see
+Without `INTERCHAIN_INDEXER__CLUSTERS_CONFIG` the `ethereum`, `gnosis` and
+`multichain` clusters are not loaded; clusters then come only from the environment (see
 [Clusters](#clusters)).
 
 ## Chains
@@ -300,8 +301,8 @@ INTERCHAIN_INDEXER_BRIDGES__3__CONTRACTS__100__0x7301CFA0e1756B71869E93d4e4Dca5c
 ## Clusters
 
 Read API presets served under `/api/v1/clusters/<id>/…`. Field reference and
-startup checks: [`config/ENVs.md`](../ENVs.md#clusters). Neither cluster below
-sets `include_unindexed_chains`, so both use its default, `false`.
+startup checks: [`config/ENVs.md`](../ENVs.md#clusters). No cluster below sets
+`include_unindexed_chains`, so all use its default, `false`.
 
 ### Cluster `ethereum`
 
@@ -332,6 +333,18 @@ INTERCHAIN_INDEXER_CLUSTERS__GNOSIS__HOME_CHAIN_ID=100
 INTERCHAIN_INDEXER_CLUSTERS__GNOSIS__BRIDGE_IDS='[1,3]'
 ```
 
+### Cluster `multichain`
+
+No filters: every chain and every bridge, with unindexed chains hidden, the
+same as a legacy route called without filter params. The one exception is
+message details: the cluster route also hides a message its own bridge could not
+fully observe (404), while the legacy details route returns it. An empty
+cluster has no fields, so there is only the entry form:
+
+```bash
+INTERCHAIN_INDEXER_CLUSTERS__MULTICHAIN='{}'
+```
+
 ## Optional subnets, added per deployment
 
 Neither subnet below is in `chains.json` or `bridges.json`. Each deployment adds the
@@ -358,7 +371,7 @@ Both subnets are indexed from a file — no environment needed — by
 One variable:
 
 ```bash
-INTERCHAIN_INDEXER_CHAINS__8021='{"name":"NUMINE Mainnet","icon":"https://images.ctfassets.net/gcj8jwzm6086/411JTIUnbER3rI5dpOR54Y/3c0a8e47d58818a66edd868d6a03a135/numine_main_icon.png","explorer":{"url":"https://subnets.avax.network/numi"},"rpcs":[{"glacier":{"url":"https://glacier-api.avax.network/v1/ext/bc/8021/rpc","max_rps":1,"multicall_batching_us":0}}]}'
+INTERCHAIN_INDEXER_CHAINS__8021='{"name":"NUMINE Mainnet","icon":"https://images.ctfassets.net/gcj8jwzm6086/411JTIUnbER3rI5dpOR54Y/3c0a8e47d58818a66edd868d6a03a135/numine_main_icon.png","explorer":{"url":"https://numinescan.numine.io/numi"},"rpcs":[{"numine":{"url":"https://rpc.numine.io","max_rps":25,"multicall_batching_us":0}}]}'
 ```
 
 Field by field:
@@ -366,11 +379,11 @@ Field by field:
 ```bash
 INTERCHAIN_INDEXER_CHAINS__8021__NAME='NUMINE Mainnet'
 INTERCHAIN_INDEXER_CHAINS__8021__ICON=https://images.ctfassets.net/gcj8jwzm6086/411JTIUnbER3rI5dpOR54Y/3c0a8e47d58818a66edd868d6a03a135/numine_main_icon.png
-INTERCHAIN_INDEXER_CHAINS__8021__EXPLORER__URL=https://subnets.avax.network/numi
-# rpc provider "glacier"
-INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__URL=https://glacier-api.avax.network/v1/ext/bc/8021/rpc
-INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__MAX_RPS=1
-INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__MULTICALL_BATCHING_US=0
+INTERCHAIN_INDEXER_CHAINS__8021__EXPLORER__URL=https://numinescan.numine.io/numi
+# rpc provider "Numine"
+INTERCHAIN_INDEXER_CHAINS__8021__RPCS__NUMINE__URL=https://rpc.numine.io
+INTERCHAIN_INDEXER_CHAINS__8021__RPCS__NUMINE__MAX_RPS=25
+INTERCHAIN_INDEXER_CHAINS__8021__RPCS__NUMINE__MULTICALL_BATCHING_US=0
 ```
 
 Its bridge `2` contract:

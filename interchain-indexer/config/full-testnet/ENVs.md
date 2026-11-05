@@ -20,6 +20,7 @@ Every block below stands alone. Copy a chain block to add that chain, a bridge b
 | --- | --- | --- | --- |
 | `sepolia` | `11155111` | all | `clusters.json` |
 | `chiado` | `10200` | `1001`, `1003` | `clusters.json` |
+| `multichain` | — | all | `clusters.json` |
 
 ## Config files
 
@@ -29,8 +30,8 @@ INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/full-testnet/bridges.json
 INTERCHAIN_INDEXER__CLUSTERS_CONFIG=config/full-testnet/clusters.json  # optional
 ```
 
-Without `INTERCHAIN_INDEXER__CLUSTERS_CONFIG` the `sepolia` and `chiado`
-clusters are not loaded; clusters then come only from the environment (see
+Without `INTERCHAIN_INDEXER__CLUSTERS_CONFIG` the `sepolia`, `chiado` and
+`multichain` clusters are not loaded; clusters then come only from the environment (see
 [Clusters](#clusters)).
 
 ## Chains
@@ -235,8 +236,8 @@ INTERCHAIN_INDEXER_BRIDGES__1003__CONTRACTS__10200__0xccA0Dc2A058884e62082312F09
 ## Clusters
 
 Read API presets served under `/api/v1/clusters/<id>/…`. Field reference and
-startup checks: [`config/ENVs.md`](../ENVs.md#clusters). Neither cluster below
-sets `include_unindexed_chains`, so both use its default, `false`.
+startup checks: [`config/ENVs.md`](../ENVs.md#clusters). No cluster below sets
+`include_unindexed_chains`, so all use its default, `false`.
 
 ### Cluster `sepolia`
 
@@ -265,4 +266,16 @@ Field by field:
 ```bash
 INTERCHAIN_INDEXER_CLUSTERS__CHIADO__HOME_CHAIN_ID=10200
 INTERCHAIN_INDEXER_CLUSTERS__CHIADO__BRIDGE_IDS='[1001,1003]'
+```
+
+### Cluster `multichain`
+
+No filters: every chain and every bridge, with unindexed chains hidden, the
+same as a legacy route called without filter params. The one exception is
+message details: the cluster route also hides a message its own bridge could not
+fully observe (404), while the legacy details route returns it. An empty
+cluster has no fields, so there is only the entry form:
+
+```bash
+INTERCHAIN_INDEXER_CLUSTERS__MULTICHAIN='{}'
 ```
