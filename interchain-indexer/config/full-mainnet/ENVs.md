@@ -18,6 +18,11 @@ Every block below stands alone. Copy a chain block to add that chain, a bridge b
 | `2` | Avalanche ICTT | `avalanche_native` / `icm_ictt` | 1 |
 | `3` | xDai Bridge | `xdai` / `xdai` | 4 |
 
+| Cluster | `home_chain_id` | `bridge_ids` |
+| --- | --- | --- |
+| `ethereum` | `1` | all |
+| `gnosis` | `100` | `1`, `3` |
+
 The Avalanche side ships with C-Chain only, deliberately: bridge `2` has
 `process_unknown_chains: true`, so subnets are indexed through their C-Chain
 counterpart even when unconfigured, and each subnet is then added per deployment
@@ -32,7 +37,12 @@ file.
 ```bash
 INTERCHAIN_INDEXER__CHAINS_CONFIG=config/full-mainnet/chains.json
 INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/full-mainnet/bridges.json
+INTERCHAIN_INDEXER__CLUSTERS_CONFIG=config/full-mainnet/clusters.json  # optional
 ```
+
+Without `INTERCHAIN_INDEXER__CLUSTERS_CONFIG` the `ethereum` and `gnosis`
+clusters are not loaded; clusters then come only from the environment (see
+[Clusters](#clusters)).
 
 ## Chains
 
@@ -287,6 +297,41 @@ INTERCHAIN_INDEXER_BRIDGES__3__CONTRACTS__100__0x7301CFA0e1756B71869E93d4e4Dca5c
 
 </details>
 
+## Clusters
+
+Read API presets served under `/api/v1/clusters/<id>/…`. Field reference and
+startup checks: [`config/ENVs.md`](../ENVs.md#clusters). Neither cluster below
+sets `include_unindexed_chains`, so both use its default, `false`.
+
+### Cluster `ethereum`
+
+One variable:
+
+```bash
+INTERCHAIN_INDEXER_CLUSTERS__ETHEREUM='{"home_chain_id":1}'
+```
+
+Field by field:
+
+```bash
+INTERCHAIN_INDEXER_CLUSTERS__ETHEREUM__HOME_CHAIN_ID=1
+```
+
+### Cluster `gnosis`
+
+One variable:
+
+```bash
+INTERCHAIN_INDEXER_CLUSTERS__GNOSIS='{"home_chain_id":100,"bridge_ids":[1,3]}'
+```
+
+Field by field:
+
+```bash
+INTERCHAIN_INDEXER_CLUSTERS__GNOSIS__HOME_CHAIN_ID=100
+INTERCHAIN_INDEXER_CLUSTERS__GNOSIS__BRIDGE_IDS='[1,3]'
+```
+
 ## Optional subnets, added per deployment
 
 Neither subnet below is in `chains.json` or `bridges.json`. Each deployment adds the
@@ -297,7 +342,8 @@ Adding a subnet takes **two** blocks: the chain, so the indexer has an RPC and e
 for it, and a bridge `2` contract entry, so its own ICTT contract is scanned. Contract
 entries merge per-entry (`…__CONTRACTS__<CHAIN>__<ADDRESS>__<VERSION>__…`), so adding
 one leaves the C-Chain entry alone — unlike `…__CONTRACTS='[…]'`, which replaces the
-array wholesale.
+array wholesale. A subnet's Read API cluster, if it has one, is a third block that
+must come and go with the other two.
 
 Leaving a subnet out does not hide its messages: bridge `2` sets
 `process_unknown_chains: true`, so ICTT traffic to and from an unconfigured chain is
@@ -331,6 +377,22 @@ Its bridge `2` contract:
 
 ```bash
 INTERCHAIN_INDEXER_BRIDGES__2__CONTRACTS__8021__0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf__1__STARTED_AT_BLOCK=4
+```
+
+Its cluster, `numine`. It lives here and not in `clusters.json` because it
+needs the two blocks above: without them bridge `2` does not index `8021`, and
+the cluster startup check rejects a cluster whose chain none of its bridges
+indexes. Add and remove it together with the subnet:
+
+```bash
+INTERCHAIN_INDEXER_CLUSTERS__NUMINE='{"home_chain_id":8021,"bridge_ids":[2]}'
+```
+
+or field by field:
+
+```bash
+INTERCHAIN_INDEXER_CLUSTERS__NUMINE__HOME_CHAIN_ID=8021
+INTERCHAIN_INDEXER_CLUSTERS__NUMINE__BRIDGE_IDS='[2]'
 ```
 
 Glacier accepts an `x-glacier-api-key` header and rate-limits harder without one. The

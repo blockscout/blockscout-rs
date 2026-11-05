@@ -6,8 +6,8 @@ This file doubles as the shared reference for the whole `config/` tree: grammar,
 
 | Set | Contents | Document |
 | --- | --- | --- |
-| `config/full-mainnet` | AMB/Omnibridge + Avalanche ICTT on C-Chain, mainnet (subnets added per deployment) | [ENVs.md](full-mainnet/ENVs.md) |
-| `config/full-testnet` | AMB/Omnibridge + xDai bridge, testnet | [ENVs.md](full-testnet/ENVs.md) |
+| `config/full-mainnet` | AMB/Omnibridge + Avalanche ICTT on C-Chain, mainnet (subnets added per deployment); clusters `ethereum`, `gnosis` | [ENVs.md](full-mainnet/ENVs.md) |
+| `config/full-testnet` | AMB/Omnibridge + xDai bridge, testnet; clusters `sepolia`, `chiado` | [ENVs.md](full-testnet/ENVs.md) |
 | `config/omnibridge` | AMB/Omnibridge only, mainnet + testnet | [ENVs.md](omnibridge/ENVs.md) |
 | `config/avalanche` | Avalanche ICM/ICTT only: C-Chain, NUMINE, Henesys | [ENVs.md](avalanche/ENVs.md) |
 | `config/xdai` | xDai bridge only, mainnet + testnet | [ENVs.md](xdai/ENVs.md) |
@@ -19,10 +19,11 @@ This file doubles as the shared reference for the whole `config/` tree: grammar,
 | `INTERCHAIN_INDEXER__…` | the service settings | **double** underscore |
 | `INTERCHAIN_INDEXER_CHAINS…` | the chains config | single underscore |
 | `INTERCHAIN_INDEXER_BRIDGES…` | the bridges config | single underscore |
+| `INTERCHAIN_INDEXER_CLUSTERS…` | the clusters config (Read API presets) | single underscore |
 | `INTERCHAIN_INDEXER_RPC_API_KEY__…` | RPC provider secrets | single underscore |
 
 The single underscore is load-bearing: the main settings source reads
-`INTERCHAIN_INDEXER__*`, so these three families are invisible to it and cannot
+`INTERCHAIN_INDEXER__*`, so these families are invisible to it and cannot
 collide.
 
 ```text
@@ -38,14 +39,16 @@ addressed by the same keys the database is unique on:
 | --- | --- | --- |
 | chains top-level array | `chain_id` | `INTERCHAIN_INDEXER_CHAINS__<CHAIN_ID>` |
 | bridges top-level array | `bridge_id` | `INTERCHAIN_INDEXER_BRIDGES__<BRIDGE_ID>` |
+| clusters top-level array | `id` | `INTERCHAIN_INDEXER_CLUSTERS__<ID>` |
 | `bridges[].contracts` | `(chain_id, address, version)` | `…__CONTRACTS__<CHAIN_ID>__<ADDRESS>__<VERSION>` |
 | `chains[].rpcs` | provider name (map key) | `…__RPCS__<PROVIDER_NAME>` |
 
 No match appends a new element with the key fields injected; more than one match
 fails startup. Env is merged **on top of** the file and always wins.
 
-Full narrative: [README — Overriding `chains.json` / `bridges.json` via
-environment](../README.md#overriding-chainsjson--bridgesjson-via-environment).
+Full narrative: [README — Overriding `chains.json` / `bridges.json` /
+`clusters.json` via
+environment](../README.md#overriding-chainsjson--bridgesjson--clustersjson-via-environment).
 
 ## Which files the service reads
 
@@ -55,6 +58,11 @@ INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/bridges.json  # []
 ```
 
 Both are **required** — the service has no fallback path and fails to start without them. Pointing them at the empty arrays is what turns the variables below from overrides into the entire configuration.
+
+The clusters file is **optional**, and this base set ships none: leave
+`INTERCHAIN_INDEXER__CLUSTERS_CONFIG` unset and every cluster comes from
+`INTERCHAIN_INDEXER_CLUSTERS…` variables alone; with neither, no cluster is
+configured and every `/api/v1/clusters/…` route answers 404.
 
 ## Short form — JSON values
 
@@ -193,6 +201,33 @@ chains present in `contracts` — validated at startup.
 | `started_at_block` | `__STARTED_AT_BLOCK` | yes | must be ≥ `1`; `0` fails startup. For `xdai` it is also an identity epoch floor: a value below the deployment's floor fails startup |
 | `kind` | `__KIND` | no | `amb_proxy`, `omnibridge_mediator`, … |
 | `abi` | `__ABI` | no | inline JSON array, or a JSON-quoted string |
+
+### `clusters[]`
+
+A cluster is a named preset of the Read API filter fields, served under
+`/api/v1/clusters/<id>/…` (README, "Cluster-Scoped Read API").
+
+| Field | Env path suffix | Required | Default |
+| --- | --- | --- | --- |
+| `id` | *(taken from the path)* | yes | — |
+| `home_chain_id` | `__HOME_CHAIN_ID` | no | none |
+| `counterparty_chain_ids` | `__COUNTERPARTY_CHAIN_IDS` | no | none (no restriction) |
+| `bridge_ids` | `__BRIDGE_IDS` | no | none (all bridges) |
+| `include_unindexed_chains` | `__INCLUDE_UNINDEXED_CHAINS` | no | `false` |
+
+- **Ids** are lowercase letters and digits in groups joined by a single `_` or
+  `-` (`gnosis`, `eth-gno`), never a plain integer. An env-created entry takes
+  its id from the path segment, lowercased. A shell cannot export a field
+  variable for an id containing `-`; use the entry or whole-array form for it.
+- **Lists are JSON arrays, not CSV:** `…__BRIDGE_IDS='[1,3]'`. An explicit `[]`
+  fails startup; omit the field (or set `null`) for no restriction.
+- **`include_unindexed_chains` is a plain bool.** Omit it for `false`; `null`
+  fails the typed parse.
+- **Startup checks** name the cluster on failure: unknown field, bad or
+  duplicate id, empty list, a `bridge_ids` entry missing from the bridges
+  config, and — with `include_unindexed_chains = false` — a cluster chain that
+  none of its bridges indexes (it could only return empty results). A cluster
+  over an env-added subnet must therefore be added together with that subnet.
 
 ## Gotchas
 

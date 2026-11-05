@@ -1,0 +1,11 @@
+[
+  {
+    "id": "sepolia",
+    "home_chain_id": 11155111
+  },
+  {
+    "id": "chiado",
+    "home_chain_id": 10200,
+    "bridge_ids": [1001, 1003]
+  }
+]

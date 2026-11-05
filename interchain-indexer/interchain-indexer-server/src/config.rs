@@ -2411,8 +2411,28 @@ mod tests {
                     .unwrap_or_else(|e| panic!("invalid bridges config {path:?}: {e}"));
                 validate_bridge_ids(&bridges)
                     .unwrap_or_else(|e| panic!("invalid bridges config {path:?}: {e}"));
+            } else if name.starts_with("clusters") {
+                // The startup loader, not a bare serde parse: it also runs the
+                // shape checks (id rules, duplicates, empty lists).
+                let clusters = load_clusters_impl(Some(&path), std::iter::empty())
+                    .unwrap_or_else(|e| panic!("invalid clusters config {path:?}: {e:#}"));
+                // And the cross-config startup check against the bridges file
+                // of the same set, built the way `server::run` builds it, so a
+                // committed preset that would fail startup fails here first.
+                let bridges_path = path.with_file_name("bridges.json");
+                let bridges = load_bridges_impl(&bridges_path, std::iter::empty())
+                    .unwrap_or_else(|e| panic!("invalid bridges config {bridges_path:?}: {e:#}"));
+                let indexed_chains = IndexedChains::from_bridges(bridges.iter().map(|b| {
+                    (
+                        b.bridge_id,
+                        b.contracts.iter().map(|c| c.chain_id).collect(),
+                    )
+                }));
+                validate_clusters(&clusters, &bridges, &indexed_chains).unwrap_or_else(|e| {
+                    panic!("clusters config {path:?} fails the startup check: {e:#}")
+                });
             } else {
-                panic!("unexpected config file {path:?}: neither chains* nor bridges*");
+                panic!("unexpected config file {path:?}: neither chains*, bridges* nor clusters*");
             }
         }
     }
