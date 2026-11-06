@@ -15,12 +15,12 @@ use crate::{
         scope::ReadScope,
         utils::{
             build_chain_bridge_filter, checked_bridge_id, list_page_params, non_empty,
-            parse_bridge_ids_csv, parse_chain_ids_csv,
+            parse_bridge_ids_csv, parse_chain_ids_csv, parse_list_q,
         },
     },
 };
 use interchain_indexer_logic::{
-    ChainBridgeFilter,
+    ChainBridgeFilter, ListSubject,
     pagination::{MessagesPaginationLogic, TransfersPaginationLogic},
 };
 use tonic::{Request, Response, Status};
@@ -92,8 +92,7 @@ impl InterchainClusterService for InterchainServiceImpl {
         match filter {
             Some(filter) => {
                 self.messages_page(
-                    None,
-                    None,
+                    parse_list_q(inner.q.as_deref()),
                     filter,
                     page_size,
                     is_last_page,
@@ -139,8 +138,7 @@ impl InterchainClusterService for InterchainServiceImpl {
         match filter {
             Some(filter) => {
                 self.messages_page(
-                    Some(tx_hash),
-                    None,
+                    Some(ListSubject::Transaction(tx_hash)),
                     filter,
                     page_size,
                     is_last_page,
@@ -170,8 +168,7 @@ impl InterchainClusterService for InterchainServiceImpl {
         match filter {
             Some(filter) => {
                 self.messages_page(
-                    None,
-                    Some(address),
+                    Some(ListSubject::Address(address)),
                     filter,
                     page_size,
                     is_last_page,
@@ -200,8 +197,7 @@ impl InterchainClusterService for InterchainServiceImpl {
         match filter {
             Some(filter) => {
                 self.transfers_page(
-                    None,
-                    None,
+                    parse_list_q(inner.q.as_deref()),
                     filter,
                     page_size,
                     is_last_page,
@@ -231,8 +227,7 @@ impl InterchainClusterService for InterchainServiceImpl {
         match filter {
             Some(filter) => {
                 self.transfers_page(
-                    Some(tx_hash),
-                    None,
+                    Some(ListSubject::Transaction(tx_hash)),
                     filter,
                     page_size,
                     is_last_page,
@@ -262,8 +257,7 @@ impl InterchainClusterService for InterchainServiceImpl {
         match filter {
             Some(filter) => {
                 self.transfers_page(
-                    None,
-                    Some(address),
+                    Some(ListSubject::Address(address)),
                     filter,
                     page_size,
                     is_last_page,

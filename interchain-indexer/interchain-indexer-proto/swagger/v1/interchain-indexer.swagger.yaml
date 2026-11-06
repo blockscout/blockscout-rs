@@ -190,7 +190,13 @@ paths:
           required: true
           type: string
         - name: q
-          description: multisearch ability
+          description: |-
+            Exact-match search; blank means no filter. 40 hex digits (an address)
+            match the message's sender or recipient; 64 hex digits (a 32-byte hash)
+            match its message id or its source or destination transaction hash. The
+            0x prefix is optional; letter case and surrounding whitespace are
+            ignored; any other value returns an empty list. Combines with the other
+            filters by AND; keep it unchanged while paging.
           in: query
           required: false
           type: string
@@ -428,7 +434,13 @@ paths:
           required: true
           type: string
         - name: q
-          description: multisearch ability
+          description: |-
+            Exact-match search; blank means no filter. 40 hex digits (an address)
+            match the transfer's sender or recipient; 64 hex digits (a 32-byte hash)
+            match its message id or its message's source or destination transaction
+            hash. The 0x prefix is optional; letter case and surrounding whitespace
+            are ignored; any other value returns an empty list. Combines with the
+            other filters by AND; keep it unchanged while paging.
           in: query
           required: false
           type: string
@@ -966,7 +978,13 @@ paths:
             $ref: '#/definitions/rpcStatus'
       parameters:
         - name: q
-          description: multisearch ability
+          description: |-
+            Exact-match search; blank means no filter. 40 hex digits (an address)
+            match the message's sender or recipient; 64 hex digits (a 32-byte hash)
+            match its message id or its source or destination transaction hash. The
+            0x prefix is optional; letter case and surrounding whitespace are
+            ignored; any other value returns an empty list. Combines with the other
+            filters by AND; keep it unchanged while paging.
           in: query
           required: false
           type: string
@@ -1250,7 +1268,13 @@ paths:
             $ref: '#/definitions/rpcStatus'
       parameters:
         - name: q
-          description: multisearch ability
+          description: |-
+            Exact-match search; blank means no filter. 40 hex digits (an address)
+            match the transfer's sender or recipient; 64 hex digits (a 32-byte hash)
+            match its message id or its message's source or destination transaction
+            hash. The 0x prefix is optional; letter case and surrounding whitespace
+            are ignored; any other value returns an empty list. Combines with the
+            other filters by AND; keep it unchanged while paging.
           in: query
           required: false
           type: string
@@ -2264,11 +2288,11 @@ definitions:
       every list endpoint. Send `page_token` back unchanged. A token is valid only
       with the same filters (`home_chain_id`, `counterparty_chain_ids`,
       `src_chain_ids`, `dst_chain_ids`, `bridge_ids`, `chain_ids`,
-      `include_unindexed_chains`), path scope (cluster_id, tx_hash, address, chain_id) and, for
-      stats lists, `q`, `sort` and `order` as the request that produced it. The
-      cursor does not encode them and is not re-validated against them, so
-      changing any of them mid-pagination is unsupported and yields undefined
-      results; callers must restart pagination when they change.
+      `include_unindexed_chains`, `q`), path scope (cluster_id, tx_hash, address,
+      chain_id) and, for stats lists, `sort` and `order` as the request that
+      produced it. The cursor does not encode them and is not re-validated
+      against them, so changing any of them mid-pagination is unsupported and
+      yields undefined results; callers must restart pagination when they change.
   v1RescanBlockRange:
     type: object
     properties:
