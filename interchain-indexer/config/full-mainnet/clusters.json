@@ -1,0 +1,14 @@
+[
+  {
+    "id": "ethereum",
+    "home_chain_id": 1
+  },
+  {
+    "id": "gnosis",
+    "home_chain_id": 100,
+    "bridge_ids": [1, 3]
+  },
+  {
+    "id": "multichain"
+  }
+]

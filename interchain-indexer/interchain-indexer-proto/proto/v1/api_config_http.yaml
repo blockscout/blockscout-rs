@@ -35,12 +35,6 @@ http:
 
     #################### Statistics ####################
 
-    - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetCommonStatistics
-      get: /api/v1/stats/common
-
-    - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetDailyStatistics
-      get: /api/v1/stats/daily
-
     - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetBridgedTokens
       get: /api/v1/stats/chain/{chain_id}/bridged-tokens
 
@@ -52,6 +46,47 @@ http:
 
     - selector: blockscout.interchainIndexer.v1.InterchainStatisticsService.GetReceivedMessagePaths
       get: /api/v1/stats/chain/{chain_id}/messages-paths/received
+
+    #################### Clusters ####################
+
+    - selector: blockscout.interchainIndexer.v1.InterchainClusterService.GetChains
+      get: /api/v1/clusters/{cluster_id}/interchain/chains
+
+    - selector: blockscout.interchainIndexer.v1.InterchainClusterService.GetBridges
+      get: /api/v1/clusters/{cluster_id}/interchain/bridges
+
+    - selector: blockscout.interchainIndexer.v1.InterchainClusterService.GetMessages
+      get: /api/v1/clusters/{cluster_id}/interchain/messages
+
+    - selector: blockscout.interchainIndexer.v1.InterchainClusterService.GetMessageDetails
+      get: /api/v1/clusters/{cluster_id}/interchain/messages/{message_id}
+
+    - selector: blockscout.interchainIndexer.v1.InterchainClusterService.GetMessagesByTransaction
+      get: /api/v1/clusters/{cluster_id}/interchain/messages:byTx/{tx_hash}
+
+    - selector: blockscout.interchainIndexer.v1.InterchainClusterService.GetMessagesByAddress
+      get: /api/v1/clusters/{cluster_id}/interchain/messages:byAddress/{address}
+
+    - selector: blockscout.interchainIndexer.v1.InterchainClusterService.GetTransfers
+      get: /api/v1/clusters/{cluster_id}/interchain/transfers
+
+    - selector: blockscout.interchainIndexer.v1.InterchainClusterService.GetTransfersByTransaction
+      get: /api/v1/clusters/{cluster_id}/interchain/transfers:byTx/{tx_hash}
+
+    - selector: blockscout.interchainIndexer.v1.InterchainClusterService.GetTransfersByAddress
+      get: /api/v1/clusters/{cluster_id}/interchain/transfers:byAddress/{address}
+
+    - selector: blockscout.interchainIndexer.v1.InterchainClusterStatisticsService.GetBridgedTokens
+      get: /api/v1/clusters/{cluster_id}/stats/chain/{chain_id}/bridged-tokens
+
+    - selector: blockscout.interchainIndexer.v1.InterchainClusterStatisticsService.GetChainsStats
+      get: /api/v1/clusters/{cluster_id}/stats/chains
+
+    - selector: blockscout.interchainIndexer.v1.InterchainClusterStatisticsService.GetSentMessagePaths
+      get: /api/v1/clusters/{cluster_id}/stats/chain/{chain_id}/messages-paths/sent
+
+    - selector: blockscout.interchainIndexer.v1.InterchainClusterStatisticsService.GetReceivedMessagePaths
+      get: /api/v1/clusters/{cluster_id}/stats/chain/{chain_id}/messages-paths/received
     
     #################### Health ####################
 

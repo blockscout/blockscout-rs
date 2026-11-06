@@ -9,6 +9,8 @@ info:
 tags:
   - name: InterchainService
   - name: InterchainStatisticsService
+  - name: InterchainClusterService
+  - name: InterchainClusterStatisticsService
   - name: StatusService
   - name: Health
   - name: InterchainAdminService
@@ -104,6 +106,780 @@ paths:
         - Admin
       security:
         - ApiKeyAuth: []
+  /api/v1/clusters/{cluster_id}/interchain/bridges:
+    get:
+      summary: |-
+        Bridge directory restricted to the cluster's bridge_ids (all bridges when
+        the cluster sets none). Each entry is returned unchanged.
+      operationId: InterchainClusterService_GetBridges
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetBridgesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+      tags:
+        - InterchainClusterService
+  /api/v1/clusters/{cluster_id}/interchain/chains:
+    get:
+      summary: Chain directory restricted to the cluster's chains (and `chain_ids`).
+      operationId: InterchainClusterService_GetChains
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetChainsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: chain_ids
+          description: |-
+            Optional comma-separated chain ids, for example `123,456`. Intersected with
+            the cluster's chains: home_chain_id plus counterparty_chain_ids, or
+            counterparty_chain_ids alone, or every chain when the cluster sets no
+            counterparty_chain_ids. Ids outside the cluster's chains match nothing, so
+            a selection with none inside returns an empty list. The rows are then
+            restricted, as on GET /api/v1/interchain/chains, to the chains the
+            cluster's bridges index today and, unless the cluster sets
+            include_unindexed_chains, to chains some configured bridge indexes.
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+            The rows are then restricted to the chains the selected bridges index
+            today, as on GET /api/v1/interchain/chains.
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainClusterService
+  /api/v1/clusters/{cluster_id}/interchain/messages:
+    get:
+      operationId: InterchainClusterService_GetMessages
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetMessagesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: q
+          description: multisearch ability
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          description: 'Items on a page: bounded by the API settings'
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          description: If true, return only the last page (pagination token is ignored)
+          in: query
+          required: false
+          type: boolean
+        - name: page_token
+          description: |-
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same cluster, filters and path scope as the request that
+            produced it. A malformed value is rejected with InvalidArgument.
+          in: query
+          required: false
+          type: string
+        - name: src_chain_ids
+          description: |-
+            Comma-separated source chain ids. Narrows the cluster's messages through
+            AND (messages whose src_chain_id is in this set).
+          in: query
+          required: false
+          type: string
+        - name: dst_chain_ids
+          description: |-
+            Comma-separated destination chain ids. Narrows the cluster's messages
+            through AND (messages whose dst_chain_id is in this set). A destination
+            filter excludes messages with a NULL destination.
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainClusterService
+  /api/v1/clusters/{cluster_id}/interchain/messages/{message_id}:
+    get:
+      summary: |-
+        Message details. A message outside the cluster returns NotFound, the same
+        as a missing one. An id shared with a bridge outside the cluster resolves
+        without bridge_id. The message's transfers are returned unfiltered.
+      operationId: InterchainClusterService_GetMessageDetails
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1InterchainMessage'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: message_id
+          in: path
+          required: true
+          type: string
+        - name: bridge_id
+          description: |-
+            Optional bridge qualifier. Needed only when message_id exists in more than
+            one bridge inside the cluster; an ambiguous unqualified lookup returns
+            FailedPrecondition (HTTP 400).
+          in: query
+          required: false
+          type: integer
+          format: int64
+      tags:
+        - InterchainClusterService
+  /api/v1/clusters/{cluster_id}/interchain/messages:byAddress/{address}:
+    get:
+      operationId: InterchainClusterService_GetMessagesByAddress
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetMessagesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: address
+          in: path
+          required: true
+          type: string
+        - name: page_size
+          description: 'Items on a page: bounded by the API settings'
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          description: If true, return only the last page (pagination token is ignored)
+          in: query
+          required: false
+          type: boolean
+        - name: page_token
+          description: |-
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same cluster, filters and path scope as the request that
+            produced it. A malformed value is rejected with InvalidArgument.
+          in: query
+          required: false
+          type: string
+        - name: src_chain_ids
+          description: |-
+            Comma-separated source chain ids. Narrows the cluster's messages through
+            AND (messages whose src_chain_id is in this set).
+          in: query
+          required: false
+          type: string
+        - name: dst_chain_ids
+          description: |-
+            Comma-separated destination chain ids. Narrows the cluster's messages
+            through AND (messages whose dst_chain_id is in this set). A destination
+            filter excludes messages with a NULL destination.
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainClusterService
+  /api/v1/clusters/{cluster_id}/interchain/messages:byTx/{tx_hash}:
+    get:
+      operationId: InterchainClusterService_GetMessagesByTransaction
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetMessagesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: tx_hash
+          in: path
+          required: true
+          type: string
+        - name: page_size
+          description: 'Items on a page: bounded by the API settings'
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          description: If true, return only the last page (pagination token is ignored)
+          in: query
+          required: false
+          type: boolean
+        - name: page_token
+          description: |-
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same cluster, filters and path scope as the request that
+            produced it. A malformed value is rejected with InvalidArgument.
+          in: query
+          required: false
+          type: string
+        - name: src_chain_ids
+          description: |-
+            Comma-separated source chain ids. Narrows the cluster's messages through
+            AND (messages whose src_chain_id is in this set).
+          in: query
+          required: false
+          type: string
+        - name: dst_chain_ids
+          description: |-
+            Comma-separated destination chain ids. Narrows the cluster's messages
+            through AND (messages whose dst_chain_id is in this set). A destination
+            filter excludes messages with a NULL destination.
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainClusterService
+  /api/v1/clusters/{cluster_id}/interchain/transfers:
+    get:
+      operationId: InterchainClusterService_GetTransfers
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetTransfersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: q
+          description: multisearch ability
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          description: 'Items on a page: bounded by the API settings'
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          description: If true, return only the last page (pagination token is ignored)
+          in: query
+          required: false
+          type: boolean
+        - name: page_token
+          description: |-
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same cluster, filters and path scope as the request that
+            produced it. A malformed value is rejected with InvalidArgument.
+          in: query
+          required: false
+          type: string
+        - name: src_chain_ids
+          description: |-
+            Comma-separated source chain ids. Narrows the cluster's transfers through
+            AND, matched by the transfer's own token source chain (token_src_chain_id).
+          in: query
+          required: false
+          type: string
+        - name: dst_chain_ids
+          description: |-
+            Comma-separated destination chain ids. Narrows the cluster's transfers
+            through AND, matched by the transfer's own token destination chain
+            (token_dst_chain_id).
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainClusterService
+  /api/v1/clusters/{cluster_id}/interchain/transfers:byAddress/{address}:
+    get:
+      operationId: InterchainClusterService_GetTransfersByAddress
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetTransfersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: address
+          in: path
+          required: true
+          type: string
+        - name: page_size
+          description: 'Items on a page: bounded by the API settings'
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          description: If true, return only the last page (pagination token is ignored)
+          in: query
+          required: false
+          type: boolean
+        - name: page_token
+          description: |-
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same cluster, filters and path scope as the request that
+            produced it. A malformed value is rejected with InvalidArgument.
+          in: query
+          required: false
+          type: string
+        - name: src_chain_ids
+          description: |-
+            Comma-separated source chain ids. Narrows the cluster's transfers through
+            AND, matched by the transfer's own token source chain (token_src_chain_id).
+          in: query
+          required: false
+          type: string
+        - name: dst_chain_ids
+          description: |-
+            Comma-separated destination chain ids. Narrows the cluster's transfers
+            through AND, matched by the transfer's own token destination chain
+            (token_dst_chain_id).
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainClusterService
+  /api/v1/clusters/{cluster_id}/interchain/transfers:byTx/{tx_hash}:
+    get:
+      operationId: InterchainClusterService_GetTransfersByTransaction
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetTransfersResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: tx_hash
+          in: path
+          required: true
+          type: string
+        - name: page_size
+          description: 'Items on a page: bounded by the API settings'
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          description: If true, return only the last page (pagination token is ignored)
+          in: query
+          required: false
+          type: boolean
+        - name: page_token
+          description: |-
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same cluster, filters and path scope as the request that
+            produced it. A malformed value is rejected with InvalidArgument.
+          in: query
+          required: false
+          type: string
+        - name: src_chain_ids
+          description: |-
+            Comma-separated source chain ids. Narrows the cluster's transfers through
+            AND, matched by the transfer's own token source chain (token_src_chain_id).
+          in: query
+          required: false
+          type: string
+        - name: dst_chain_ids
+          description: |-
+            Comma-separated destination chain ids. Narrows the cluster's transfers
+            through AND, matched by the transfer's own token destination chain
+            (token_dst_chain_id).
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainClusterService
+  /api/v1/clusters/{cluster_id}/stats/chain/{chain_id}/bridged-tokens:
+    get:
+      summary: |-
+        Bridged tokens of `chain_id` within the cluster. When the cluster defines a
+        chain set, `chain_id` must belong to it (else InvalidArgument), and the
+        counterparty chains are derived from the cluster. The rows and their
+        transfer counts are cluster-scoped; the `tokens` list of a row is NOT: as
+        on the legacy route, it lists the asset's tokens on every chain some
+        configured bridge indexes (every chain when the cluster sets
+        include_unindexed_chains).
+      operationId: InterchainClusterStatisticsService_GetBridgedTokens
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetBridgedTokensResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: chain_id
+          description: |-
+            The focal chain. Must belong to the cluster's chains when the cluster
+            defines them (else InvalidArgument); the counterparty chains are derived
+            from the cluster.
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          in: query
+          required: false
+          type: boolean
+        - name: sort
+          description: 'Sort field: TOTAL_TRANSFERS_COUNT[default] / OUTPUT_TRANSFERS_COUNT / INPUT_TRANSFERS_COUNT / NAME'
+          in: query
+          required: false
+          type: string
+          enum:
+            - TOTAL_TRANSFERS_COUNT
+            - OUTPUT_TRANSFERS_COUNT
+            - INPUT_TRANSFERS_COUNT
+            - NAME
+          default: TOTAL_TRANSFERS_COUNT
+        - name: order
+          description: 'Sort order: DESC[default] / ASC'
+          in: query
+          required: false
+          type: string
+          enum:
+            - DESC
+            - ASC
+          default: DESC
+        - name: page_token
+          description: |-
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same cluster, `chain_id`, `bridge_ids`, `q`, `sort` and
+            `order` as the request that produced it. A malformed value is rejected
+            with InvalidArgument.
+          in: query
+          required: false
+          type: string
+        - name: q
+          description: Case-insensitive substring filter on the row display name (`stats_assets.name`).
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainClusterStatisticsService
+  /api/v1/clusters/{cluster_id}/stats/chain/{chain_id}/messages-paths/received:
+    get:
+      summary: |-
+        Incoming message paths of `chain_id` within the cluster; `chain_id` rules
+        as in GetBridgedTokens.
+      operationId: InterchainClusterStatisticsService_GetReceivedMessagePaths
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetMessagePathsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: chain_id
+          description: The focal chain; rules as in GetClusterBridgedTokensRequest.chain_id.
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: from_date
+          description: YYYY-MM-DD
+          in: query
+          required: false
+          type: string
+        - name: to_date
+          description: YYYY-MM-DD
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainClusterStatisticsService
+  /api/v1/clusters/{cluster_id}/stats/chain/{chain_id}/messages-paths/sent:
+    get:
+      summary: |-
+        Outgoing message paths of `chain_id` within the cluster; `chain_id` rules
+        as in GetBridgedTokens.
+      operationId: InterchainClusterStatisticsService_GetSentMessagePaths
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetMessagePathsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: chain_id
+          description: The focal chain; rules as in GetClusterBridgedTokensRequest.chain_id.
+          in: path
+          required: true
+          type: string
+          format: int64
+        - name: from_date
+          description: YYYY-MM-DD
+          in: query
+          required: false
+          type: string
+        - name: to_date
+          description: YYYY-MM-DD
+          in: query
+          required: false
+          type: string
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainClusterStatisticsService
+  /api/v1/clusters/{cluster_id}/stats/chains:
+    get:
+      summary: |-
+        Per-chain statistics, rows restricted to the cluster's chains (and
+        `chain_ids`). The unique_transfer_users_count of each row is NOT scoped to
+        the cluster: it is the chain's global deduplicated count or, when the
+        request's effective bridge set is non-empty (the cluster's bridge_ids
+        narrowed by the bridge_ids param), the sum of the per-bridge counts of
+        those bridges (which can overcount an address seen through several of them).
+      operationId: InterchainClusterStatisticsService_GetChainsStats
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetChainsStatsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: last_page
+          in: query
+          required: false
+          type: boolean
+        - name: chain_ids
+          description: |-
+            Optional comma-separated chain ids filter, for example `123,456`, selecting
+            subject rows. Intersected with the cluster's chains (see
+            GetClusterChainsRequest.chain_ids); a selection with none inside returns
+            an empty list. Counts are not cluster-scoped (see GetChainsStats).
+          in: query
+          required: false
+          type: string
+        - name: order
+          description: 'Sort order: DESC[default] / ASC'
+          in: query
+          required: false
+          type: string
+          enum:
+            - DESC
+            - ASC
+          default: DESC
+        - name: page_token
+          description: |-
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same cluster, `chain_ids`, `bridge_ids`, `q`, `sort` and
+            `order` as the request that produced it. A malformed value is rejected
+            with InvalidArgument.
+          in: query
+          required: false
+          type: string
+        - name: q
+          description: Case-insensitive substring filter on chain name or textual chain id.
+          in: query
+          required: false
+          type: string
+        - name: sort
+          description: 'Sort field: UNIQUE_TRANSFER_USERS_COUNT[default]'
+          in: query
+          required: false
+          type: string
+          enum:
+            - UNIQUE_TRANSFER_USERS_COUNT
+          default: UNIQUE_TRANSFER_USERS_COUNT
+        - name: bridge_ids
+          description: |-
+            Optional comma-separated bridge ids. Narrows the request to these bridges
+            inside the cluster's bridge_ids (all bridges when the cluster sets none).
+            Ids outside the cluster match nothing, so a selection with none inside
+            returns an empty list. Malformed values return InvalidArgument.
+          in: query
+          required: false
+          type: string
+      tags:
+        - InterchainClusterStatisticsService
   /api/v1/interchain/bridges:
     get:
       operationId: InterchainService_GetBridges
@@ -207,34 +983,10 @@ paths:
           type: boolean
         - name: page_token
           description: |-
-            input pagination token - used by default
-            (packed version of the raw pagination parameters)
-          in: query
-          required: false
-          type: string
-        - name: timestamp
-          description: |-
-            Raw pagination parameters
-            (used when api.use_pagination_token=false)
-
-            Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: message_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-        - name: bridge_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: direction
-          description: Raw pagination field
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same filters and path scope as the request that produced
+            it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
@@ -344,34 +1096,10 @@ paths:
           type: boolean
         - name: page_token
           description: |-
-            input pagination token - used by default
-            (packed version of the raw pagination parameters)
-          in: query
-          required: false
-          type: string
-        - name: timestamp
-          description: |-
-            Raw pagination parameters
-            (used when api.use_pagination_token=false)
-
-            Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: message_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-        - name: bridge_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: direction
-          description: Raw pagination field
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same filters and path scope as the request that produced
+            it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
@@ -453,34 +1181,10 @@ paths:
           type: boolean
         - name: page_token
           description: |-
-            input pagination token - used by default
-            (packed version of the raw pagination parameters)
-          in: query
-          required: false
-          type: string
-        - name: timestamp
-          description: |-
-            Raw pagination parameters
-            (used when api.use_pagination_token=false)
-
-            Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: message_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-        - name: bridge_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: direction
-          description: Raw pagination field
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same filters and path scope as the request that produced
+            it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
@@ -563,40 +1267,10 @@ paths:
           type: boolean
         - name: page_token
           description: |-
-            input pagination token - used by default
-            (packed version of the raw pagination parameters)
-          in: query
-          required: false
-          type: string
-        - name: timestamp
-          description: |-
-            Raw pagination parameters
-            (used when api.use_pagination_token=false)
-
-            Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: message_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-        - name: bridge_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: index
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: direction
-          description: Raw pagination field
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same filters and path scope as the request that produced
+            it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
@@ -678,40 +1352,10 @@ paths:
           type: boolean
         - name: page_token
           description: |-
-            input pagination token - used by default
-            (packed version of the raw pagination parameters)
-          in: query
-          required: false
-          type: string
-        - name: timestamp
-          description: |-
-            Raw pagination parameters
-            (used when api.use_pagination_token=false)
-
-            Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: message_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-        - name: bridge_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: index
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: direction
-          description: Raw pagination field
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same filters and path scope as the request that produced
+            it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
@@ -793,40 +1437,10 @@ paths:
           type: boolean
         - name: page_token
           description: |-
-            input pagination token - used by default
-            (packed version of the raw pagination parameters)
-          in: query
-          required: false
-          type: string
-        - name: timestamp
-          description: |-
-            Raw pagination parameters
-            (used when api.use_pagination_token=false)
-
-            Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: message_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-        - name: bridge_id
-          description: Raw pagination field
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: index
-          description: Raw pagination field
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: direction
-          description: Raw pagination field
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same filters and path scope as the request that produced
+            it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
@@ -927,33 +1541,15 @@ paths:
             - ASC
           default: DESC
         - name: page_token
-          description: Token-based pagination
+          description: |-
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same `chain_id`, `counterparty_chain_ids`, `bridge_ids`,
+            `include_unindexed_chains`, `q`, `sort`, and `order` as the request that
+            produced it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
-        - name: direction
-          description: Flat keys matching `BridgedTokensListPagination` / `next_page_params` / `prev_page_params` (for `api.use_pagination_token=false`, pass that dict fields here).
-          in: query
-          required: false
-          type: string
-        - name: asset_id
-          in: query
-          required: false
-          type: string
-          format: int64
-        - name: name
-          in: query
-          required: false
-          type: string
-        - name: name_blank
-          in: query
-          required: false
-          type: boolean
-        - name: count
-          in: query
-          required: false
-          type: string
-          format: uint64
         - name: q
           description: Case-insensitive substring filter on the row display name (`stats_assets.name`).
           in: query
@@ -1143,25 +1739,15 @@ paths:
             - ASC
           default: DESC
         - name: page_token
-          description: token-based pagination
+          description: |-
+            Opaque pagination cursor: pass `next_page_params.page_token` or
+            `prev_page_params.page_token` from a previous response unchanged. Valid
+            only with the same `bridge_ids`, `chain_ids`, `q`,
+            `include_unindexed_chains`, `sort`, and `order` as the request that
+            produced it. A malformed value is rejected with InvalidArgument.
           in: query
           required: false
           type: string
-        - name: direction
-          description: raw pagination fields
-          in: query
-          required: false
-          type: string
-        - name: count
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: chain_id
-          in: query
-          required: false
-          type: string
-          format: int64
         - name: q
           description: Case-insensitive substring filter on chain name or textual chain id.
           in: query
@@ -1202,160 +1788,12 @@ paths:
             `include_unindexed_chains` keeps its global meaning: a chain is unindexed
             only when NO configured bridge indexes it; the flag controls visibility
             among the selected bridge candidates described above.
-            Page tokens and raw cursors are valid only with the same `bridge_ids`,
+            Page tokens are valid only with the same `bridge_ids`,
             `chain_ids`, `q`, `include_unindexed_chains`, `sort`, and `order` that
             produced them.
           in: query
           required: false
           type: string
-      tags:
-        - InterchainStatisticsService
-  /api/v1/stats/common:
-    get:
-      summary: |-
-        DEPRECATED: total_messages and total_transfers are always 0. Use the stats
-        service in interchain mode instead.
-      description: |-
-        Every call used to run an unbounded COUNT(*) over crosschain_messages plus
-        a joined COUNT(*) over crosschain_transfers, uncached — the heaviest query
-        this service served, growing with the canonical tables. The stats service
-        now precomputes the same numbers. The endpoint is kept, answering zeros
-        without querying, only so existing clients do not break, and will be
-        removed in a future API iteration.
-      operationId: InterchainStatisticsService_GetCommonStatistics
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1GetCommonStatisticsResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: timestamp
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: home_chain_id
-          description: 'Filter: only messages/transfers touching this chain (src = N OR dst = N).'
-          in: query
-          required: false
-          type: string
-          format: int64
-        - name: counterparty_chain_ids
-          description: |-
-            Comma-separated chain ids. With home_chain_id: restricts the other
-            endpoint (peer) to this set. Without home_chain_id: both endpoints
-            must be within the set. Messages with unknown (NULL) destination are
-            excluded whenever this set is present.
-          in: query
-          required: false
-          type: string
-        - name: bridge_ids
-          description: Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
-          in: query
-          required: false
-          type: string
-        - name: src_chain_ids
-          description: |-
-            Comma-separated source chain ids. Independent directional filter that
-            narrows the focal predicate through AND. src_chain_ids and dst_chain_ids
-            are independent direction sets; both apply when both are present. The
-            message counter matches message src/dst chains; the transfer counter
-            matches the transfer's own token src/dst chains.
-          in: query
-          required: false
-          type: string
-        - name: dst_chain_ids
-          description: |-
-            Comma-separated destination chain ids. Independent directional filter that
-            narrows the focal predicate through AND. A destination filter excludes
-            messages with a NULL destination through normal SQL semantics.
-          in: query
-          required: false
-          type: string
-        - name: include_unindexed_chains
-          description: |-
-            When true, also count messages/transfers touching a chain that this
-            record's own bridge does not index. Default (absent or false) hides them.
-          in: query
-          required: false
-          type: boolean
-      tags:
-        - InterchainStatisticsService
-  /api/v1/stats/daily:
-    get:
-      summary: |-
-        DEPRECATED: daily_messages and daily_transfers are always 0. Use the stats
-        service in interchain mode instead.
-      description: |-
-        Same reasoning as GetCommonStatistics: two uncached COUNT(*) queries per
-        call, now precomputed by the stats service. The endpoint is kept, answering
-        zeros without querying, only so existing clients do not break, and will be
-        removed in a future API iteration.
-      operationId: InterchainStatisticsService_GetDailyStatistics
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1GetDailyStatisticsResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/rpcStatus'
-      parameters:
-        - name: timestamp
-          in: query
-          required: false
-          type: string
-          format: uint64
-        - name: home_chain_id
-          description: 'Filter: only messages/transfers touching this chain (src = N OR dst = N).'
-          in: query
-          required: false
-          type: string
-          format: int64
-        - name: counterparty_chain_ids
-          description: |-
-            Comma-separated chain ids. With home_chain_id: restricts the other
-            endpoint (peer) to this set. Without home_chain_id: both endpoints
-            must be within the set. Messages with unknown (NULL) destination are
-            excluded whenever this set is present.
-          in: query
-          required: false
-          type: string
-        - name: bridge_ids
-          description: Comma-separated bridge ids (see GET /api/v1/interchain/bridges).
-          in: query
-          required: false
-          type: string
-        - name: src_chain_ids
-          description: |-
-            Comma-separated source chain ids. Independent directional filter that
-            narrows the focal predicate through AND. src_chain_ids and dst_chain_ids
-            are independent direction sets; both apply when both are present. The
-            message counter matches message src/dst chains; the transfer counter
-            matches the transfer's own token src/dst chains.
-          in: query
-          required: false
-          type: string
-        - name: dst_chain_ids
-          description: |-
-            Comma-separated destination chain ids. Independent directional filter that
-            narrows the focal predicate through AND. A destination filter excludes
-            messages with a NULL destination through normal SQL semantics.
-          in: query
-          required: false
-          type: string
-        - name: include_unindexed_chains
-          description: |-
-            When true, also count messages/transfers touching a chain that this
-            record's own bridge does not index. Default (absent or false) hides them.
-          in: query
-          required: false
-          type: boolean
       tags:
         - InterchainStatisticsService
   /api/v1/status/indexers:
@@ -1537,28 +1975,6 @@ definitions:
         type: integer
         format: int64
         description: Bridge id usable in bridge_ids filters.
-  v1BridgedTokensListPagination:
-    type: object
-    properties:
-      page_token:
-        type: string
-      direction:
-        type: string
-      asset_id:
-        type: string
-        format: int64
-      name:
-        type: string
-      name_blank:
-        type: boolean
-      count:
-        type: string
-        format: uint64
-    description: |-
-      Pagination for bridged tokens stats only (`page_token` or explicit cursor fields).
-      Does not reuse messages/transfers `Pagination` fields (timestamp, message_id, etc.).
-      Tokens are only valid with the same `counterparty_chain_ids`, `bridge_ids`,
-      `q`, `sort`, and `order` as the request that produced them.
   v1BridgedTokensSort:
     type: string
     enum:
@@ -1648,9 +2064,9 @@ definitions:
           type: object
           $ref: '#/definitions/v1StatsBridgedTokenRow'
       next_page_params:
-        $ref: '#/definitions/v1BridgedTokensListPagination'
+        $ref: '#/definitions/v1Pagination'
       prev_page_params:
-        $ref: '#/definitions/v1BridgedTokensListPagination'
+        $ref: '#/definitions/v1Pagination'
   v1GetBridgesResponse:
     type: object
     properties:
@@ -1676,41 +2092,9 @@ definitions:
           type: object
           $ref: '#/definitions/v1StatsChainRow'
       next_page_params:
-        $ref: '#/definitions/v1StatsChainsListPagination'
+        $ref: '#/definitions/v1Pagination'
       prev_page_params:
-        $ref: '#/definitions/v1StatsChainsListPagination'
-  v1GetCommonStatisticsResponse:
-    type: object
-    properties:
-      timestamp:
-        type: string
-      total_messages:
-        type: string
-        format: uint64
-        description: Always 0 since deprecation. Use the stats service in interchain mode.
-      total_transfers:
-        type: string
-        format: uint64
-        description: Always 0 since deprecation. Use the stats service in interchain mode.
-    description: |-
-      DEPRECATED, and removed together with
-      InterchainStatisticsService.GetCommonStatistics in a future API iteration.
-  v1GetDailyStatisticsResponse:
-    type: object
-    properties:
-      date:
-        type: string
-      daily_messages:
-        type: string
-        format: uint64
-        description: Always 0 since deprecation. Use the stats service in interchain mode.
-      daily_transfers:
-        type: string
-        format: uint64
-        description: Always 0 since deprecation. Use the stats service in interchain mode.
-    description: |-
-      DEPRECATED, and removed together with
-      InterchainStatisticsService.GetDailyStatistics in a future API iteration.
+        $ref: '#/definitions/v1Pagination'
   v1GetIndexingProgressResponse:
     type: object
     properties:
@@ -1875,27 +2259,16 @@ definitions:
     properties:
       page_token:
         type: string
-      timestamp:
-        type: string
-        format: uint64
-      message_id:
-        type: string
-      bridge_id:
-        type: integer
-        format: int64
-      index:
-        type: string
-        format: uint64
-      direction:
-        type: string
     description: |-
-      Cursor for list pagination (request input and next/prev response params).
-      Page tokens and raw cursor fields are only valid within the same complete
-      filter combination (`home_chain_id`, `counterparty_chain_ids`,
-      `src_chain_ids`, `dst_chain_ids`, `bridge_ids`, and any tx_hash/address
-      scope). The cursor does not encode these filters and is not re-validated
-      against them, so changing any filter mid-pagination is unsupported and
-      yields undefined results; callers must restart pagination when filters change.
+      Opaque keyset cursor returned as `next_page_params` / `prev_page_params` by
+      every list endpoint. Send `page_token` back unchanged. A token is valid only
+      with the same filters (`home_chain_id`, `counterparty_chain_ids`,
+      `src_chain_ids`, `dst_chain_ids`, `bridge_ids`, `chain_ids`,
+      `include_unindexed_chains`), path scope (cluster_id, tx_hash, address, chain_id) and, for
+      stats lists, `q`, `sort` and `order` as the request that produced it. The
+      cursor does not encode them and is not re-validated against them, so
+      changing any of them mid-pagination is unsupported and yields undefined
+      results; callers must restart pagination when they change.
   v1RescanBlockRange:
     type: object
     properties:
@@ -2093,20 +2466,6 @@ definitions:
       unique_transfer_users_count:
         type: string
         format: uint64
-  v1StatsChainsListPagination:
-    type: object
-    properties:
-      page_token:
-        type: string
-      direction:
-        type: string
-      count:
-        type: string
-        format: uint64
-      chain_id:
-        type: string
-        format: int64
-    description: 'Pagination for `/stats/chains` (composite cursor: direction, count, chain_id).'
   v1StatsChainsSort:
     type: string
     enum:

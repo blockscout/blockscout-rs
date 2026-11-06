@@ -11,7 +11,7 @@ members = [
 
 [workspace.dependencies]
 actix-prost = { version = "0.3.0" }
-actix-prost-build = { version = "0.3.0", features = ["conversions"] }
+actix-prost-build = { version = "0.3.0" }
 actix-prost-macros = { version = "0.3.0" }
 actix-web = { version = "4.2" }
 alloy = { version = "1.0", features = ["full", "node-bindings"] }
@@ -29,7 +29,6 @@ bon = { version = "3.8.1" }
 bs58 = { version = "0.5", features = ["cb58"] }
 chrono = { version = "0.4" }
 config = { version = "0.15" }
-convert-trait = { package = "actix-prost-convert-trait", version = "0.2.0" }
 dashmap = { version = "6" }
 env-collector = { git = "https://github.com/blockscout/blockscout-rs", rev = "faa570f" }
 futures = { version = "0.3" }

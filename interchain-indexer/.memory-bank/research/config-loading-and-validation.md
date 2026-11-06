@@ -2,8 +2,8 @@
 
 ## Scope
 
-How `Settings`, JSON config files (`chains.json`, `bridges.json`), environment
-variable overrides, `deny_unknown_fields`, DB seeding, and cross-field
+How `Settings`, JSON config files (`chains.json`, `bridges.json`, optional
+`clusters.json`), environment variable overrides, `deny_unknown_fields`, DB seeding, and cross-field
 validation interact from process startup to indexer construction.
 
 Out of scope: runtime indexer behavior after construction, bridge filtering
@@ -13,9 +13,10 @@ semantics (see `avalanche-bridge-filtering.md`), stats projection, API serving.
 
 Configuration flows through two disconnected channels that converge in
 `server.rs::run()`. Runtime settings use the `config` crate with env-var
-layering (`INTERCHAIN_INDEXER__*`). Chain/bridge topology is read from JSON
-files and then patched by a dedicated env-override layer
-(`INTERCHAIN_INDEXER_CHAINS*` / `INTERCHAIN_INDEXER_BRIDGES*`, single
+layering (`INTERCHAIN_INDEXER__*`). Chain/bridge topology (and the optional
+cluster presets) is read from JSON files and then patched by a dedicated
+env-override layer (`INTERCHAIN_INDEXER_CHAINS*` /
+`INTERCHAIN_INDEXER_BRIDGES*` / `INTERCHAIN_INDEXER_CLUSTERS*`, single
 underscore after the service name) implemented in
 `interchain-indexer-server/src/env_merge.rs`: vars are parsed as JSON fragments
 and deep-merged into the file's `serde_json::Value` before typed
@@ -70,6 +71,7 @@ than at load time.
 Settings                              (deny_unknown_fields)
   ├─ chains_config: PathBuf
   ├─ bridges_config: PathBuf
+  ├─ clusters_config: Option<PathBuf>         (optional; #[serde(default)])
   ├─ token_info: TokenInfoServiceSettings     (deny_unknown_fields)
   ├─ chain_info: ChainInfoServiceSettings     (deny_unknown_fields)
   ├─ buffer_settings: MessageBufferSettings   (deny_unknown_fields)
@@ -96,6 +98,13 @@ BridgeConfig          (deny_unknown_fields)
   ├─ reconstruct_incoming_ictt_transfers (default true; Avalanche-only switch)
   └─ contracts: Vec<BridgeContractConfig>     (deny_unknown_fields)
        └─ abi: dual-form deserializer (JSON string or inline JSON)
+
+ClusterConfig         (deny_unknown_fields)
+  ├─ id: String                               (URL path segment + env key; see `is_valid_cluster_id`)
+  ├─ home_chain_id: Option<i64>
+  ├─ counterparty_chain_ids: Option<Vec<i64>> (None = no restriction; explicit [] rejected)
+  ├─ bridge_ids: Option<Vec<i32>>             (None = no restriction; explicit [] rejected)
+  └─ include_unindexed_chains: bool           (default false)
 
 ChainConfig           (deny_unknown_fields)
   ├─ chain_id, name, icon
@@ -163,6 +172,34 @@ file path itself is still set via `INTERCHAIN_INDEXER__CHAINS_CONFIG` /
 Testable impls (`load_chains_impl` / `load_bridges_impl`) take an injectable
 vars iterator so tests never mutate process env.
 
+`load_clusters_from_file(Option<&Path>)` is the third JSON config and follows
+the same shape with these differences:
+
+- **Optional.** `INTERCHAIN_INDEXER__CLUSTERS_CONFIG` (`Settings.clusters_config`)
+  may be unset: the base is then an empty array, so a configuration made only of
+  env vars works, and with neither file nor env the result is `[]`.
+- **Env layer.** Prefix `INTERCHAIN_INDEXER_CLUSTERS`, `CLUSTERS_RULES` keyed by
+  `id`. Clusters have no nested object arrays: `counterparty_chain_ids` /
+  `bridge_ids` are scalar arrays, so a JSON array value at the leaf
+  (`…__BRIDGE_IDS=[1,3]`) replaces the field and no `ArrayRule` is needed. A path
+  segment that parses as `i64` is injected as a JSON number, so integer ids are
+  invalid by design.
+- **Per-entry typed parse.** The merged array is parsed element by element, not
+  as `Vec<ClusterConfig>`, with a label (the entry's `id` in backticks, or
+  `#<index>` when it has none), so every serde error names its cluster.
+- **Shape checks** (`validate_cluster_shapes`): id format, duplicate ids, explicit
+  empty lists. Each message starts with ``cluster `<id>`:``.
+- **Cross-config check.** `validate_clusters(&clusters, &bridges, &indexed_chains)`
+  runs in `server.rs::run()` right after the indexed-chain guard and **before** the
+  stats backfill and DB seeding, so a bad cluster fails startup fast. Every
+  `bridge_ids` entry must be a configured bridge (disabled ones count); with
+  `include_unindexed_chains = false` every cluster chain must be indexed by an
+  in-scope bridge (the cluster's `bridge_ids`, or all configured bridges). The
+  chain check is skipped under `AllIndexed` and, for a cluster without
+  `bridge_ids`, when no bridge is configured. Each cluster is then logged
+  (`cluster configured`). The clusters then become the `ClusterRegistry` that
+  the cluster Read API routes use (ADR-017).
+
 Custom deserializers:
 - `deserialize_bridge_type` — maps JSON string to `BridgeType` via SeaORM `ActiveEnum`
 - `deserialize_address` — parses hex string (with or without `0x`) to `Vec<u8>`
@@ -229,15 +266,16 @@ spawned. `launcher::launch()` runs the servers until shutdown.
 1. **Env vars override file settings** — the `config` crate env layer always
    wins over the file layer for `Settings`
 2. **JSON configs have their own env-override layer** — `INTERCHAIN_INDEXER_CHAINS*`
-   / `INTERCHAIN_INDEXER_BRIDGES*` (single underscore — cannot collide with the
+   / `INTERCHAIN_INDEXER_BRIDGES*` / `INTERCHAIN_INDEXER_CLUSTERS*` (single underscore — cannot collide with the
    `INTERCHAIN_INDEXER__*` settings prefix, whose prefix separator is `__`);
-   env always wins over the file, merge keys equal DB uniqueness keys
+   env always wins over the file, merge keys equal DB uniqueness keys (clusters
+   are not persisted; their key is `id`)
 3. **`deny_unknown_fields` is pervasive on Settings** — every settings struct in
    the tree has it; a typo in any env var mapping to these structs causes hard
    startup failure
 4. **`deny_unknown_fields` is complete on JSON structs** — `BridgeConfig`,
-   `BridgeContractConfig`, `ChainConfig`, `ExplorerConfig`, `RpcProviderConfig`,
-   `ApiKeyConfig`, `PoolConfig` all have it; stray keys in files or env paths
+   `BridgeContractConfig`, `ChainConfig`, `ClusterConfig`, `ExplorerConfig`,
+   `RpcProviderConfig`, `ApiKeyConfig`, `PoolConfig` all have it; stray keys in files or env paths
    fail startup
 5. **DB seeding is unconditional** — every startup overwrites chain/bridge/
    contract rows; config is the source of truth, not the database
@@ -251,7 +289,7 @@ spawned. `launcher::launch()` runs the servers until shutdown.
 | Failure | When | Severity | Observable |
 |---------|------|----------|------------|
 | Unknown field in Settings env var | `Settings::build()` | Fatal — process won't start | Startup panic with serde error |
-| Unknown field in any chains/bridges JSON struct (file or env path) | `load_*_from_file()` | Fatal — process won't start | Startup panic with serde error |
+| Unknown field in any chains/bridges/clusters JSON struct (file or env path) | `load_*_from_file()` | Fatal — process won't start | Startup panic with serde error |
 | Invalid env-override path/value (ambiguous duplicate path, multi-match key, null entry, malformed root patch) | `env_merge::apply_env_overrides()` | Fatal | anyhow error naming the env var |
 | Env-built entry missing a required field | `load_*_from_file()` typed parse | Fatal | serde error (references the merged JSON; per-override info logs printed beforehand are the breadcrumb) |
 | Missing JSON config file | `load_*_from_file()` | Fatal | anyhow context with file path |
@@ -261,6 +299,7 @@ spawned. `launcher::launch()` runs the servers until shutdown.
 | `home_chain_id` not in configured chains | `AvalancheIndexer::new()` | Per-bridge skip | Error log, indexer not started |
 | No enabled RPCs for a chain | `create_provider_pools_from_chains` | Warning, chain skipped | Warn log |
 | API key config present | `build_rpc_url` | Fatal (unimplemented) | anyhow bail |
+| Cluster config error (wrong type, malformed or duplicate id, explicit empty list, env numeric id, unknown `bridge_ids` entry, chain unindexed by in-scope bridges) | `load_clusters_from_file()` / `validate_clusters()` in `run()`, before the stats backfill | Fatal — process won't start | anyhow error naming the cluster (``cluster `<id>` `` or entry `#<index>`) |
 
 ## Edge Cases / Gotchas
 

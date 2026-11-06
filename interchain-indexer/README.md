@@ -34,10 +34,11 @@ However, as cross-chain ecosystems evolve, monitoring interactions between multi
 
 ## Configuration JSON Files
 
-The service reads configuration from two JSON files:
+The service reads configuration from two required JSON files and one optional file:
 
 - **Chains** — `INTERCHAIN_INDEXER__CHAINS_CONFIG` (e.g. `config/avalanche/chains.json`)
 - **Bridges** — `INTERCHAIN_INDEXER__BRIDGES_CONFIG` (e.g. `config/avalanche/bridges.json`)
+- **Clusters** (optional) — `INTERCHAIN_INDEXER__CLUSTERS_CONFIG` (e.g. `config/clusters.json`)
 
 ### `chains.json`
 
@@ -166,19 +167,73 @@ If that write fails, startup continues with a `warn` and the next restart re-app
 
 Restoring a floor you previously raised is not symmetric with never having raised it: the range between the two floors is rescanned, and already-indexed rows in it are re-derived rather than duplicated. Raising a floor to skip history and then lowering it back is therefore safe but not free — plan floor changes as deliberate rescans.
 
-### Overriding `chains.json` / `bridges.json` via environment
+### `clusters.json`
 
-At startup, environment variables under two dedicated prefixes are deep-merged
+Optional. Defines **clusters**: named presets of the Read API filter fields
+`home_chain_id`, `counterparty_chain_ids`, `bridge_ids` and
+`include_unindexed_chains`. The cluster routes under
+`/api/v1/clusters/{cluster_id}/…` apply a cluster's preset to the corresponding
+Read API endpoint (the route behavior is documented in a later section). The
+file is a JSON array; each entry is one cluster:
+
+| Field        | Description |
+| ------------ | ----------- |
+| `id`         | Required. The cluster's name: the `{cluster_id}` URL path segment and the env-override key. |
+| `home_chain_id` | Optional. Same meaning as the query param of the same name. |
+| `counterparty_chain_ids` | Optional list of chain ids. Same meaning as the query param of the same name. |
+| `bridge_ids` | Optional list of bridge ids. Same meaning as the query param of the same name. |
+| `include_unindexed_chains` | Optional, default `false`. Same meaning as the query param of the same name. |
+
+An omitted or `null` list means no restriction; an explicit `[]` is rejected.
+An empty cluster (`{"id": "all"}`) is valid and means everything the indexed
+bridges fully observe.
+
+**Cluster ids** consist of lowercase letters and digits in groups separated by a
+single `_` or `-` (`gnosis`, `eth-gno`), and must not be an integer. Ids are URL
+path segments, so they are case-sensitive in URLs.
+
+**Startup validation.** Clusters are loaded and validated at startup, before the
+stats backfill and before any database seeding. Any of the following fails
+startup with an error that names the cluster:
+
+- an unknown field or a wrongly typed value;
+- an invalid or duplicate `id`;
+- an empty `counterparty_chain_ids` or `bridge_ids` list;
+- a `bridge_ids` entry that is not in the bridges config (disabled bridges
+  count as configured);
+- a chain of the cluster (`home_chain_id` or `counterparty_chain_ids`) that none
+  of its in-scope bridges indexes while `include_unindexed_chains` is `false`.
+  In-scope bridges are the cluster's `bridge_ids`, or every configured bridge
+  when `bridge_ids` is unset. Such a cluster could only return empty results.
+  The check is skipped when no bridge is configured at all and the cluster has
+  no `bridge_ids`.
+
+Each configured cluster is logged at startup (`cluster configured`). Cluster
+configuration is read once at startup; there is no runtime reload.
+
+Example:
+
+```json
+[
+  { "id": "gnosis", "home_chain_id": 100, "bridge_ids": [1] },
+  { "id": "all" }
+]
+```
+
+### Overriding `chains.json` / `bridges.json` / `clusters.json` via environment
+
+At startup, environment variables under three dedicated prefixes are deep-merged
 into the JSON read from the config files, **before** validation. Env always wins
 over the file. Both single-field overrides and whole new entries (a new chain,
-bridge, RPC provider, or contract version) are supported. With no such vars set,
-behavior is unchanged.
+bridge, cluster, RPC provider, or contract version) are supported. With no such
+vars set, behavior is unchanged.
 
 Note the single underscore after `INTERCHAIN_INDEXER` — these prefixes are
 separate from the main `INTERCHAIN_INDEXER__*` settings:
 
 - `INTERCHAIN_INDEXER_CHAINS…` patches the chains config
 - `INTERCHAIN_INDEXER_BRIDGES…` patches the bridges config
+- `INTERCHAIN_INDEXER_CLUSTERS…` patches the clusters config (works without a file)
 
 **Path grammar** (segments are separated by `__` and are case-insensitive):
 
@@ -196,6 +251,7 @@ upsert to the same DB row:
 |---|---|---|
 | chains top-level array | `chain_id` | `INTERCHAIN_INDEXER_CHAINS__<CHAIN_ID>` |
 | bridges top-level array | `bridge_id` | `INTERCHAIN_INDEXER_BRIDGES__<BRIDGE_ID>` |
+| clusters top-level array | `id` | `INTERCHAIN_INDEXER_CLUSTERS__<ID>` |
 | `bridges[].contracts` | `(chain_id, address, version)` | `…__CONTRACTS__<CHAIN_ID>__<ADDRESS>__<VERSION>` |
 | `chains[].rpcs` | provider name (map key) | `…__RPCS__<PROVIDER_NAME>` |
 
@@ -262,6 +318,13 @@ INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8
 
 # …or add a new contract *version* for the same chain+address (appends a new entry)
 INTERCHAIN_INDEXER_BRIDGES__1__CONTRACTS__100__0xf6A78083ca3e2a662D6dd1703c939c8aCE2e268d__8__STARTED_AT_BLOCK=19000000
+
+# Define a cluster with no clusters.json at all
+INTERCHAIN_INDEXER_CLUSTERS__GNOSIS__HOME_CHAIN_ID=100
+INTERCHAIN_INDEXER_CLUSTERS__GNOSIS__BRIDGE_IDS='[1,3]'   # lists are JSON arrays, not CSV
+# Ids containing `-`: a shell cannot export INTERCHAIN_INDEXER_CLUSTERS__ETH-GNO__…
+# (Kubernetes can). Use the bare-prefix JSON array form instead:
+INTERCHAIN_INDEXER_CLUSTERS='[{"id":"eth-gno","counterparty_chain_ids":[1,100]}]'
 ```
 
 ### RPC provider API keys
@@ -369,6 +432,106 @@ surface in logs if the log level is raised. Service-owned sinks — the failure
 ledger in Postgres, indexer state served by the status API, and this service's
 own RPC warnings — redact URLs before writing them.
 
+## Cluster-Scoped Read API
+
+A cluster is a named preset of `home_chain_id`, `counterparty_chain_ids`,
+`bridge_ids` and `include_unindexed_chains`, configured as described in
+[Configuration JSON Files](#configuration-json-files). Every cluster is served
+under `/api/v1/clusters/{cluster_id}/…`, so a frontend selects its slice of the
+data with the URL alone and does not repeat the filter set on each call.
+
+### Routes
+
+Each route is a legacy Read API route prefixed with
+`/api/v1/clusters/{cluster_id}`; the 13 routes are:
+
+- the six message and transfer lists: `interchain/messages`,
+  `interchain/messages:byTx/{tx_hash}`, `interchain/messages:byAddress/{address}`,
+  `interchain/transfers`, `interchain/transfers:byTx/{tx_hash}` and
+  `interchain/transfers:byAddress/{address}`;
+- `interchain/chains`, `interchain/bridges` and
+  `interchain/messages/{message_id}` (optional `bridge_id`);
+- `stats/chains`, `stats/chain/{chain_id}/bridged-tokens` and
+  `stats/chain/{chain_id}/messages-paths/{sent,received}`.
+
+They are served over HTTP and over gRPC (`InterchainClusterService` and
+`InterchainClusterStatisticsService`). The request and response shapes are in
+the Swagger.
+
+### Semantics
+
+A cluster route never returns rows outside the cluster:
+
+- **Client `bridge_ids`**, on every route whose legacy twin has it, narrows the
+  cluster's bridges: the request runs with the selected bridges the cluster
+  contains, or with the selection as sent when the cluster sets no
+  `bridge_ids`. A selection that shares no bridge with the cluster returns an
+  empty response (see Caveats).
+- **Message and transfer lists** are the legacy route called with the
+  cluster's four fields, `bridge_ids` narrowed as above. The client's `src_chain_ids` / `dst_chain_ids`, `q`
+  and paging work as on the legacy route; the direction filters narrow the
+  cluster's rows by AND.
+- **Chain directories** (`interchain/chains`, `stats/chains`) return the
+  cluster's chain set intersected with the client's `chain_ids`. The chain set
+  is `{home_chain_id} ∪ counterparty_chain_ids`, `counterparty_chain_ids` alone,
+  or every chain when the cluster sets no `counterparty_chain_ids`. An empty
+  intersection is an empty list, never "all chains". The rows are then
+  restricted exactly as on the legacy route (the cluster's bridges, and the
+  unindexed-chain gate).
+- **Per-chain stats** (`bridged-tokens`, `messages-paths/{sent,received}`)
+  derive the focal and peer chains from the cluster and the `{chain_id}` path
+  segment:
+
+  | home | counterparty `S` | path chain `X` | focal | peers |
+  | ---- | ---------------- | -------------- | ----- | ----- |
+  | none | none             | any            | `X`   | none  |
+  | none | `S`              | `X` in `S`     | `X`   | `S`   |
+  | `h`  | none             | `X` = `h`      | `h`   | none  |
+  | `h`  | none             | `X` != `h`     | `X`   | `{h}` |
+  | `h`  | `S`              | `X` = `h`      | `h`   | `S`   |
+  | `h`  | `S`              | `X` in `S`, `X` != `h` | `X` | `{h}` |
+
+  Any other path chain is outside the cluster and gives HTTP 400
+  (`chain_id X is not in cluster <id>`).
+- **Bridges** (`interchain/bridges`) lists the cluster's `bridge_ids`, or every
+  bridge when the cluster sets none.
+- **Message details** apply the cluster's filter inside the lookup. A message
+  outside the cluster is a 404, the same as a missing one, and an id shared
+  with a bridge outside the cluster resolves without `bridge_id`. An id shared
+  by two bridges inside the cluster is still ambiguous (HTTP 400). The
+  message's own transfers are returned unfiltered.
+
+### Errors
+
+An unknown `cluster_id` is HTTP 404 (gRPC `NotFound`) with the message
+`cluster not found: <id>`. The cluster is resolved before any other validation
+the handler does, so a malformed `page_token`, CSV, date or hex path value under
+an unknown cluster is still this 404. A param the HTTP layer cannot parse into
+its declared type (for example a non-integer `chain_id` or `page_size`) is
+rejected with 400 first.
+
+### Caveats
+
+- The cluster fields `home_chain_id`, `counterparty_chain_ids` and
+  `include_unindexed_chains` are not parameters of the cluster routes. If sent
+  as query params they are silently ignored and the result stays within the
+  cluster.
+- `bridge_ids` is a client selection inside the cluster: the request runs with
+  the selected bridges that the cluster contains (the selection as sent when the
+  cluster sets no `bridge_ids`). Ids outside the cluster are ignored, and a
+  selection with none inside returns an empty list, never all bridges.
+- A `page_token` is not bound to a cluster. Do not carry a token across
+  clusters, or between a cluster route and the legacy route.
+- The counts of `stats/chains` are not cluster-scoped: each row's
+  `unique_transfer_users_count` is the chain's global deduplicated count or,
+  when the request's effective bridge set is non-empty, the sum of the
+  per-bridge counts of those bridges, which can overcount an address seen
+  through several of them.
+- The `tokens` list of a `stats/chain/{chain_id}/bridged-tokens` row is not
+  cluster-scoped. The rows and their transfer counts are; the list, as on the
+  legacy route, holds the asset's tokens on every chain some configured bridge
+  indexes (every chain when the cluster sets `include_unindexed_chains`).
+
 ## Envs
 
 ### Main Service Settings
@@ -384,7 +547,6 @@ own RPC warnings — redact URLs before writing them.
 | `INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS`                          |                          | Run DB migrations on startup                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `false`       |
 | `INTERCHAIN_INDEXER__API__DEFAULT_PAGE_SIZE`                            |                          | Default page size for paginated endpoints (`/api/v1/interchain/messages` and `/api/v1/interchain/transfers`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `50`          |
 | `INTERCHAIN_INDEXER__API__MAX_PAGE_SIZE`                                |                          | Maximum supported page size for paginated endpoints (configured via `page_size` query parameter)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `100`         |
-| `INTERCHAIN_INDEXER__API__USE_PAGINATION_TOKEN`                         |                          | If true, wrap all raw pagination parameters into the single Base64 string                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `true`        |
 | `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__IGNORE_CHAINS`  |                          | The list of chain IDs to be ignored by token info service. Comma-separated list of identifiers without spaces (e.g. `42,1000`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | ``            |
 | `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__RETRY_INTERVAL` |                          | If the token icon is not found in the external token info service do not retry fetching it during this interval. Unit: `seconds`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `3600`        |
 | `INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL`            |                          | External Blockscout token info service. E.g. `https://contracts-info-test.k8s-dev.blockscout.com`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `null`        |
@@ -395,7 +557,8 @@ own RPC warnings — redact URLs before writing them.
 | `INTERCHAIN_INDEXER__STATS__BACKFILL_ON_START`                          |                          | Recalculate the statistics tables for messages and transfers (`stats_messages`, `stats_messages_days`, `stats_asset_edges`) on service startup, before indexers and the API start. Required as the catch-up mechanism after any projection-invalidating migration — not only the original `m20260312_175120_add_stats_tables` — for example the bridge-qualified `m20260720_120000_add_read_filters_and_bridge_stats` rebuild, which clears the additive aggregates and resets the canonical `stats_processed` markers. Such a deployment MUST run once with this flag enabled and MUST block until backfill reaches idle before serving (see the maintenance runbook below). This option should normally be disabled for steady-state operation to reduce service startup time. | `false`       |
 | `INTERCHAIN_INDEXER__STATS__CHAINS_RECALCULATION_PERIOD_SECS`           |                          | Interval in seconds between full recomputations of per-chain distinct user counters (from `crosschain_messages` / `crosschain_transfers`, any status). One worker rebuilds both `stats_chains` (globally deduplicated) and `stats_chains_by_bridge` (per-bridge, backing the `bridge_ids` filter on `/api/v1/stats/chains`) atomically, in the same transaction. Only chains/bridge-chain cells with at least one counted user address keep a row; stale rows are deleted from both tables. Set to `0` to disable the background task.                                                                                                                                                                                                                                           | `3600`        |
 | `INTERCHAIN_INDEXER__STATS__INCLUDE_ZERO_CHAINS`                        |                          | When `true`, stats endpoints (`/api/v1/stats/chains` and `/api/v1/stats/chain/{chain_id}/messages-paths/*`) include known chains from `chains` even when the aggregated stats row is missing or has a zero value. For message paths with `counterparty_chain_ids`, zero rows are still returned for the explicitly requested counterparties that exist in `chains`, and no other counterparties are added. Disable it to return only chains with positive aggregated stats.                                                                                                                                                                                                                                                                                                      | `true`        |
-| `INTERCHAIN_INDEXER__WRITE_API__KEYS_SHA256__<KEY_NAME>`                |                          | SHA-256 digest (64 hex characters, either case) of a write API key, **not the key itself**. One variable per key. `<KEY_NAME>` (lowercased by the env loader) is recorded as the actor in the `write_api_audit_log` audit table. Generate a key and this variable with `just write-api-key <name>` (or hash an existing key with `just write-api-key-digest <name>`) instead of hashing by hand. With no key configured every write method rejects all requests (401). Set **only** this per-key form: a value assigned to `INTERCHAIN_INDEXER__WRITE_API__KEYS_SHA256` itself fails startup, and the error prints that value. See `.memory-bank/runbooks/write-api.md`. | `null`        |
+| `INTERCHAIN_INDEXER__WRITE_API__KEYS_SHA256__<KEY_NAME>`                |                          | SHA-256 digest (64 hex characters, either case) of a write API key, **not the key itself**. One variable per key. `<KEY_NAME>` (lowercased by the env loader) is recorded as the actor in the `write_api_audit_log` audit table. Generate a key and this variable with `just write-api-key <name>` (or hash an existing key with `just write-api-key-digest <name>`) instead of hashing by hand. With no key configured every write method rejects all requests (401). Set **only** this per-key form: a value assigned to `INTERCHAIN_INDEXER__WRITE_API__KEYS_SHA256` itself fails startup, and the error prints that value. See `.memory-bank/runbooks/write-api.md`.                                                                                                         | `null`        |
+| `INTERCHAIN_INDEXER__CLUSTERS_CONFIG`                                   |                          | Optional path to a JSON array of cluster presets (see "Configuration JSON Files" → `clusters.json`). When unset, clusters come only from `INTERCHAIN_INDEXER_CLUSTERS*` env vars; with neither, no cluster is configured. e.g. `config/clusters.json`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `null`        |
 
 [anchor]: <> (anchors.envs.end.service)
 

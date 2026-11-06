@@ -1,0 +1,324 @@
+syntax = "proto3";
+
+package blockscout.interchainIndexer.v1;
+
+option go_package = "github.com/blockscout/blockscout-rs/interchain-indexer";
+
+import "v1/interchain_indexer.proto";
+import "v1/stats.proto";
+
+// Cluster-scoped twins of InterchainService. A cluster is an operator-configured
+// preset of home_chain_id, counterparty_chain_ids, bridge_ids and
+// include_unindexed_chains; every route applies it and otherwise behaves like
+// the route of the same name under /api/v1/interchain. An unknown cluster_id
+// returns NotFound (HTTP 404). The preset's fields are not parameters here,
+// except bridge_ids, which narrows the request inside the cluster's bridges;
+// home_chain_id, counterparty_chain_ids and include_unindexed_chains are
+// ignored if sent, and results stay within the cluster.
+service InterchainClusterService {
+  // Chain directory restricted to the cluster's chains (and `chain_ids`).
+  rpc GetChains(GetClusterChainsRequest) returns (GetChainsResponse) {}
+  // Bridge directory restricted to the cluster's bridge_ids (all bridges when
+  // the cluster sets none). Each entry is returned unchanged.
+  rpc GetBridges(GetClusterBridgesRequest) returns (GetBridgesResponse) {}
+  rpc GetMessages(GetClusterMessagesRequest) returns (GetMessagesResponse) {}
+  // Message details. A message outside the cluster returns NotFound, the same
+  // as a missing one. An id shared with a bridge outside the cluster resolves
+  // without bridge_id. The message's transfers are returned unfiltered.
+  rpc GetMessageDetails(GetClusterMessageDetailsRequest) returns (InterchainMessage) {}
+  rpc GetMessagesByTransaction(GetClusterMessagesByTransactionRequest) returns (GetMessagesResponse) {}
+  rpc GetMessagesByAddress(GetClusterMessagesByAddressRequest) returns (GetMessagesResponse) {}
+
+  rpc GetTransfers(GetClusterTransfersRequest) returns (GetTransfersResponse) {}
+  rpc GetTransfersByTransaction(GetClusterTransfersByTransactionRequest) returns (GetTransfersResponse) {}
+  rpc GetTransfersByAddress(GetClusterTransfersByAddressRequest) returns (GetTransfersResponse) {}
+}
+
+// Cluster-scoped twins of InterchainStatisticsService; see
+// InterchainClusterService for the cluster rules.
+service InterchainClusterStatisticsService {
+  // Bridged tokens of `chain_id` within the cluster. When the cluster defines a
+  // chain set, `chain_id` must belong to it (else InvalidArgument), and the
+  // counterparty chains are derived from the cluster. The rows and their
+  // transfer counts are cluster-scoped; the `tokens` list of a row is NOT: as
+  // on the legacy route, it lists the asset's tokens on every chain some
+  // configured bridge indexes (every chain when the cluster sets
+  // include_unindexed_chains).
+  rpc GetBridgedTokens(GetClusterBridgedTokensRequest) returns (GetBridgedTokensResponse) {}
+  // Per-chain statistics, rows restricted to the cluster's chains (and
+  // `chain_ids`). The unique_transfer_users_count of each row is NOT scoped to
+  // the cluster: it is the chain's global deduplicated count or, when the
+  // request's effective bridge set is non-empty (the cluster's bridge_ids
+  // narrowed by the bridge_ids param), the sum of the per-bridge counts of
+  // those bridges (which can overcount an address seen through several of them).
+  rpc GetChainsStats(GetClusterChainsStatsRequest) returns (GetChainsStatsResponse) {}
+  // Outgoing message paths of `chain_id` within the cluster; `chain_id` rules
+  // as in GetBridgedTokens.
+  rpc GetSentMessagePaths(GetClusterMessagePathsRequest) returns (GetMessagePathsResponse) {}
+  // Incoming message paths of `chain_id` within the cluster; `chain_id` rules
+  // as in GetBridgedTokens.
+  rpc GetReceivedMessagePaths(GetClusterMessagePathsRequest) returns (GetMessagePathsResponse) {}
+}
+
+message GetClusterChainsRequest {
+  string cluster_id = 1;
+  // Optional comma-separated chain ids, for example `123,456`. Intersected with
+  // the cluster's chains: home_chain_id plus counterparty_chain_ids, or
+  // counterparty_chain_ids alone, or every chain when the cluster sets no
+  // counterparty_chain_ids. Ids outside the cluster's chains match nothing, so
+  // a selection with none inside returns an empty list. The rows are then
+  // restricted, as on GET /api/v1/interchain/chains, to the chains the
+  // cluster's bridges index today and, unless the cluster sets
+  // include_unindexed_chains, to chains some configured bridge indexes.
+  optional string chain_ids = 2;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  // The rows are then restricted to the chains the selected bridges index
+  // today, as on GET /api/v1/interchain/chains.
+  optional string bridge_ids = 3;
+}
+
+message GetClusterBridgesRequest {
+  string cluster_id = 1;
+}
+
+message GetClusterMessagesRequest {
+  string cluster_id = 1;
+  optional string q = 2;  // multisearch ability
+
+  // Items on a page: bounded by the API settings
+  optional uint32 page_size = 3;
+  // If true, return only the last page (pagination token is ignored)
+  optional bool last_page = 4;
+  // Opaque pagination cursor: pass `next_page_params.page_token` or
+  // `prev_page_params.page_token` from a previous response unchanged. Valid
+  // only with the same cluster, filters and path scope as the request that
+  // produced it. A malformed value is rejected with InvalidArgument.
+  optional string page_token = 5;
+  // Comma-separated source chain ids. Narrows the cluster's messages through
+  // AND (messages whose src_chain_id is in this set).
+  optional string src_chain_ids = 6;
+  // Comma-separated destination chain ids. Narrows the cluster's messages
+  // through AND (messages whose dst_chain_id is in this set). A destination
+  // filter excludes messages with a NULL destination.
+  optional string dst_chain_ids = 7;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 8;
+}
+
+message GetClusterMessageDetailsRequest {
+  string cluster_id = 1;
+  string message_id = 2;
+  // Optional bridge qualifier. Needed only when message_id exists in more than
+  // one bridge inside the cluster; an ambiguous unqualified lookup returns
+  // FailedPrecondition (HTTP 400).
+  optional uint32 bridge_id = 3;
+}
+
+message GetClusterMessagesByTransactionRequest {
+  string cluster_id = 1;
+  string tx_hash = 2;
+
+  // Items on a page: bounded by the API settings
+  optional uint32 page_size = 3;
+  // If true, return only the last page (pagination token is ignored)
+  optional bool last_page = 4;
+  // Opaque pagination cursor: pass `next_page_params.page_token` or
+  // `prev_page_params.page_token` from a previous response unchanged. Valid
+  // only with the same cluster, filters and path scope as the request that
+  // produced it. A malformed value is rejected with InvalidArgument.
+  optional string page_token = 5;
+  // Comma-separated source chain ids. Narrows the cluster's messages through
+  // AND (messages whose src_chain_id is in this set).
+  optional string src_chain_ids = 6;
+  // Comma-separated destination chain ids. Narrows the cluster's messages
+  // through AND (messages whose dst_chain_id is in this set). A destination
+  // filter excludes messages with a NULL destination.
+  optional string dst_chain_ids = 7;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 8;
+}
+
+message GetClusterMessagesByAddressRequest {
+  string cluster_id = 1;
+  string address = 2;
+
+  // Items on a page: bounded by the API settings
+  optional uint32 page_size = 3;
+  // If true, return only the last page (pagination token is ignored)
+  optional bool last_page = 4;
+  // Opaque pagination cursor: pass `next_page_params.page_token` or
+  // `prev_page_params.page_token` from a previous response unchanged. Valid
+  // only with the same cluster, filters and path scope as the request that
+  // produced it. A malformed value is rejected with InvalidArgument.
+  optional string page_token = 5;
+  // Comma-separated source chain ids. Narrows the cluster's messages through
+  // AND (messages whose src_chain_id is in this set).
+  optional string src_chain_ids = 6;
+  // Comma-separated destination chain ids. Narrows the cluster's messages
+  // through AND (messages whose dst_chain_id is in this set). A destination
+  // filter excludes messages with a NULL destination.
+  optional string dst_chain_ids = 7;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 8;
+}
+
+message GetClusterTransfersRequest {
+  string cluster_id = 1;
+  optional string q = 2;  // multisearch ability
+
+  // Items on a page: bounded by the API settings
+  optional uint32 page_size = 3;
+  // If true, return only the last page (pagination token is ignored)
+  optional bool last_page = 4;
+  // Opaque pagination cursor: pass `next_page_params.page_token` or
+  // `prev_page_params.page_token` from a previous response unchanged. Valid
+  // only with the same cluster, filters and path scope as the request that
+  // produced it. A malformed value is rejected with InvalidArgument.
+  optional string page_token = 5;
+  // Comma-separated source chain ids. Narrows the cluster's transfers through
+  // AND, matched by the transfer's own token source chain (token_src_chain_id).
+  optional string src_chain_ids = 6;
+  // Comma-separated destination chain ids. Narrows the cluster's transfers
+  // through AND, matched by the transfer's own token destination chain
+  // (token_dst_chain_id).
+  optional string dst_chain_ids = 7;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 8;
+}
+
+message GetClusterTransfersByTransactionRequest {
+  string cluster_id = 1;
+  string tx_hash = 2;
+
+  // Items on a page: bounded by the API settings
+  optional uint32 page_size = 3;
+  // If true, return only the last page (pagination token is ignored)
+  optional bool last_page = 4;
+  // Opaque pagination cursor: pass `next_page_params.page_token` or
+  // `prev_page_params.page_token` from a previous response unchanged. Valid
+  // only with the same cluster, filters and path scope as the request that
+  // produced it. A malformed value is rejected with InvalidArgument.
+  optional string page_token = 5;
+  // Comma-separated source chain ids. Narrows the cluster's transfers through
+  // AND, matched by the transfer's own token source chain (token_src_chain_id).
+  optional string src_chain_ids = 6;
+  // Comma-separated destination chain ids. Narrows the cluster's transfers
+  // through AND, matched by the transfer's own token destination chain
+  // (token_dst_chain_id).
+  optional string dst_chain_ids = 7;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 8;
+}
+
+message GetClusterTransfersByAddressRequest {
+  string cluster_id = 1;
+  string address = 2;
+
+  // Items on a page: bounded by the API settings
+  optional uint32 page_size = 3;
+  // If true, return only the last page (pagination token is ignored)
+  optional bool last_page = 4;
+  // Opaque pagination cursor: pass `next_page_params.page_token` or
+  // `prev_page_params.page_token` from a previous response unchanged. Valid
+  // only with the same cluster, filters and path scope as the request that
+  // produced it. A malformed value is rejected with InvalidArgument.
+  optional string page_token = 5;
+  // Comma-separated source chain ids. Narrows the cluster's transfers through
+  // AND, matched by the transfer's own token source chain (token_src_chain_id).
+  optional string src_chain_ids = 6;
+  // Comma-separated destination chain ids. Narrows the cluster's transfers
+  // through AND, matched by the transfer's own token destination chain
+  // (token_dst_chain_id).
+  optional string dst_chain_ids = 7;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 8;
+}
+
+message GetClusterBridgedTokensRequest {
+  string cluster_id = 1;
+  // The focal chain. Must belong to the cluster's chains when the cluster
+  // defines them (else InvalidArgument); the counterparty chains are derived
+  // from the cluster.
+  int64 chain_id = 2;
+  optional uint32 page_size = 3;
+  optional bool last_page = 4;
+  // Sort field: TOTAL_TRANSFERS_COUNT[default] / OUTPUT_TRANSFERS_COUNT / INPUT_TRANSFERS_COUNT / NAME
+  BridgedTokensSort sort = 5;
+  // Sort order: DESC[default] / ASC
+  SortOrder order = 6;
+  // Opaque pagination cursor: pass `next_page_params.page_token` or
+  // `prev_page_params.page_token` from a previous response unchanged. Valid
+  // only with the same cluster, `chain_id`, `bridge_ids`, `q`, `sort` and
+  // `order` as the request that produced it. A malformed value is rejected
+  // with InvalidArgument.
+  optional string page_token = 7;
+  // Case-insensitive substring filter on the row display name (`stats_assets.name`).
+  optional string q = 8;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 9;
+}
+
+message GetClusterChainsStatsRequest {
+  string cluster_id = 1;
+  optional uint32 page_size = 2;
+  optional bool last_page = 3;
+  // Optional comma-separated chain ids filter, for example `123,456`, selecting
+  // subject rows. Intersected with the cluster's chains (see
+  // GetClusterChainsRequest.chain_ids); a selection with none inside returns
+  // an empty list. Counts are not cluster-scoped (see GetChainsStats).
+  optional string chain_ids = 4;
+  // Sort order: DESC[default] / ASC
+  SortOrder order = 5;
+  // Opaque pagination cursor: pass `next_page_params.page_token` or
+  // `prev_page_params.page_token` from a previous response unchanged. Valid
+  // only with the same cluster, `chain_ids`, `bridge_ids`, `q`, `sort` and
+  // `order` as the request that produced it. A malformed value is rejected
+  // with InvalidArgument.
+  optional string page_token = 6;
+  // Case-insensitive substring filter on chain name or textual chain id.
+  optional string q = 7;
+  // Sort field: UNIQUE_TRANSFER_USERS_COUNT[default]
+  StatsChainsSort sort = 8;
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 9;
+}
+
+message GetClusterMessagePathsRequest {
+  string cluster_id = 1;
+  // The focal chain; rules as in GetClusterBridgedTokensRequest.chain_id.
+  int64 chain_id = 2;
+  optional string from_date = 3; // YYYY-MM-DD
+  optional string to_date = 4;   // YYYY-MM-DD
+  // Optional comma-separated bridge ids. Narrows the request to these bridges
+  // inside the cluster's bridge_ids (all bridges when the cluster sets none).
+  // Ids outside the cluster match nothing, so a selection with none inside
+  // returns an empty list. Malformed values return InvalidArgument.
+  optional string bridge_ids = 5;
+}

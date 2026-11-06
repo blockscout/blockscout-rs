@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
+use super::scope::ReadScope;
+use crate::proto::Pagination;
 use chrono::NaiveDateTime;
-use interchain_indexer_logic::{ChainBridgeFilter, IndexedChains, protocol_metadata};
+use interchain_indexer_logic::{
+    ChainBridgeFilter, IndexedChains,
+    pagination::{ListMarker, OutputPagination},
+    protocol_metadata,
+};
 use sea_orm::JsonValue;
 use tonic::Status;
 
@@ -84,39 +90,34 @@ pub fn non_empty<T>(v: Vec<T>) -> Option<Vec<T>> {
     if v.is_empty() { None } else { Some(v) }
 }
 
-/// Builds the shared `ChainBridgeFilter` from the CSV request fields common to
-/// every filtered list/counter endpoint. Parsing and empty-to-`None`
-/// normalization for all five CSV fields live here so a new filter dimension is
-/// maintained in one place. Malformed values return labeled `InvalidArgument`.
+/// Builds the shared `ChainBridgeFilter` for every filtered list/counter
+/// endpoint. The already-parsed [`ReadScope`] carries home, counterparty,
+/// bridges and the unindexed opt-in; this function parses only the directional
+/// `src_chain_ids` / `dst_chain_ids` lists (empty-to-`None` normalization
+/// included), so a new filter dimension is maintained in one place. Malformed
+/// values return labeled `InvalidArgument`.
 ///
-/// `indexed_chains` and `include_unindexed` add the sixth dimension: by default
-/// (`include_unindexed = false`) results are restricted to rows their own bridge
-/// could have fully observed (see [`ChainBridgeFilter::only_indexed_by_bridge`]);
-/// `include_unindexed = true` or an `AllIndexed` configuration disables the
-/// restriction entirely.
+/// `indexed_chains` and the scope's `include_unindexed_chains` add the sixth
+/// dimension: by default (`include_unindexed_chains = false`) results are
+/// restricted to rows their own bridge could have fully observed (see
+/// [`ChainBridgeFilter::only_indexed_by_bridge`]); `include_unindexed_chains =
+/// true` or an `AllIndexed` configuration disables the restriction entirely.
 pub fn build_chain_bridge_filter(
-    home_chain_id: Option<i64>,
-    counterparty_chain_ids: Option<&str>,
+    scope: &ReadScope,
     src_chain_ids: Option<&str>,
     dst_chain_ids: Option<&str>,
-    bridge_ids: Option<&str>,
     indexed_chains: &IndexedChains,
-    include_unindexed: bool,
 ) -> Result<ChainBridgeFilter, Status> {
-    let bridge_ids = non_empty(parse_bridge_ids_csv(bridge_ids)?);
-    let only_indexed_by_bridge = (!include_unindexed)
-        .then(|| indexed_chains.configured_pairs(bridge_ids.as_deref()))
+    let only_indexed_by_bridge = (!scope.include_unindexed_chains)
+        .then(|| indexed_chains.configured_pairs(scope.bridge_ids.as_deref()))
         .flatten();
 
     Ok(ChainBridgeFilter {
-        home_chain_id,
-        counterparty_chain_ids: non_empty(parse_chain_ids_csv(
-            "counterparty_chain_ids",
-            counterparty_chain_ids,
-        )?),
+        home_chain_id: scope.home_chain_id,
+        counterparty_chain_ids: scope.counterparty_chain_ids.clone(),
         src_chain_ids: non_empty(parse_chain_ids_csv("src_chain_ids", src_chain_ids)?),
         dst_chain_ids: non_empty(parse_chain_ids_csv("dst_chain_ids", dst_chain_ids)?),
-        bridge_ids,
+        bridge_ids: scope.bridge_ids.clone(),
         only_indexed_by_bridge,
     })
 }
@@ -131,13 +132,169 @@ pub fn checked_bridge_id(bridge_id: Option<u32>) -> Result<Option<i32>, Status> 
         .map_err(|_| Status::invalid_argument("bridge_id exceeds the supported int32 range"))
 }
 
+/// Decodes an optional request `page_token`. A malformed token is client
+/// input (`InvalidArgument`), never an internal error, and is not logged.
+pub fn parse_page_token<M: ListMarker>(page_token: Option<&str>) -> Result<Option<M>, Status> {
+    page_token
+        .map(M::from_token)
+        .transpose()
+        .map_err(|e| Status::invalid_argument(format!("invalid page_token: {e}")))
+}
+
+/// Renders both sides of an `OutputPagination` into the shared response
+/// cursor. Infallible by design: a side whose marker cannot be encoded is
+/// logged here (the handling point) and omitted, so the page itself is still
+/// served. No marker a list query builds is expected to fail: bridged-tokens
+/// bounds its name sort key to fit the 512-byte name cap
+/// (`bridged_tokens_query.rs`). The omission is the safety net if one ever
+/// does.
+pub fn page_params<M: ListMarker + std::fmt::Debug>(
+    pagination: OutputPagination<M>,
+) -> (Option<Pagination>, Option<Pagination>) {
+    (
+        encode_page_token(pagination.next_marker),
+        encode_page_token(pagination.prev_marker),
+    )
+}
+
+fn encode_page_token<M: ListMarker + std::fmt::Debug>(marker: Option<M>) -> Option<Pagination> {
+    let marker = marker?;
+    marker
+        .token()
+        .inspect_err(|e| tracing::error!(err = ?e, marker = ?marker, "failed to encode page token"))
+        .ok()
+        .map(|page_token| Pagination { page_token })
+}
+
+/// Parses the pagination fields every list request shares by name
+/// (`page_token`, `page_size`, `last_page`) and returns
+/// `(inner, input_pagination, page_size, is_last_page)`. A macro, not a fn:
+/// the request types share these field names but no trait.
+macro_rules! list_page_params {
+    ($service:expr, $request:expr, $marker:ty) => {{
+        let inner = $request.into_inner();
+        let input_pagination =
+            $crate::services::utils::parse_page_token::<$marker>(inner.page_token.as_deref())?;
+        let page_size = inner
+            .page_size
+            .unwrap_or($service.api_settings.default_page_size)
+            .clamp(1, $service.api_settings.max_page_size.get()) as usize;
+        let is_last_page = inner.last_page.unwrap_or(false);
+        Ok::<_, tonic::Status>((inner, input_pagination, page_size, is_last_page))
+    }};
+}
+pub(crate) use list_page_params;
+
 #[cfg(test)]
 mod tests {
     use super::{
         build_chain_bridge_filter, checked_bridge_id, db_datetime_to_string, non_empty,
-        parse_bridge_ids_csv, parse_chain_ids_csv,
+        page_params, parse_bridge_ids_csv, parse_chain_ids_csv, parse_page_token,
     };
-    use interchain_indexer_logic::IndexedChains;
+    use crate::services::scope::ReadScope;
+    use interchain_indexer_logic::{
+        IndexedChains,
+        pagination::{
+            BridgedTokensPaginationLogic, ListMarker, MessagesPaginationLogic, OutputPagination,
+            PaginationDirection, StatsChainsPaginationLogic,
+        },
+    };
+
+    fn messages_marker(direction: PaginationDirection, message_id: u64) -> MessagesPaginationLogic {
+        MessagesPaginationLogic {
+            timestamp: chrono::DateTime::from_timestamp(1_767_313_800, 0)
+                .expect("valid timestamp")
+                .naive_utc(),
+            message_id,
+            bridge_id: 1,
+            direction,
+        }
+    }
+
+    fn bridged_tokens_marker(name_sort: String) -> BridgedTokensPaginationLogic {
+        BridgedTokensPaginationLogic {
+            direction: PaginationDirection::Next,
+            stats_asset_id: 42,
+            name_blank: false,
+            name_sort,
+            count: 7,
+        }
+    }
+
+    #[test]
+    fn parse_page_token_absent_is_none() {
+        assert_eq!(
+            parse_page_token::<MessagesPaginationLogic>(None).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_page_token_rejects_malformed_as_invalid_argument() {
+        let err = parse_page_token::<MessagesPaginationLogic>(Some("not*a*token"))
+            .expect_err("must reject malformed token");
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+        assert!(err.message().contains("invalid page_token"));
+    }
+
+    #[test]
+    fn parse_page_token_decodes_valid_token() {
+        let parsed =
+            parse_page_token::<StatsChainsPaginationLogic>(Some("AQAAAAAAAAAAMgAAAAAAAABk"))
+                .unwrap();
+        assert_eq!(
+            parsed,
+            Some(StatsChainsPaginationLogic {
+                direction: PaginationDirection::Next,
+                count: 50,
+                chain_id: 100,
+            })
+        );
+    }
+
+    #[test]
+    fn page_params_none_sides_stay_none() {
+        let (next, prev) = page_params::<StatsChainsPaginationLogic>(OutputPagination::default());
+        assert_eq!(next, None);
+        assert_eq!(prev, None);
+    }
+
+    #[test]
+    fn page_params_encodes_both_sides() {
+        let next_marker = messages_marker(PaginationDirection::Next, 0x1234);
+        let prev_marker = messages_marker(PaginationDirection::Prev, 0x1200);
+        let (next, prev) = page_params(OutputPagination {
+            next_marker: Some(next_marker),
+            prev_marker: Some(prev_marker),
+        });
+        assert_eq!(
+            next.expect("next side is encoded").page_token,
+            next_marker.token().unwrap()
+        );
+        assert_eq!(
+            prev.expect("prev side is encoded").page_token,
+            prev_marker.token().unwrap()
+        );
+    }
+
+    #[test]
+    fn page_params_omits_only_the_side_that_fails_to_encode() {
+        // 513 bytes is over the 512-byte bridged-tokens name cursor cap, so
+        // `token()` errs for this marker.
+        let next_marker = bridged_tokens_marker("x".repeat(513));
+        let prev_marker = bridged_tokens_marker("usdc".to_string());
+        assert!(next_marker.token().is_err());
+
+        let (next, prev) = page_params(OutputPagination {
+            next_marker: Some(next_marker),
+            prev_marker: Some(prev_marker.clone()),
+        });
+        assert_eq!(next, None);
+        assert_eq!(
+            prev.expect("prev side is still encoded").page_token,
+            prev_marker.token().unwrap()
+        );
+    }
 
     /// `db_datetime_to_string` delegates to
     /// `interchain_indexer_logic::protocol_metadata::rfc3339_millis_z`, so the
@@ -255,8 +412,16 @@ mod tests {
     #[test]
     fn build_chain_bridge_filter_include_unindexed_true_clears_restriction() {
         let indexed = IndexedChains::from_pairs([(1, 1), (1, 100)]);
-        let filter =
-            build_chain_bridge_filter(None, None, None, None, None, &indexed, true).unwrap();
+        let filter = build_chain_bridge_filter(
+            &ReadScope {
+                include_unindexed_chains: true,
+                ..Default::default()
+            },
+            None,
+            None,
+            &indexed,
+        )
+        .unwrap();
         assert_eq!(filter.only_indexed_by_bridge, None);
     }
 
@@ -264,7 +429,7 @@ mod tests {
     fn build_chain_bridge_filter_default_sets_sorted_pairs() {
         let indexed = IndexedChains::from_pairs([(2, 250), (1, 100), (1, 1)]);
         let filter =
-            build_chain_bridge_filter(None, None, None, None, None, &indexed, false).unwrap();
+            build_chain_bridge_filter(&ReadScope::default(), None, None, &indexed).unwrap();
         assert_eq!(
             filter.only_indexed_by_bridge,
             Some(vec![(1, vec![1, 100]), (2, vec![250])])
@@ -274,13 +439,10 @@ mod tests {
     #[test]
     fn build_chain_bridge_filter_all_indexed_is_none_even_without_opt_in() {
         let filter = build_chain_bridge_filter(
-            None,
-            None,
-            None,
+            &ReadScope::default(),
             None,
             None,
             &IndexedChains::AllIndexed,
-            false,
         )
         .unwrap();
         assert_eq!(filter.only_indexed_by_bridge, None);
@@ -289,8 +451,16 @@ mod tests {
     #[test]
     fn build_chain_bridge_filter_prunes_pairs_to_requested_bridge_ids() {
         let indexed = IndexedChains::from_pairs([(1, 1), (2, 250), (3, 999)]);
-        let filter =
-            build_chain_bridge_filter(None, None, None, None, Some("2"), &indexed, false).unwrap();
+        let filter = build_chain_bridge_filter(
+            &ReadScope {
+                bridge_ids: Some(vec![2]),
+                ..Default::default()
+            },
+            None,
+            None,
+            &indexed,
+        )
+        .unwrap();
         assert_eq!(filter.bridge_ids, Some(vec![2]));
         assert_eq!(filter.only_indexed_by_bridge, Some(vec![(2, vec![250])]));
     }

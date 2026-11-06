@@ -1162,17 +1162,26 @@ logging to see the old/new values of replacements.
 
 ---
 
-## Filter Params Must Not Reuse Pagination Cursor Field Names
+## Former Raw Cursor Fields Are `reserved` — Never Un-Reserve Them
 
-List requests (`GetMessagesRequest`, `GetTransfersRequest`, and their
-byTx/byAddress variants) already use `bridge_id` as a **raw pagination
-cursor** field (proto field 7), and `GetChainsStatsRequest` uses `chain_id`
-(field 8) the same way. A read *filter* with either name would collide with
-cursor semantics for `api.use_pagination_token=false` clients.
+Until 2026-11 the list requests (`GetMessages*Request`,
+`GetTransfers*Request`, `GetBridgedTokensRequest`, `GetChainsStatsRequest`)
+also accepted raw pagination cursor fields (`timestamp`, `message_id`,
+`bridge_id`, `index`, `direction`; `asset_id`, `name`, `name_blank`,
+`count`; `chain_id`) for `api.use_pagination_token=false`. The setting and
+the fields are gone; each request message reserves the old field numbers
+**and names**, so protoc rejects any attempt to reuse them.
 
-The unified read-filter vocabulary avoids both by construction:
-`home_chain_id`, `counterparty_chain_ids`, `bridge_ids`. Never add request
-fields named `bridge_id`/`chain_id` to these messages for non-cursor purposes.
+The names matter, not just the numbers: generated HTTP routes silently drop
+undeclared query params (next gotcha). An old raw-mode client URL such as
+`?bridge_id=2&direction=next` is ignored today (the client gets page 1). If a
+field named `bridge_id` or `chain_id` came back with *filter* semantics, that
+same URL would silently become a filter.
+
+Use the read-filter vocabulary instead: `home_chain_id`,
+`counterparty_chain_ids`, `bridge_ids`, `chain_ids`. The only cursor in either
+direction is `page_token`. Every list response uses the shared cursor message
+`Pagination { page_token }`, and its removed fields are reserved too.
 
 ---
 
@@ -1191,6 +1200,16 @@ Pattern for the read-API filters: declare the field in proto even when the
 endpoint cannot honor it yet, and return
 `Status::invalid_argument("<param> is not supported by this endpoint yet")`
 for non-blank values.
+
+**Cluster routes are the deliberate exception.** `/api/v1/clusters/{cluster_id}/…`
+request messages do not declare `home_chain_id`, `counterparty_chain_ids` or
+`include_unindexed_chains`: the cluster preset supplies them, and a client
+sending them gets them silently ignored. That is safe only because the result
+stays bounded by the cluster. `bridge_ids` is declared, as a client selection
+that `narrow_bridges` intersects with the cluster's own bridges (a disjoint
+selection is an empty response, never "all bridges"). Never add one of the
+other three to a `GetCluster*Request` message — the preset would become
+client-overridable.
 
 ---
 
@@ -2138,6 +2157,18 @@ load-bearing, not incidental; the original live-report symptom traced back to
 on a fresh database), not to this predicate. Do not remove it again on a
 similar report — verify the snapshot actually has rows for the
 bridge/chain pair in question first.
+
+**An empty union has two meanings in message paths.** `message_paths`
+(`services/stats.rs`) feeds `push_zero_chains_guard_predicate` a union of the
+in-scope bridges' configured chains. Empty with no `bridge_ids` means no bridge
+is configured at all: restrict nothing (`None`, ADR-004 Decision 5). Empty with
+a `bridge_ids` selection (unknown ids, or bridges without contracts) means no
+zero-row candidates: `zero_row_chains` yields `Some([])` and the guard renders
+`sm.messages_count IS NOT NULL`, so only real rows remain. Before this was told
+apart, `?bridge_ids=<unknown>` with `include_unindexed_chains=false` padded
+every directory chain with a zero row. Do not collapse it back into the
+`push_in_predicate` empty no-op, which stays for real rows. `chains_list` and
+`chains_stats_page` make the same distinction.
 
 **Placeholder numbering, fixed alongside the above.** The `chain_ids`
 predicate in `list_stats_chains` hardcoded `$1, $2, ...` instead of deriving
@@ -3123,3 +3154,64 @@ icon and Blockscout misses erase ERC-20 icons: re-apply manual icons from
 `write_api_audit_log` (`runbooks/write-api.md`). The cache protocol that makes
 the new value visible without a restart is described in "Token Cache Writers W1,
 W3 And Admin Invalidation Share The Per-Key Mutex".
+
+## Do Not Re-Enable actix-prost `conversions`
+
+Until the `api-clusters` work, the root `Cargo.toml` enabled the
+`conversions` feature of `actix-prost-build`. With it, actix-prost (0.3.1)
+emits a `<Message>Internal` struct plus a `convert_trait::TryConvert` impl for
+every message tree an RPC reaches, and deduplicates them **per service**
+(`ActixGenerator::generate` builds a fresh `ConversionsGenerator` for each
+service). A message reached from two services was therefore generated twice
+into the one module `blockscout.interchain_indexer.v1.rs`, and the proto crate
+failed with `E0428 <Message>Internal defined multiple times`. `ChainInfo` and
+`Pagination` were patched out by a `build.rs` text hack
+(`dedupe_actix_duplicate_internal_structs`) that keyed off literal generated
+text and struct order.
+
+Nothing in this repo used the `*Internal` / `TryConvert` code, and the
+generated actix routes never call it. The feature, the `convert-trait`
+dependency, the unused `convert/convert_options.proto` import and the patch
+were removed; `multichain-aggregator` builds the same way.
+
+Do not turn the feature back on: the legacy and cluster Read API services
+share every response message, so the duplicate-definition errors would return
+at once. If a conversion is ever needed, write it by hand.
+
+---
+
+## Keyset Cursor Keys Must Be Bounded By Construction
+
+**Symptom:** a bridged-tokens list stops at one row. The page has no
+`next_page_params` (or `prev_page_params`), and the server logs
+`failed to encode page token` on every view of it. A related symptom: a
+name-sorted walk never ends.
+
+**Root cause:**
+
+- Until this fix, the bridged-tokens cursor carried the full
+  `stats_assets.name` as its name sort key in every sort mode. The
+  page-token encoder caps that name at 512 bytes.
+- Asset names come verbatim from on-chain `name()` and are unbounded
+  `TEXT`. Anyone can choose one: Omnibridge bridges any ERC-20 and reads
+  its name with no length limit.
+- The encoder cap only moved the failure to the page boundary. Raising the
+  cap would not help either: the production edge rejects a `page_token` of
+  about 11,000 characters with HTTP 520, which the service never sees
+  (measured 2026-11-03; 10,000 characters still passed).
+
+**Fix:**
+
+- Bound the key in the SQL expression that the ORDER BY reads:
+  `left(name, 128)`, and 128 characters × 4 bytes = 512.
+- Copy that column into the marker as is.
+- Map a decoded cursor into the same key space before binding it, so old
+  tokens still continue.
+- Never re-derive a marker field in Rust differently from the SQL.
+
+The whitespace-only loop was such a re-derivation. SQL sorted by the raw
+`COALESCE(name, '')`, while `marker()` sent `''` for blank names, so a name
+made of spaces made the walk revisit pages forever.
+
+See `NAME_SORT_PREFIX_CHARS` in
+`interchain-indexer-logic/src/bridged_tokens_query.rs`.

@@ -12,6 +12,7 @@ mod helpers;
 
 use blockscout_service_launcher::test_server;
 use interchain_indexer_entity::{chains, stats_chains, stats_chains_by_bridge};
+use interchain_indexer_logic::{StatsChainsPaginationLogic, pagination::ListMarker};
 use reqwest::StatusCode;
 use sea_orm::{ActiveValue::Set, EntityTrait};
 
@@ -190,10 +191,9 @@ async fn malformed_and_overflow_bridge_ids_return_bad_request() {
 
 #[tokio::test]
 #[ignore = "Needs database to run"]
-async fn use_pagination_token_false_paginates_by_the_filtered_count() {
-    let db = helpers::init_db("test", "stats_bridge_filter_raw_pagination").await;
+async fn page_token_paginates_by_the_filtered_count() {
+    let db = helpers::init_db("test", "stats_bridge_filter_token_pagination").await;
     let base = helpers::init_interchain_indexer_server(db.db_url(), |mut s| {
-        s.api.use_pagination_token = false;
         s.stats.chains_recalculation_period_secs = 0;
         s
     })
@@ -201,7 +201,7 @@ async fn use_pagination_token_false_paginates_by_the_filtered_count() {
     let conn = db.client();
 
     // Global order would be 100 (99) then 1 (5); bridge-1-filtered order
-    // must be 1 (50) then 100 (3) — proving the raw pagination marker is
+    // must be 1 (50) then 100 (3) — proving the page token's marker is
     // derived from the filtered count, not the global one.
     seed_global(conn.as_ref(), 1, 5).await;
     seed_global(conn.as_ref(), 100, 99).await;
@@ -213,16 +213,22 @@ async fn use_pagination_token_false_paginates_by_the_filtered_count() {
     let items1 = page1["items"].as_array().unwrap();
     assert_eq!(items1.len(), 1);
     assert_eq!(items1[0]["id"], serde_json::json!("1"));
-    let next = &page1["next_page_params"];
-    assert_eq!(next["count"], serde_json::json!("50"));
-    assert_eq!(next["chain_id"], serde_json::json!("1"));
-
-    let route2 = format!(
-        "/api/v1/stats/chains?bridge_ids=1&page_size=1&direction={}&count={}&chain_id={}",
-        next["direction"].as_str().unwrap(),
-        next["count"].as_str().unwrap(),
-        next["chain_id"].as_str().unwrap(),
+    let next = page1["next_page_params"]
+        .as_object()
+        .expect("next_page_params must be an object");
+    assert_eq!(
+        next.keys().map(String::as_str).collect::<Vec<_>>(),
+        vec!["page_token"],
+        "{page1}"
     );
+    let token = next["page_token"].as_str().unwrap();
+
+    // Page 2 alone cannot tell the filtered count (50) from the global one (5):
+    // chain 100's filtered count (3) is below both. The token itself can.
+    let marker = StatsChainsPaginationLogic::from_token(token).unwrap();
+    assert_eq!((marker.count, marker.chain_id), (50, 1));
+
+    let route2 = format!("/api/v1/stats/chains?bridge_ids=1&page_size=1&page_token={token}");
     let page2: serde_json::Value = test_server::send_get_request(&base, &route2).await;
     let items2 = page2["items"].as_array().unwrap();
     assert_eq!(items2.len(), 1);

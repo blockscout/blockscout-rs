@@ -2,6 +2,7 @@
 
 use crate::{
     auth::WriteApiAuth,
+    config::{load_clusters_from_file, validate_clusters},
     create_provider_pools_from_chains,
     indexers::{IndexingTarget, enumerate_indexing_targets, reconcile_catchup_floors},
     load_bridges_from_file, load_chains_from_file, logging,
@@ -9,13 +10,17 @@ use crate::{
         health_actix::route_health, health_server::HealthServer,
         interchain_admin_service_actix::route_interchain_admin_service,
         interchain_admin_service_server::InterchainAdminServiceServer,
+        interchain_cluster_service_actix::route_interchain_cluster_service,
+        interchain_cluster_service_server::InterchainClusterServiceServer,
+        interchain_cluster_statistics_service_actix::route_interchain_cluster_statistics_service,
+        interchain_cluster_statistics_service_server::InterchainClusterStatisticsServiceServer,
         interchain_service_actix::route_interchain_service,
         interchain_service_server::InterchainServiceServer,
         interchain_statistics_service_server::InterchainStatisticsServiceServer,
         status_service_server::StatusServiceServer,
     },
     services::{
-        HealthService, InterchainAdminServiceImpl, InterchainServiceImpl,
+        ClusterRegistry, HealthService, InterchainAdminServiceImpl, InterchainServiceImpl,
         InterchainStatisticsServiceImpl, StatusServiceImpl, build_replay_profiles,
         collect_indexing_progress,
     },
@@ -281,6 +286,12 @@ impl Router {
             .add_service(InterchainStatisticsServiceServer::from_arc(
                 self.stats_service.clone(),
             ))
+            .add_service(InterchainClusterServiceServer::from_arc(
+                self.interchain_service.clone(),
+            ))
+            .add_service(InterchainClusterStatisticsServiceServer::from_arc(
+                self.stats_service.clone(),
+            ))
             .add_service(StatusServiceServer::from_arc(self.status_service.clone()))
             .add_service(InterchainAdminServiceServer::from_arc(
                 self.admin_service.clone(),
@@ -295,6 +306,12 @@ impl launcher::HttpRouter for Router {
             .configure(|config| route_interchain_service(config, self.interchain_service.clone()));
         service_config.configure(|config| {
             route_interchain_statistics_service(config, self.stats_service.clone())
+        });
+        service_config.configure(|config| {
+            route_interchain_cluster_service(config, self.interchain_service.clone())
+        });
+        service_config.configure(|config| {
+            route_interchain_cluster_statistics_service(config, self.stats_service.clone())
         });
         service_config
             .configure(|config| route_status_service(config, self.status_service.clone()));
@@ -390,6 +407,24 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         bridges.len(),
         settings.bridges_config.display()
     );
+
+    // Fail fast on a bad cluster config: before the (possibly long) stats
+    // backfill and before any DB seeding. Clusters are consumed by the cluster
+    // Read API routes.
+    let clusters = load_clusters_from_file(settings.clusters_config.as_deref())?;
+    validate_clusters(&clusters, &bridges, &indexed_chains)?;
+    for cluster in &clusters {
+        tracing::info!(
+            cluster_id = %cluster.id,
+            home_chain_id = ?cluster.home_chain_id,
+            counterparty_chain_ids = ?cluster.counterparty_chain_ids,
+            bridge_ids = ?cluster.bridge_ids,
+            include_unindexed_chains = cluster.include_unindexed_chains,
+            "cluster configured"
+        );
+    }
+
+    let cluster_registry = Arc::new(ClusterRegistry::new(&clusters));
 
     // Shared by both API services below so the SQL predicate and the response
     // flag are computed from the exact same value.
@@ -510,12 +545,14 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
         bridges,
         api_settings.clone(),
         indexed_chains.clone(),
+        cluster_registry.clone(),
     )?);
     let stats_service = Arc::new(InterchainStatisticsServiceImpl::new(
         stats.clone(),
         api_settings,
         chain_info_service.clone(),
         indexed_chains.clone(),
+        cluster_registry.clone(),
     ));
     let status_service = Arc::new(StatusServiceImpl::new(
         indexers.clone(),

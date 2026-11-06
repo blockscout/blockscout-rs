@@ -13,6 +13,11 @@ use crate::{
     stats::StatsListQuery,
 };
 
+/// Name sort key length, in characters. A UTF-8 character is at most 4 bytes,
+/// so a key always fits the 512-byte name cap of the page token
+/// (`BT_MAX_NAME_CURSOR_BYTES` in `pagination.rs`); a unit test pins that.
+const NAME_SORT_PREFIX_CHARS: usize = 128;
+
 #[derive(Debug, Clone, FromQueryResult)]
 pub struct BridgedTokenAggDbRow {
     pub stats_asset_id: i64,
@@ -44,11 +49,7 @@ impl BridgedTokenAggDbRow {
             direction,
             stats_asset_id: self.stats_asset_id,
             name_blank,
-            name_sort: if name_blank {
-                String::new()
-            } else {
-                self.name_sort.clone()
-            },
+            name_sort: self.name_sort.clone(),
             count,
         }
     }
@@ -132,6 +133,12 @@ fn count_column(sort: BridgedTokensSortField) -> &'static str {
     }
 }
 
+/// Maps a decoded cursor name into the bounded sort-key space of the list
+/// query. Tokens issued before the key was bounded can carry up to 512 bytes.
+fn name_sort_key(name: &str) -> String {
+    name.chars().take(NAME_SORT_PREFIX_CHARS).collect()
+}
+
 /// `Next` cursor: rows strictly after `m` in forward display order.
 fn cursor_where_next(
     sort: BridgedTokensSortField,
@@ -143,7 +150,7 @@ fn cursor_where_next(
     let sql = match sort {
         BridgedTokensSortField::Name => {
             let b = m.name_blank as i32;
-            let n = m.name_sort.clone();
+            let n = name_sort_key(&m.name_sort);
             let id = m.stats_asset_id;
             vals.push(Value::BigInt(Some(i64::from(b))));
             vals.push(Value::String(Some(Box::new(n))));
@@ -204,7 +211,7 @@ fn cursor_where_prev(
     let sql = match sort {
         BridgedTokensSortField::Name => {
             let b = m.name_blank as i32;
-            let n = m.name_sort.clone();
+            let n = name_sort_key(&m.name_sort);
             let id = m.stats_asset_id;
             vals.push(Value::BigInt(Some(i64::from(b))));
             vals.push(Value::String(Some(Box::new(n))));
@@ -444,7 +451,9 @@ FROM (
            s.symbol,
            s.icon_url,
            (CASE WHEN s.name IS NULL OR btrim(s.name) = '' THEN 1 ELSE 0 END)::int AS name_blank,
-           COALESCE(s.name, '') AS name_sort
+           -- Same blank test as `name_blank` above; keep the two in sync.
+           (CASE WHEN s.name IS NULL OR btrim(s.name) = '' THEN ''
+                 ELSE left(s.name, {name_sort_chars}) END) AS name_sort
     FROM (
         -- The alias is load-bearing: the middle layer selects `agg.stats_asset_id`
         -- and joins `stats_assets s ON s.id = agg.stats_asset_id`, the outer layer
@@ -472,6 +481,7 @@ ORDER BY {order_clause}
 LIMIT ${limit_ph}
 "#,
         edges_where = edges_where,
+        name_sort_chars = NAME_SORT_PREFIX_CHARS,
         name_filter = name_filter_sql,
         where_extra = where_extra,
         order_clause = order_clause,
@@ -592,7 +602,10 @@ mod tests {
     };
     use sea_orm::{ActiveValue::Set, DatabaseConnection, EntityTrait, prelude::BigDecimal};
 
-    use crate::{pagination::PaginationDirection, test_utils::init_db};
+    use crate::{
+        pagination::{ListMarker, PaginationDirection},
+        test_utils::init_db,
+    };
 
     async fn seed_chains(db: &DatabaseConnection, ids: &[i64]) {
         if ids.is_empty() {
@@ -821,7 +834,7 @@ mod tests {
 
         assert_eq!(rows.len(), 3);
         assert_eq!(rows[0].name.as_deref(), Some("Zed"));
-        // NULL then whitespace-only both sort after non-blank; tie-break by stats_asset_id
+        // Blank names (NULL, empty, whitespace) share the key '' and are ordered by stats_asset_id
         let tail: Vec<_> = rows[1..].iter().map(|r| r.stats_asset_id).collect();
         assert!(tail[0] < tail[1]);
     }
@@ -2006,5 +2019,309 @@ mod tests {
         let ids_restricted: Vec<i64> = restricted.iter().map(|r| r.stats_asset_id).collect();
         let ids_opt_in: Vec<i64> = opt_in.iter().map(|r| r.stats_asset_id).collect();
         assert_eq!(ids_restricted, ids_opt_in);
+    }
+
+    /// Encodes a marker and decodes it back, as a client round trip would.
+    /// Panics (naming `ctx`) when the marker cannot be encoded.
+    fn roundtrip_marker(
+        marker: &BridgedTokensPaginationLogic,
+        ctx: &str,
+    ) -> BridgedTokensPaginationLogic {
+        let token = marker
+            .token()
+            .unwrap_or_else(|e| panic!("{ctx}: marker must encode: {e:#}"));
+        let decoded = BridgedTokensPaginationLogic::from_token(&token)
+            .unwrap_or_else(|e| panic!("{ctx}: token must decode: {e:#}"));
+        assert_eq!(&decoded, marker, "{ctx}: marker must round-trip");
+        decoded
+    }
+
+    async fn list_page(
+        db: &DatabaseConnection,
+        sort: BridgedTokensSortField,
+        order: StatsSortOrder,
+        page_size: usize,
+        last_page: bool,
+        input_pagination: Option<BridgedTokensPaginationLogic>,
+    ) -> (
+        Vec<BridgedTokenAggDbRow>,
+        OutputPagination<BridgedTokensPaginationLogic>,
+    ) {
+        list_bridged_token_stats_for_chain(
+            db,
+            1,
+            None,
+            None,
+            None,
+            StatsListQuery {
+                sort,
+                order,
+                page_size,
+                last_page,
+                input_pagination,
+                q: None,
+            },
+        )
+        .await
+        .unwrap()
+    }
+
+    /// Walks the whole list at `page_size = 1`, forward from the start and
+    /// backward from `last_page`, round-tripping every marker through the
+    /// page-token codec. Returns `(forward ids, backward ids in visit order)`.
+    async fn walk_bridged_tokens(
+        db: &DatabaseConnection,
+        sort: BridgedTokensSortField,
+        order: StatsSortOrder,
+        expected_rows: usize,
+    ) -> (Vec<i64>, Vec<i64>) {
+        let label = format!("{sort:?}/{order:?}");
+        // Hard cap, so a looping cursor fails the test instead of hanging it.
+        let cap = expected_rows + 3;
+
+        let mut forward = Vec::new();
+        let mut input = None;
+        let mut requests = 0;
+        loop {
+            requests += 1;
+            assert!(requests <= cap, "{label}: forward walk does not end");
+            let (rows, pag) = list_page(db, sort, order, 1, false, input).await;
+            forward.extend(rows.iter().map(|r| r.stats_asset_id));
+            if let Some(prev) = &pag.prev_marker {
+                roundtrip_marker(prev, &format!("{label} forward prev #{requests}"));
+            }
+            match &pag.next_marker {
+                Some(next) => {
+                    input = Some(roundtrip_marker(
+                        next,
+                        &format!("{label} forward next #{requests}"),
+                    ));
+                }
+                None => break,
+            }
+        }
+        assert_eq!(requests, expected_rows, "{label}: forward request count");
+
+        let mut backward = Vec::new();
+        let mut pages = Vec::new();
+        let mut input = None;
+        let mut requests = 0;
+        loop {
+            requests += 1;
+            assert!(requests <= cap + 1, "{label}: backward walk does not end");
+            let (rows, pag) = list_page(db, sort, order, 1, input.is_none(), input).await;
+            pages.push(rows.iter().map(|r| r.stats_asset_id).collect::<Vec<_>>());
+            backward.extend(rows.iter().map(|r| r.stats_asset_id));
+            if let Some(next) = &pag.next_marker {
+                roundtrip_marker(next, &format!("{label} backward next #{requests}"));
+            }
+            match &pag.prev_marker {
+                Some(prev) => {
+                    input = Some(roundtrip_marker(
+                        prev,
+                        &format!("{label} backward prev #{requests}"),
+                    ));
+                }
+                None => break,
+            }
+        }
+        // The first page's prev marker always exists and leads to one empty
+        // page, where `prev_marker` finally becomes `None`.
+        assert_eq!(requests, expected_rows + 1, "{label}: backward requests");
+        assert!(
+            pages.last().is_some_and(Vec::is_empty),
+            "{label}: backward walk must end on an empty page"
+        );
+        assert!(
+            pages[..pages.len() - 1].iter().all(|p| p.len() == 1),
+            "{label}: only the last backward page may be empty"
+        );
+
+        (forward, backward)
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn bridged_tokens_long_names_paginate_in_every_sort() {
+        let g = init_db("bridged_tokens_long_names").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2, 3]).await;
+        let names_and_edges = vec![
+            (Some("USDC".into()), vec![(1, 2, 5), (2, 1, 1)]),
+            (Some("a".repeat(600) + "1"), vec![(1, 2, 3)]),
+            (Some("a".repeat(600) + "2"), vec![(1, 2, 3), (3, 1, 2)]),
+            (Some("€".repeat(200)), vec![(2, 1, 4)]),
+            (Some("😀".repeat(200)), vec![(1, 3, 1), (2, 1, 4)]),
+            (None, vec![(1, 2, 2)]),
+            (Some("   ".into()), vec![(3, 1, 3)]),
+        ];
+        let mut all_ids = Vec::new();
+        for (name, edges) in names_and_edges {
+            all_ids.push(seed_asset_edges(db.as_ref(), name, edges).await);
+        }
+        let mut sorted_ids = all_ids.clone();
+        sorted_ids.sort_unstable();
+
+        for sort in [
+            BridgedTokensSortField::Name,
+            BridgedTokensSortField::InputTransfers,
+            BridgedTokensSortField::OutputTransfers,
+            BridgedTokensSortField::TotalTransfers,
+        ] {
+            for order in [StatsSortOrder::Asc, StatsSortOrder::Desc] {
+                let label = format!("{sort:?}/{order:?}");
+                let (forward, backward) =
+                    walk_bridged_tokens(db.as_ref(), sort, order, all_ids.len()).await;
+
+                let mut forward_sorted = forward.clone();
+                forward_sorted.sort_unstable();
+                assert_eq!(
+                    forward_sorted, sorted_ids,
+                    "{label}: forward visits each id once"
+                );
+
+                let mut backward_display = backward.clone();
+                backward_display.reverse();
+                assert_eq!(
+                    backward_display, forward,
+                    "{label}: backward walk reversed equals forward walk"
+                );
+            }
+        }
+    }
+
+    async fn list_ids(
+        db: &DatabaseConnection,
+        sort: BridgedTokensSortField,
+        order: StatsSortOrder,
+        input_pagination: Option<BridgedTokensPaginationLogic>,
+    ) -> Vec<i64> {
+        list_page(db, sort, order, 50, false, input_pagination)
+            .await
+            .0
+            .iter()
+            .map(|r| r.stats_asset_id)
+            .collect()
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn bridged_tokens_long_shared_prefix_ties_by_id() {
+        let g = init_db("bridged_tokens_shared_prefix").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2]).await;
+        let a = seed_asset_edges(db.as_ref(), Some("a".repeat(600) + "1"), vec![(1, 2, 1)]).await;
+        let b = seed_asset_edges(db.as_ref(), Some("a".repeat(600) + "2"), vec![(1, 2, 1)]).await;
+
+        // Both names share their first 128 characters, so the key ties and
+        // `stats_asset_id` decides, in the direction of the order.
+        let asc = list_ids(
+            db.as_ref(),
+            BridgedTokensSortField::Name,
+            StatsSortOrder::Asc,
+            None,
+        )
+        .await;
+        assert_eq!(asc, vec![a, b]);
+        let desc = list_ids(
+            db.as_ref(),
+            BridgedTokensSortField::Name,
+            StatsSortOrder::Desc,
+            None,
+        )
+        .await;
+        assert_eq!(desc, vec![b, a]);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn bridged_tokens_old_long_name_token_continues() {
+        let g = init_db("bridged_tokens_old_token").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2]).await;
+        let w = seed_asset_edges(db.as_ref(), Some("b".repeat(200) + "a"), vec![(1, 2, 1)]).await;
+        let x = seed_asset_edges(db.as_ref(), Some("b".repeat(200)), vec![(1, 2, 1)]).await;
+        let y = seed_asset_edges(db.as_ref(), Some("b".repeat(200) + "z"), vec![(1, 2, 1)]).await;
+
+        let sort = BridgedTokensSortField::Name;
+        let order = StatsSortOrder::Asc;
+
+        // All three share the key `"b" * 128`, so they are ordered by id.
+        let (rows, _) = list_page(db.as_ref(), sort, order, 50, false, None).await;
+        assert_eq!(
+            rows.iter().map(|r| r.stats_asset_id).collect::<Vec<_>>(),
+            vec![w, x, y]
+        );
+
+        for (direction, expected) in [
+            (PaginationDirection::Next, vec![y]),
+            (PaginationDirection::Prev, vec![w]),
+        ] {
+            // A token issued before the key was bounded: the full 200-byte name.
+            let old_marker = roundtrip_marker(
+                &BridgedTokensPaginationLogic {
+                    direction,
+                    stats_asset_id: x,
+                    name_blank: false,
+                    name_sort: "b".repeat(200),
+                    count: 0,
+                },
+                "old-style marker",
+            );
+            let from_old = list_ids(db.as_ref(), sort, order, Some(old_marker)).await;
+            assert_eq!(from_old, expected, "old-style {direction:?} marker");
+
+            let new_marker = rows
+                .iter()
+                .find(|r| r.stats_asset_id == x)
+                .expect("row X")
+                .marker(direction, sort);
+            let from_new = list_ids(db.as_ref(), sort, order, Some(new_marker)).await;
+            assert_eq!(from_new, from_old, "new-style {direction:?} marker");
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn bridged_tokens_blank_names_tie_by_id() {
+        let g = init_db("bridged_tokens_blank_ties").await;
+        let db = g.client();
+        seed_chains(db.as_ref(), &[1, 2, 3, 4]).await;
+        let w = seed_asset_edges(db.as_ref(), Some("   ".into()), vec![(1, 2, 1)]).await;
+        let n = seed_asset_edges(db.as_ref(), None, vec![(1, 3, 1)]).await;
+        let z = seed_asset_edges(db.as_ref(), Some("Zed".into()), vec![(1, 4, 1)]).await;
+
+        let sort = BridgedTokensSortField::Name;
+        let asc = list_ids(db.as_ref(), sort, StatsSortOrder::Asc, None).await;
+        assert_eq!(asc, vec![z, w, n]);
+        let desc = list_ids(db.as_ref(), sort, StatsSortOrder::Desc, None).await;
+        assert_eq!(desc, vec![z, n, w]);
+
+        for order in [StatsSortOrder::Asc, StatsSortOrder::Desc] {
+            let (forward, _) = walk_bridged_tokens(db.as_ref(), sort, order, 3).await;
+            let mut visited = forward.clone();
+            visited.sort_unstable();
+            assert_eq!(visited, vec![w, n, z], "{order:?}: each asset once");
+        }
+    }
+
+    #[test]
+    fn name_sort_key_bound_fits_token_cap() {
+        let key = name_sort_key(&"😀".repeat(200));
+        assert_eq!(key.chars().count(), NAME_SORT_PREFIX_CHARS);
+        assert_eq!(key.len(), 512, "128 four-byte characters");
+        let marker = BridgedTokensPaginationLogic {
+            direction: PaginationDirection::Next,
+            stats_asset_id: 1,
+            name_blank: false,
+            name_sort: key,
+            count: 0,
+        };
+        roundtrip_marker(&marker, "worst-case key");
+
+        assert_eq!(name_sort_key("USDC"), "USDC");
+        let euro_key = name_sort_key(&"€".repeat(200));
+        assert_eq!(euro_key.chars().count(), NAME_SORT_PREFIX_CHARS);
+        assert_eq!(euro_key.len(), 384);
     }
 }
