@@ -178,7 +178,7 @@ macro_rules! list_page_params {
         let page_size = inner
             .page_size
             .unwrap_or($service.api_settings.default_page_size)
-            .clamp(1, $service.api_settings.max_page_size) as usize;
+            .clamp(1, $service.api_settings.max_page_size.get()) as usize;
         let is_last_page = inner.last_page.unwrap_or(false);
         Ok::<_, tonic::Status>((inner, input_pagination, page_size, is_last_page))
     }};

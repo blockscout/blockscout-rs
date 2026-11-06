@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap, num::NonZeroU32, path::PathBuf};
 
 use blockscout_service_launcher::{
     database::{DatabaseConnectSettings, DatabaseSettings},
@@ -261,20 +261,60 @@ mod tests {
         assert_eq!(s.write_api, WriteApiSettings::default());
         assert!(s.write_api.keys_sha256.is_empty());
     }
+
+    #[derive(Debug, Deserialize)]
+    struct ApiSettingsWrapper {
+        #[serde(default)]
+        api: ApiSettings,
+    }
+
+    fn api_settings_with_max_page_size(
+        max_page_size: u64,
+    ) -> Result<ApiSettings, config::ConfigError> {
+        Config::builder()
+            .set_override("api.max_page_size", max_page_size)
+            .expect("set_override")
+            .build()
+            .expect("config")
+            .try_deserialize::<ApiSettingsWrapper>()
+            .map(|wrapper| wrapper.api)
+    }
+
+    #[test]
+    fn api_settings_reject_zero_max_page_size() {
+        let err = api_settings_with_max_page_size(0)
+            .expect_err("a zero max_page_size must fail at config load");
+        assert!(err.to_string().contains("nonzero"), "{err}");
+    }
+
+    #[test]
+    fn api_settings_accept_positive_max_page_size() {
+        let api = api_settings_with_max_page_size(5).expect("deserialize");
+        assert_eq!(api.max_page_size.get(), 5);
+        assert_eq!(
+            api.default_page_size,
+            ApiSettings::default().default_page_size
+        );
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct ApiSettings {
     pub default_page_size: u32,
-    pub max_page_size: u32,
+    /// Non-zero by type: list handlers clamp `page_size` to `1..=max_page_size`,
+    /// and `clamp(1, 0)` panics, so a zero maximum fails at config load
+    /// instead of on every list request.
+    pub max_page_size: NonZeroU32,
 }
+
+const DEFAULT_MAX_PAGE_SIZE: NonZeroU32 = NonZeroU32::new(100).unwrap();
 
 impl Default for ApiSettings {
     fn default() -> Self {
         Self {
             default_page_size: 50,
-            max_page_size: 100,
+            max_page_size: DEFAULT_MAX_PAGE_SIZE,
         }
     }
 }
