@@ -1,6 +1,6 @@
 chains_config = "config/full-mainnet/chains.json"
 bridges_config = "config/full-mainnet/bridges.json"
-clusters_config = "config/clusters.json"
+clusters_config = "config/full-mainnet/clusters.json"
 
 [token_info]
 onchain_retry_interval = 10

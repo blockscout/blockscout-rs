@@ -617,7 +617,11 @@ paths:
       summary: |-
         Bridged tokens of `chain_id` within the cluster. When the cluster defines a
         chain set, `chain_id` must belong to it (else InvalidArgument), and the
-        counterparty chains are derived from the cluster.
+        counterparty chains are derived from the cluster. The rows and their
+        transfer counts are cluster-scoped; the `tokens` list of a row is NOT: as
+        on the legacy route, it lists the asset's tokens on every chain some
+        configured bridge indexes (every chain when the cluster sets
+        include_unindexed_chains).
       operationId: InterchainClusterStatisticsService_GetBridgedTokens
       responses:
         "200":

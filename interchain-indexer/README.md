@@ -527,6 +527,10 @@ rejected with 400 first.
   when the request's effective bridge set is non-empty, the sum of the
   per-bridge counts of those bridges, which can overcount an address seen
   through several of them.
+- The `tokens` list of a `stats/chain/{chain_id}/bridged-tokens` row is not
+  cluster-scoped. The rows and their transfer counts are; the list, as on the
+  legacy route, holds the asset's tokens on every chain some configured bridge
+  indexes (every chain when the cluster sets `include_unindexed_chains`).
 
 ## Envs
 

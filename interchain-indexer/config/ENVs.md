@@ -217,8 +217,11 @@ A cluster is a named preset of the Read API filter fields, served under
 
 - **Ids** are lowercase letters and digits in groups joined by a single `_` or
   `-` (`gnosis`, `eth-gno`), never a plain integer. An env-created entry takes
-  its id from the path segment, lowercased. A shell cannot export a field
-  variable for an id containing `-`; use the entry or whole-array form for it.
+  its id from the path segment, lowercased. A shell cannot export a variable
+  whose name contains `-`, so for an id like `eth-gno` neither the field form
+  nor the entry form (`…__ETH-GNO`) works from a shell (Kubernetes can set
+  them). Use the whole-array form instead:
+  `INTERCHAIN_INDEXER_CLUSTERS='[{"id":"eth-gno","counterparty_chain_ids":[1,100]}]'`.
 - **Lists are JSON arrays, not CSV:** `…__BRIDGE_IDS='[1,3]'`. An explicit `[]`
   fails startup; omit the field (or set `null`) for no restriction.
 - **`include_unindexed_chains` is a plain bool.** Omit it for `false`; `null`

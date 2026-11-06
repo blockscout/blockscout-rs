@@ -408,19 +408,8 @@ INTERCHAIN_INDEXER_CLUSTERS__NUMINE__HOME_CHAIN_ID=8021
 INTERCHAIN_INDEXER_CLUSTERS__NUMINE__BRIDGE_IDS='[2]'
 ```
 
-Glacier accepts an `x-glacier-api-key` header and rate-limits harder without one. The
-credential is optional; supply the shape *and* the value together, since a declared
-`api_key` whose value is unset, empty or whitespace-only fails startup by design:
-
-```bash
-INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__LOCATION=header
-INTERCHAIN_INDEXER_CHAINS__8021__RPCS__GLACIER__API_KEY__PARAM_NAME=x-glacier-api-key
-INTERCHAIN_INDEXER_RPC_API_KEY__8021__GLACIER=<secret>
-```
-
-Raising `MAX_RPS` above `1` usually goes with the key. Locally all of this goes in
-`.env` (see [`.env.example`](../../.env.example)) and the service is started with
-`just run-dev`. Nothing loads `.env` implicitly — deliberately, since a globally loaded
+Locally all of this goes in `.env` (see [`.env.example`](../../.env.example)) and
+the service is started with `just run-dev`. Nothing loads `.env` implicitly — deliberately, since a globally loaded
 `.env` would also reach `just test`, whose fixture declares chains `1` and `100` only
 and fails on a partial chain `8021` appended to it.
 

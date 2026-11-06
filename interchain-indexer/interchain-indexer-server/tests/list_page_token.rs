@@ -167,10 +167,18 @@ async fn list_endpoints_paginate_by_page_token_only() {
         assert_eq!(seen, all_ids, "{route}: two pages must cover both items");
 
         for (page, body) in [("page 1", &page1), ("page 2", &page2)] {
-            for side in ["next_page_params", "prev_page_params"] {
-                if !body[side].is_null() {
-                    token_only(&body[side], &format!("{route} {page} {side}"));
-                }
+            // A non-empty page of these lists always carries a backward cursor,
+            // page 1 included: it lets a client poll for newer items (only the
+            // static `byTx` lists drop it, and none is listed here).
+            token_only(
+                &body["prev_page_params"],
+                &format!("{route} {page} prev_page_params"),
+            );
+            if !body["next_page_params"].is_null() {
+                token_only(
+                    &body["next_page_params"],
+                    &format!("{route} {page} next_page_params"),
+                );
             }
         }
 
