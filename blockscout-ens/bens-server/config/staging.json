@@ -7,7 +7,10 @@
           "url": "https://eth-sepolia.k8s-dev.blockscout.com"
         },
         "use_protocols": [
-          "ens", "genome", "mode"
+          "ens",
+          "genome",
+          "mode",
+          "gwei-sepolia"
         ]
       },
       "11155420": {
@@ -84,6 +87,24 @@
           "description": "Mode Name Service (MNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
           "icon_url": "https://i.imgur.com/6QXp70g.png",
           "docs_url": "https://docs.modedomains.xyz/"
+        }
+      },
+      "gwei-sepolia": {
+        "tld_list": ["gwei"],
+        "network_id": 11155111,
+        "subgraph_name": "gwei-sepolia-subgraph",
+        "address_resolve_technique": "primary_name_record",
+        "specific": {
+          "type": "ens_like",
+          "native_token_contract": "0x9D51D507BC7264d4fE8Ad1cf7Fe191933A0a81d6",
+          "native_token_id_is_namehash": true
+        },
+        "meta": {
+          "short_name": "GNS",
+          "title": "Gwei Name Service",
+          "description": "Gwei Name Service provides ENS-compatible .gwei names on Sepolia",
+          "icon_url": "https://gwei.site/favicon.svg",
+          "docs_url": "https://gwei.domains/"
         }
       }
     }
