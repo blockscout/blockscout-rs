@@ -494,6 +494,57 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "tests/migrations")]
+    async fn never_expiring_domain_does_not_break_queries(pool: PgPool) {
+        // names that never expire carry type(uint64).max, which `to_timestamp` rejects
+        sqlx::query(
+            "UPDATE sgd1.domain SET expiry_date = 18446744073709551615, ttl = 18446744073709551615 \
+             WHERE name = 'vitalik.eth'",
+        )
+        .execute(&pool)
+        .await
+        .expect("failed to update vitalik domain");
+        let reader = mocked_reader(pool).await;
+
+        let domain = reader
+            .get_domain(GetDomainInput {
+                network_id: Some(DEFAULT_CHAIN_ID),
+                name: "vitalik.eth".to_string(),
+                only_active: true,
+                protocol_id: None,
+            })
+            .await
+            .expect("failed to get vitalik domain")
+            .expect("never expiring domain is active")
+            .domain;
+        assert_eq!(domain.expiry_date, None);
+        assert_eq!(domain.ttl, None);
+        assert!(!domain.is_expired);
+
+        // a page large enough to scan every domain of both protocols
+        let result = reader
+            .lookup_domain_name(LookupDomainInput {
+                network_id: None,
+                name: None,
+                only_active: true,
+                pagination: DomainPaginationInput {
+                    page_size: 1000,
+                    ..Default::default()
+                },
+                protocols: Some(nonempty!["ens".to_string(), "genome".to_string()]),
+                all_protocols: false,
+            })
+            .await
+            .expect("failed to lookup domains");
+        let vitalik = result
+            .items
+            .iter()
+            .find(|output| output.domain.name.as_deref() == Some("vitalik.eth"))
+            .expect("never expiring domain is listed as active");
+        assert_eq!(vitalik.domain.expiry_date, None);
+        assert!(!vitalik.domain.is_expired);
+    }
+
+    #[sqlx::test(migrations = "tests/migrations")]
     async fn lookup_domain_name_works(pool: PgPool) {
         let reader = mocked_reader(pool).await;
 

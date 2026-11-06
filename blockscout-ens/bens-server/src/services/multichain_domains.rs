@@ -6,9 +6,14 @@ use bens_logic::subgraph::SubgraphReader;
 use bens_proto::blockscout::bens::v1::{multichain_domains_server::MultichainDomains, *};
 use std::sync::Arc;
 
-#[derive(derive_new::new)]
 pub struct MultichainDomainsService {
     pub subgraph_reader: Arc<SubgraphReader>,
+}
+
+impl MultichainDomainsService {
+    pub fn new(subgraph_reader: Arc<SubgraphReader>) -> Self {
+        Self { subgraph_reader }
+    }
 }
 
 #[async_trait]
