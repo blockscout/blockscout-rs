@@ -11,7 +11,8 @@
 //! layer cannot parse into its declared type is rejected with 400 earlier), and
 //! `bridge_ids` is a client selection narrowed inside the cluster's bridges
 //! (a disjoint one is an empty response), and the other three cluster fields
-//! sent as query params are ignored.
+//! sent as query params are ignored. `q` is checked against the `:byAddress` /
+//! `:byTx` oracles.
 //!
 //! One server, one database, deliberately: every check is read-only against
 //! the same seed, and each extra server adds to the test-server port race
@@ -672,6 +673,60 @@ async fn check_bridge_selection(base: &Url) {
     );
 }
 
+/// `q` on the plain lists, checked against the `:byAddress` / `:byTx` oracles.
+async fn check_q(base: &Url) {
+    for list in ["messages", "transfers"] {
+        for prefix in ["/api/v1/interchain", "/api/v1/clusters/gnosis/interchain"] {
+            let route = format!("{prefix}/{list}");
+            let by_address = get(base, &format!("{route}?q={ADDRESS}")).await;
+            assert!(
+                !by_address["items"].as_array().unwrap().is_empty(),
+                "{route}: q=address must not be vacuously empty: {by_address}"
+            );
+            let oracle = get(base, &format!("{prefix}/{list}:byAddress/{ADDRESS}")).await;
+            assert_eq!(by_address, oracle, "{route}: q=address vs :byAddress");
+
+            let upper = get(base, &format!("{route}?q=%20{}%20", ADDRESS.to_uppercase())).await;
+            assert_eq!(upper, by_address, "{route}: 0X prefix, spaces, upper case");
+
+            let by_hash = get(base, &format!("{route}?q={TX_HASH}")).await;
+            let by_tx = get(base, &format!("{prefix}/{list}:byTx/{TX_HASH}")).await;
+            assert_eq!(by_hash["items"], by_tx["items"], "{route}: q=hash vs :byTx");
+            assert!(
+                !by_hash["prev_page_params"].is_null(),
+                "{route}: q keeps the prev marker: {by_hash}"
+            );
+            assert!(
+                by_tx["prev_page_params"].is_null(),
+                "{route}: :byTx has no prev marker: {by_tx}"
+            );
+
+            for q in ["foo", "0x1234"] {
+                let (status, body) = helpers::get_raw(base, &format!("{route}?q={q}")).await;
+                assert_eq!(status, StatusCode::OK, "{route}?q={q}: {body}");
+                assert_eq!(body["items"], json!([]), "{route}?q={q}: {body}");
+                assert!(body["next_page_params"].is_null(), "{route}?q={q}: {body}");
+                assert!(body["prev_page_params"].is_null(), "{route}?q={q}: {body}");
+            }
+        }
+
+        // The cluster scope applies on top of `q`.
+        let legacy = get(base, &format!("/api/v1/interchain/{list}?q={ADDRESS}")).await;
+        let gnosis = get(
+            base,
+            &format!("/api/v1/clusters/gnosis/interchain/{list}?q={ADDRESS}"),
+        )
+        .await;
+        assert_ne!(legacy, gnosis, "{list}: the cluster scope must apply to q");
+        let disjoint = get(
+            base,
+            &format!("/api/v1/clusters/gnosis/interchain/{list}?q={ADDRESS}&bridge_ids=2"),
+        )
+        .await;
+        assert_eq!(disjoint["items"], json!([]), "{list}: {disjoint}");
+    }
+}
+
 async fn check_foreign_params_are_ignored(base: &Url) {
     let with_foreign = get(
         base,
@@ -744,6 +799,7 @@ async fn cluster_routes_apply_the_cluster_scope() {
     check_details(&base).await;
     check_unknown_cluster(&base).await;
     check_bridge_selection(&base).await;
+    check_q(&base).await;
     check_foreign_params_are_ignored(&base).await;
     check_paging(&base).await;
     check_serde_defaults(&base).await;

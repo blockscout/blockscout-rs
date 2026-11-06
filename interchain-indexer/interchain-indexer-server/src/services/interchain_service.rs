@@ -16,7 +16,7 @@ use interchain_indexer_entity::{
 };
 use interchain_indexer_logic::{
     ChainBridgeFilter, ChainInfoService, CrosschainMessageLookup, IndexedChains,
-    InterchainDatabase, JoinedTransfer, TokenInfoService,
+    InterchainDatabase, JoinedTransfer, ListSubject, TokenInfoService,
     pagination::{MessagesPaginationLogic, TransfersPaginationLogic},
     protocol_metadata::ProtocolMetadata,
     utils::{hex_string_opt, to_hex_prefixed, vec_from_hex_prefixed},
@@ -31,7 +31,7 @@ use super::{
     scope::ReadScope,
     utils::{
         build_chain_bridge_filter, checked_bridge_id, db_datetime_to_string, list_page_params,
-        map_db_error, non_empty, page_params, parse_chain_ids_csv,
+        map_db_error, non_empty, page_params, parse_chain_ids_csv, parse_list_q,
     },
 };
 
@@ -333,25 +333,22 @@ impl InterchainServiceImpl {
 impl InterchainServiceImpl {
     /// Core of every messages list route (plain, byTx, byAddress; legacy and
     /// cluster): keyset query plus rendering. `filter` is already built.
+    /// `subject = None` is a plain-list `q` no row can match (`parse_list_q`):
+    /// an empty page, without a query.
     async fn messages_page(
         &self,
-        tx_hash: Option<Vec<u8>>,
-        address: Option<Vec<u8>>,
+        subject: Option<ListSubject>,
         filter: ChainBridgeFilter,
         page_size: usize,
         is_last_page: bool,
         input_pagination: Option<MessagesPaginationLogic>,
     ) -> Result<GetMessagesResponse, Status> {
+        let Some(subject) = subject else {
+            return Ok(GetMessagesResponse::default());
+        };
         let (items, output_pagination) = self
             .db
-            .get_crosschain_messages(
-                tx_hash,
-                address,
-                filter,
-                page_size,
-                is_last_page,
-                input_pagination,
-            )
+            .get_crosschain_messages(subject, filter, page_size, is_last_page, input_pagination)
             .await
             .map_err(map_db_error)?;
         let items = self.messages_logic_to_proto(items).await?;
@@ -365,25 +362,22 @@ impl InterchainServiceImpl {
 
     /// Core of every transfers list route (plain, byTx, byAddress; legacy and
     /// cluster): keyset query plus rendering. `filter` is already built.
+    /// `subject = None` is a plain-list `q` no row can match (`parse_list_q`):
+    /// an empty page, without a query.
     async fn transfers_page(
         &self,
-        tx_hash: Option<Vec<u8>>,
-        address: Option<Vec<u8>>,
+        subject: Option<ListSubject>,
         filter: ChainBridgeFilter,
         page_size: usize,
         is_last_page: bool,
         input_pagination: Option<TransfersPaginationLogic>,
     ) -> Result<GetTransfersResponse, Status> {
+        let Some(subject) = subject else {
+            return Ok(GetTransfersResponse::default());
+        };
         let (items, output_pagination) = self
             .db
-            .get_crosschain_transfers(
-                tx_hash,
-                address,
-                filter,
-                page_size,
-                is_last_page,
-                input_pagination,
-            )
+            .get_crosschain_transfers(subject, filter, page_size, is_last_page, input_pagination)
             .await
             .map_err(map_db_error)?;
         let items = self.joined_transfers_logic_to_proto(items).await?;
@@ -529,8 +523,7 @@ impl InterchainService for InterchainServiceImpl {
             self.indexed_chains.as_ref(),
         )?;
         self.messages_page(
-            None,
-            None,
+            parse_list_q(inner.q.as_deref()),
             filter,
             page_size,
             is_last_page,
@@ -572,8 +565,7 @@ impl InterchainService for InterchainServiceImpl {
             self.indexed_chains.as_ref(),
         )?;
         self.messages_page(
-            Some(tx_hash),
-            None,
+            Some(ListSubject::Transaction(tx_hash)),
             filter,
             page_size,
             is_last_page,
@@ -603,8 +595,7 @@ impl InterchainService for InterchainServiceImpl {
             self.indexed_chains.as_ref(),
         )?;
         self.messages_page(
-            None,
-            Some(address),
+            Some(ListSubject::Address(address)),
             filter,
             page_size,
             is_last_page,
@@ -633,8 +624,7 @@ impl InterchainService for InterchainServiceImpl {
             self.indexed_chains.as_ref(),
         )?;
         self.transfers_page(
-            None,
-            None,
+            parse_list_q(inner.q.as_deref()),
             filter,
             page_size,
             is_last_page,
@@ -664,8 +654,7 @@ impl InterchainService for InterchainServiceImpl {
             self.indexed_chains.as_ref(),
         )?;
         self.transfers_page(
-            Some(tx_hash),
-            None,
+            Some(ListSubject::Transaction(tx_hash)),
             filter,
             page_size,
             is_last_page,
@@ -695,8 +684,7 @@ impl InterchainService for InterchainServiceImpl {
             self.indexed_chains.as_ref(),
         )?;
         self.transfers_page(
-            None,
-            Some(address),
+            Some(ListSubject::Address(address)),
             filter,
             page_size,
             is_last_page,

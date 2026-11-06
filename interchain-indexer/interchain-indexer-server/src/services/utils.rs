@@ -4,7 +4,7 @@ use super::scope::ReadScope;
 use crate::proto::Pagination;
 use chrono::NaiveDateTime;
 use interchain_indexer_logic::{
-    ChainBridgeFilter, IndexedChains,
+    ChainBridgeFilter, IndexedChains, ListSubject,
     pagination::{ListMarker, OutputPagination},
     protocol_metadata,
 };
@@ -84,6 +84,24 @@ pub fn parse_bridge_ids_csv(input: Option<&str>) -> Result<Vec<i32>, Status> {
             })
         })
         .collect()
+}
+
+/// Plain-list `q`: blank → `All`; optional `0x`/`0X` prefix then 40 hex digits
+/// → `Address`, or 64 hex digits → `Hash` (any letter case); anything else →
+/// `None` (no row can match, so the caller serves an empty page without
+/// querying).
+pub fn parse_list_q(q: Option<&str>) -> Option<ListSubject> {
+    let q = q.unwrap_or_default().trim();
+    let digits = q
+        .strip_prefix("0x")
+        .or_else(|| q.strip_prefix("0X"))
+        .unwrap_or(q);
+    match hex::decode(digits) {
+        _ if q.is_empty() => Some(ListSubject::All),
+        Ok(bytes) if bytes.len() == 20 => Some(ListSubject::Address(bytes)),
+        Ok(bytes) if bytes.len() == 32 => Some(ListSubject::Hash(bytes)),
+        _ => None,
+    }
 }
 
 pub fn non_empty<T>(v: Vec<T>) -> Option<Vec<T>> {
@@ -189,11 +207,11 @@ pub(crate) use list_page_params;
 mod tests {
     use super::{
         build_chain_bridge_filter, checked_bridge_id, db_datetime_to_string, non_empty,
-        page_params, parse_bridge_ids_csv, parse_chain_ids_csv, parse_page_token,
+        page_params, parse_bridge_ids_csv, parse_chain_ids_csv, parse_list_q, parse_page_token,
     };
     use crate::services::scope::ReadScope;
     use interchain_indexer_logic::{
-        IndexedChains,
+        IndexedChains, ListSubject,
         pagination::{
             BridgedTokensPaginationLogic, ListMarker, MessagesPaginationLogic, OutputPagination,
             PaginationDirection, StatsChainsPaginationLogic,
@@ -346,6 +364,36 @@ mod tests {
             err.message()
                 .contains("invalid counterparty_chain_ids value `abc`")
         );
+    }
+
+    #[test]
+    fn parse_list_q_cases() {
+        let addr = Some(ListSubject::Address(vec![0xab; 20]));
+        let hash = Some(ListSubject::Hash(vec![0xcd; 32]));
+        let digits = |unit: &str, n: usize| unit.repeat(n);
+        let cases: Vec<(Option<String>, Option<ListSubject>)> = vec![
+            (None, Some(ListSubject::All)),
+            (Some(String::new()), Some(ListSubject::All)),
+            (Some("  \t ".to_string()), Some(ListSubject::All)),
+            (Some(format!("0x{}", digits("ab", 20))), addr.clone()),
+            (Some(format!("0X{}", digits("AB", 20))), addr.clone()),
+            (Some(format!("  {}  ", digits("aB", 20))), addr),
+            (Some(format!("0x{}", digits("cd", 32))), hash.clone()),
+            (Some(digits("cd", 32)), hash),
+            (Some("0x".to_string()), None),
+            (Some(digits("a", 38)), None),
+            (Some(digits("a", 39)), None),
+            (Some(digits("a", 41)), None),
+            (Some(digits("a", 63)), None),
+            (Some(digits("a", 65)), None),
+            (Some(digits("a", 66)), None),
+            (Some(format!("0x0x{}", digits("ab", 20))), None),
+            (Some(format!("0x{}", digits("zz", 20))), None),
+            (Some("foo".to_string()), None),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(parse_list_q(input.as_deref()), expected, "input: {input:?}");
+        }
     }
 
     #[test]

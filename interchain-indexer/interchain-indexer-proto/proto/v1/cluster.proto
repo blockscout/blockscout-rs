@@ -86,7 +86,13 @@ message GetClusterBridgesRequest {
 
 message GetClusterMessagesRequest {
   string cluster_id = 1;
-  optional string q = 2;  // multisearch ability
+  // Exact-match search; blank means no filter. 40 hex digits (an address)
+  // match the message's sender or recipient; 64 hex digits (a 32-byte hash)
+  // match its message id or its source or destination transaction hash. The
+  // 0x prefix is optional; letter case and surrounding whitespace are
+  // ignored; any other value returns an empty list. Combines with the other
+  // filters by AND; keep it unchanged while paging.
+  optional string q = 2;
 
   // Items on a page: bounded by the API settings
   optional uint32 page_size = 3;
@@ -176,7 +182,13 @@ message GetClusterMessagesByAddressRequest {
 
 message GetClusterTransfersRequest {
   string cluster_id = 1;
-  optional string q = 2;  // multisearch ability
+  // Exact-match search; blank means no filter. 40 hex digits (an address)
+  // match the transfer's sender or recipient; 64 hex digits (a 32-byte hash)
+  // match its message id or its message's source or destination transaction
+  // hash. The 0x prefix is optional; letter case and surrounding whitespace
+  // are ignored; any other value returns an empty list. Combines with the
+  // other filters by AND; keep it unchanged while paging.
+  optional string q = 2;
 
   // Items on a page: bounded by the API settings
   optional uint32 page_size = 3;

@@ -3215,3 +3215,35 @@ made of spaces made the walk revisit pages forever.
 
 See `NAME_SORT_PREFIX_CHARS` in
 `interchain-indexer-logic/src/bridged_tokens_query.rs`.
+
+---
+
+## An OR-Expanded Keyset Is A Filter, Not An Index Range
+
+- `ts < $t OR (ts = $t AND id < $i) OR (…)` is never an index condition.
+  PostgreSQL walks the pagination index from its start and filters, so page N
+  re-reads every earlier page (local DB, offset 10k: 7,544 buffers vs 47).
+- Write keyset predicates as row comparisons over the full ORDER BY key:
+  `(init_timestamp, id, bridge_id) < (…)` (`keyset_row_condition`,
+  `Expr::tuple`). This is equivalent only because every key column is
+  NOT NULL and every ORDER BY uses one direction.
+- The transfers key spans two tables, so no index matches it. The extra
+  inclusive `(m.init_timestamp, m.id, m.bridge_id) <= (…)` bound, implied by
+  the join, is what starts the messages pagination-index walk at the cursor.
+- The same root cause applies to `sender = $a OR recipient = $a`: a BitmapOr
+  loses order. Messages address search (`q`, `:byAddress`) is therefore a
+  `UNION ALL` of one ordered, limited arm per column over
+  `crosschain_messages_{sender,recipient}_ts_idx`.
+- The arms are still a planner choice, not a guarantee. With the default
+  `random_page_cost = 4`, a very hot address (29% of rows on the dev DB) made
+  the recipient arm walk `crosschain_messages_pagination_idx` on keyset
+  pages: up to 5,808 rows removed by the filter. The planner assumes the
+  address is spread uniformly over time. With `random_page_cost = 1.1`
+  (SSD), every page used `*_ts_idx` at about 40–60 buffers. Check that
+  setting before blaming the query.
+- Transfers address search has no such index, because its key leads with the
+  parent's `init_timestamp`. It stays planner-dependent at any
+  `random_page_cost`. On the dev DB, an address with 4% of transfers walked
+  the messages pagination index with a transfers probe per message: 68,804
+  buffers for page 1. `:byAddress` transfers behaves the same. A
+  denormalized timestamp on transfers would close it.
