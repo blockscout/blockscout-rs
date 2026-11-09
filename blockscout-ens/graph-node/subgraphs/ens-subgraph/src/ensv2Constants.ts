@@ -59,17 +59,24 @@ export function getGraveyardAddresses(): Address[] {
   return [];
 }
 
-// True for the Graveyard and the migration controllers: ENSv1 ownership
-// moving to one of these is part of a migration, whose legacy wrapped state
-// is kept and corrected by correctMigratedLegacyOwner.
-export function isMigrationDestination(address: Address): boolean {
+// True for the Graveyard itself. Besides receiving migrated names, the
+// Graveyard retires expired ENSv1 .eth names through Graveyard.clear(), which
+// re-registers them to itself for ~uint64 max (see ethRegistrar.ts).
+export function isGraveyard(address: Address): boolean {
   let graveyards = getGraveyardAddresses();
   for (let i = 0; i < graveyards.length; i++) {
     if (graveyards[i].equals(address)) {
       return true;
     }
   }
-  return isMigrationController(address);
+  return false;
+}
+
+// True for the Graveyard and the migration controllers: ENSv1 ownership
+// moving to one of these is part of a migration, whose legacy wrapped state
+// is kept and corrected by correctMigratedLegacyOwner.
+export function isMigrationDestination(address: Address): boolean {
+  return isGraveyard(address) || isMigrationController(address);
 }
 
 export function getV2GracePeriod(): BigInt {

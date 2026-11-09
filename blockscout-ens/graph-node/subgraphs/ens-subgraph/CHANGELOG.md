@@ -3,6 +3,26 @@
 Version labels match the Subgraph Studio deployments of the mainnet subgraph
 `5XqPmWe6gjyrJtFn9cLy237i4cWw2j9HcUJEXsP5qGtH`.
 
+## v2.1.2 (2026-11-09)
+
+### Fixed
+
+- Expired ENSv1 `.eth` names retired by the ENSv2 Graveyard no longer read as
+  live registrations owned by the Graveyard. `Graveyard.clear()` re-registers
+  an expired name to the Graveyard with a near-`2^64` expiry (burn, mint,
+  registry `NewOwner`, `NameRegistered`, resolver cleared); on mainnet the
+  first sweep (blocks 26,297,075 to 26,372,896) covered 946,001 names, about a
+  fifth of all `.eth` registrations, which then showed `registrant` =
+  Graveyard and `expiryDate` = the year-9999 clamp. A `NameRegistered` to the
+  Graveyard now keeps the lapsed `registrant`, `registrationDate` and
+  `expiryDate` on `Registration` and `Domain` (the name is expired and
+  available, as it looked before the sweep), the burn and the mint to the
+  Graveyard leave `registrant` alone, stale `WrappedDomain` state is cleared,
+  and the `NameTransferred`/`NameRegistered` history rows are still written.
+  `Domain.owner` still follows the registry to the Graveyard, as for migrated
+  names. Migrations (a live token moved by a migration controller) are
+  unchanged. Requires a full re-index.
+
 ## v2.1.1 (2026-10-31)
 
 ### Fixed
