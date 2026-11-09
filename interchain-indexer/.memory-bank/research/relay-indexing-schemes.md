@@ -15,6 +15,8 @@ In scope:
 
 - the REST API as a data source: payload by `orderId`, visibility scoping,
   query surface, rate limits, lifecycle
+- `/published-requests`: global visibility of terminal requests, when a
+  request is published, paging by time windows, and the column-level mapping
 - on-chain indexing: what to index on origin chains, how to find fills and
   refunds on destination chains, the solver wallet set, the Relay Chain
   settlement signal
@@ -36,23 +38,33 @@ Status: **pre-implementation research.** Evidence was gathered on
 self-serve API key), the relay.link web app, and on-chain reads on Ethereum,
 Base, Optimism, Arbitrum, Polygon and the Relay Chain. The schemes were drafted
 on 2026-10-28 from that evidence; neither has been prototyped.
+`GET /published-requests`, which Relay added on 2026-11-02, was checked on
+2026-11-05 and 2026-11-09 with the same key.
 
 ## Short Answer
 
-- **With unrestricted API visibility, ingest the API (Scheme 1).** The
-  `/requests/v3` change feed returns both sides of every order, on all chains
-  including non-EVM, in one record.
-- **A regular API key is not that.**
+- **Ingest `GET /published-requests` (Scheme 1).** Added on 2026-11-02, it
+  gives a regular key every integrator's terminal requests. It matched all 953
+  terminal requests of the global `/requests/v2` in three 2-minute windows.
+  Each record carries both sides of an order, on all chains including non-EVM.
+  - A request is published once it is terminal **and** at least 60 s past its
+    `createdAt`. There is no in-flight stage.
+  - Tail it by `updatedAt` time windows, read ≥ 60 s plus a margin after each
+    window ends. Backfill it by `createdAt` windows.
+  - Its fields are reduced: `route.actual` only (no quoted or minimum amounts,
+    no calls); no origin-swap input token in `route`; no destination on most
+    refunds. Private chains need a grant.
+- **`/requests/v3` with a regular key is not global.**
   - `/requests/v3` returns only the caller's integrator's requests plus
     requests made without a key. A fresh self-serve key saw ≈8% of the global
     feed (228 of 2,736 requests in six 3-minute windows, 3–14% per window).
-  - Only relay.link's own server-side proxy was observed with global
+  - Only relay.link's own server-side proxy was observed with global v3
     visibility.
   - The scoping applies only to requests created after 2026-03-24, ≈19:00–20:00
     UTC. A regular key sees all older history, back to v3's earliest record
     (2024-01-16).
   - The keyless, global `/requests/v2` sunsets on 2026-11-24.
-- **Without it, two on-chain streams cover EVM chains (Scheme 2):**
+- **Without the API, two on-chain streams cover EVM chains (Scheme 2):**
   - deposits from the prod Depository logs on each origin chain;
   - fills and refunds, found by reading every block of each indexed chain and
     matching the last 32 bytes of calldata against `orderId`s. Logs alone are
@@ -104,7 +116,12 @@ This repository (for fit):
   `crosschain_transfers.rs`
   - `id: i64`, `native_id: bytes`, nullable `dst_chain_id`
   - per-transfer `token_src_*` / `token_dst_*`, `src_amount` / `dst_amount`,
-    `asset_linkage`
+    `asset_linkage`; `token_dst_chain_id` is non-nullable
+- `interchain-indexer-entity/src/codegen/sea_orm_active_enums.rs`
+  - `MessageStatus`: `initiated`, `completed`, `failed`, `ready_to_claim`;
+    no value for a refund
+- `interchain-indexer-logic/src/protocol_metadata.rs`
+  - the namespaced `protocol_metadata` JSONB, where Relay-only fields would go
 - `interchain-indexer-logic/src/message_buffer/types.rs`
   - `Key { message_id: i64, bridge_id }` and the `Consolidate` trait
 - `interchain-indexer-logic/src/indexer/amb/events.rs`
@@ -129,6 +146,10 @@ Upstream:
     (server `wss://ws.relay.link`, API key required)
   - https://docs.relay.link/references/api/get-requests — the visibility scope
     is stated in the parameter descriptions, not in the page subtitle
+  - https://docs.relay.link/references/api/get-published-requests — the
+    global terminal-only feed. The page states the one-minute rule but not
+    the field it is measured from or what the time filters apply to (see
+    *`/published-requests`*)
   - https://docs.relay.link/references/api/api-keys.md — default and elevated
     rate limits
 - https://github.com/relayprotocol/relay-protocol-oracle —
@@ -157,6 +178,8 @@ Upstream:
   ADR-012 zero-address sentinel.
 - API records are keyed by `requestId`. Keep it next to `orderId`;
   `requestId` → `orderId` is many-to-one at most.
+- Column-by-column sources for Scheme 1 are in *Field mapping
+  (`/published-requests`)*.
 - History before the settlement protocol (before 2025-07-09) used short
   calldata ids that are not globally unique and do not fit this key.
 
@@ -174,6 +197,7 @@ Deposit-address flows reveal nothing until the sweep tx.
 |---|---|---|
 | `GET /requests/v3`, regular key | **no**: own integrator + keyless requests only (≈8% of traffic) | API key required; off-chain trust |
 | `GET /requests/v3`, privileged visibility | yes (all chains, incl. non-EVM) | only relay.link's own proxy observed with it; availability to third parties unknown |
+| `GET /published-requests`, regular key | **yes for terminal requests**: 953 of 953 vs the global v2; all chains incl. non-EVM, except private chains | terminal only, ≥ 60 s after `createdAt`; reduced fields; private chains need a grant |
 | `GET /requests/v2` | yes, keyless and global | deprecated 2026-07-22, throttled from 2026-09-01, **sunset 2026-11-24**; `limit` ≤ 50 |
 | `GET /intents/status/v3` | global, but one `requestId` per call | `requestId` is not on chain |
 | Relay Chain Hub/Oracle | per-order "settled" signal, all chains incl. non-EVM | no destination, fill tx, recipient or output token; fill and refund look alike; pull-based, solver-triggered |
@@ -271,9 +295,10 @@ cuts that by about a third.
 
 ### Data by `orderId`
 
-Only `/requests/v3?orderId=` (key; subject to the visibility scope below) and
-`/requests/v2?orderId=` (keyless, global, `includeOrderData=true`) accept it.
-Payload:
+Accepted by `/requests/v3?orderId=` (key; subject to the visibility scope
+below), `/requests/v2?orderId=` (keyless, global, `includeOrderData=true`) and
+`/published-requests?orderId=` (key, global, terminal requests only, reduced
+payload; see *`/published-requests`*). The v3 payload:
 
 - **Request:**
   - `id`, `status`, timestamps, `requestType`, `features`
@@ -360,6 +385,127 @@ browser; the proxy attaches privileged visibility server-side.
 It is an undocumented internal backend and must not be treated as a data
 source.
 
+### `/published-requests`
+
+Added on 2026-11-02 (API changelog). The docs describe it as the public subset
+of `requests/v3` for terminal requests (`success`, `failure`, `refund`) at
+least one minute old.
+
+- **Access.**
+  - `x-api-key` is required: no key → `401`. Short-lived session tokens are
+    not accepted.
+  - Private chains are returned only with a grant on the key and an explicit
+    `privateChainsToInclude`. `/chains` has no "private" flag, and the
+    parameter accepts any value with `200`, so which chains are private is not
+    discoverable.
+- **Parameters.**
+  - Filters: `term`, `id`, `orderId`, `depositTxHash`, `fillTxHash`,
+    `refundTxHash`, `user`, `recipient`, chain and currency filters, `filters`
+    OR groups (as in v3), `startTimestamp` / `endTimestamp`, `startBlock` /
+    `endBlock`.
+  - `sortBy` = `createdAt` (default) or `updatedAt`; `sortDirection` (default
+    `desc`); `limit` 1–100 (default 20); `continuation`; `includeTotal`.
+  - Unknown parameters → `400`. `requestType` and other private filters are
+    not available.
+- **Payload.**
+  - Request: `id`, `status`, `user`, `sender`, `recipient`, `createdAt`,
+    `updatedAt`.
+  - `data.inTxs[]` / `data.outTxs[]`: `txHash`, `chainId`, `block`,
+    `timestamp`, `status`, `fee`, `type`, raw `data{from,to,data,value}` (EVM
+    only), `stateChanges[]` (per-address balance diffs).
+  - `data.route.actual.{origin,destination}.{inputCurrency,outputCurrency}`:
+    `amount`, `amountFormatted`, `currency{chainId, address, symbol, name,
+    decimals}`. No `route.quoted`, no `minimumAmount`.
+  - `protocol`: `orderId`, `deposit.origin{chainId, depository, depositor,
+    currency, amount, transactionId, onchainId}`,
+    `settlement.destination.fills[]` / `refunds[]` (`chainId`,
+    `transactionId`), `solver.address`.
+  - Absent compared with v3: `requestType`, fees, `referrer`, `refundTo`,
+    fail reasons, Relay Chain transactions and attestations, `orderData`.
+
+| Check | Result |
+|---|---|
+| three 2-minute windows (2026-11-05 12:08 and 07:08, 2026-11-04 13:08 UTC) vs the terminal requests of the global v2 | 953 of 953 matched, none missing or extra. The matched rows include keyed integrators (v2 `referrer`: `relay.link`, `lifi`, `metamask`, `phantom`, `okx`, `rainbow`, `rango`, `funxyz`, `fomo`, …). v3 with the same key saw 43 (4.5%) |
+| chains in those windows | every chain seen in v2 was present |
+| earliest record, `sortDirection=asc` | 2024-01-16, as in v3 |
+| `updatedAt` feed over the last 10 minutes (2026-11-05) | 1,588 rows in 16 pages, sorted, no duplicates; all 1,380 `success` orders had `outTxs` |
+| differences from v2 | same-chain requests without an `orderId` lack the chain-id-only placeholder in `outTxs` that v2 has; one failed Solana → Robinhood order had no destination chain |
+| rate | two parallel 2-second polls (≈60 calls/min) for 6 minutes and an 80-page walk got no `429`. Per the changelog, the limits have the same per-tier shape as v3 |
+
+### When a request is published
+
+Measured on 2026-11-09, 11:51–11:57 UTC. Two parallel polls every 2 s
+(`sortBy=updatedAt` and `sortBy=createdAt`, both `desc`, `limit=100`; 340
+calls, no errors) recorded the first poll that returned each request. Rows
+already visible at the first poll were excluded, leaving 845 and 834 rows.
+Precision is ≈ ±2 s: the poll interval, and the 1 s resolution of the server
+`Date` header used to align clocks.
+
+**Rule: a request is published at max(`createdAt` + 60 s, the moment it turns
+terminal).**
+
+| Observation | Value |
+|---|---|
+| first appearance − `createdAt` | min 60.4 s, median 62 s; none earlier |
+| first appearance − deposit tx time | down to 50–55 s, always where `createdAt` was 7–11 s before the deposit tx: the threshold follows `createdAt`, not the deposit |
+| the 10 requests that turned terminal later than `createdAt` + 60 s | published 2–4 s after their first observed `updatedAt`, 73–337 s after `createdAt` |
+| first appearance − `updatedAt` | at most 61–64 s |
+
+- `createdAt` is close to the deposit (median +0.5 s, 1,583 rows of the
+  2026-11-05 feed). The fill follows within ≈1 s (median). `updatedAt` is set
+  ≈30 s after the fill (median; p95 82 s).
+- **The terminal status can lag the on-chain fill by minutes.** Three requests
+  filled right at creation turned `success`, and were published, 311–334 s
+  later.
+- **`updatedAt` keeps moving after publication.** 87 of 945 requests got a
+  later `updatedAt` while already visible (by 5–274 s), with no status
+  change. An `updatedAt`-sorted feed returns them again.
+
+### Paging by time windows
+
+Measured on 2026-11-09 over windows between 09:32 and 10:35 UTC.
+
+- **`startTimestamp` / `endTimestamp` filter the `sortBy` field:**
+  `createdAt` by default, `updatedAt` with `sortBy=updatedAt`. The page does
+  not say so. The v3 parameter descriptions do, and the behaviour matches.
+- **Both bounds are inclusive, compared at millisecond precision.** Fractional
+  seconds are accepted.
+  - Two adjacent 2-minute windows `[T, T+120]` and `[T+120, T+240]` together
+    returned exactly the 4-minute window: 521 rows by `createdAt`, 492 by
+    `updatedAt`, no overlap.
+  - Starting the second window at `T+121` lost 7 rows from `[T+120, T+121)`.
+- **`continuation` is a keyset cursor**, not an offset: base64 of `[sort value
+  in ms, tie-breaker]`. Its format is undocumented.
+  - One 1-hour `updatedAt` window: 7,936 rows in 80 pages, ≈1.6 s per page at
+    both the first and the last pages, sorted, no duplicates.
+  - At the end of the window it is `null`.
+- **Throughput:** one sequential stream fetches ≈45 rows/s; the feed grows by
+  ≈2.2 rows/s.
+- `startBlock` / `endBlock` are per-chain entry blocks (scoped to the origin
+  chain when `originChainId` is set, per the v3 docs). They are unusable for a
+  global feed. Not tested.
+
+What follows for a cursor:
+
+- **Live tail: `sortBy=updatedAt`, `sortDirection=asc`, windows `[a, b]`.**
+  - Read a window only when `now ≥ b + 60 s` plus a margin (90–120 s in
+    total). A request enters the feed with an `updatedAt` up to ≈60 s in the
+    past.
+  - Start the next window at exactly `b`. A row exactly on `b` is read twice,
+    which the upsert absorbs.
+  - `updatedAt` only grows. A request published or changed after its window
+    was read lands in a later window.
+  - Checkpoint the end of the last fully read window, not the `continuation`.
+- **Backfill: `sortBy=createdAt` windows.**
+  - `createdAt` never changes, so the windows partition history stably and
+    can be read in parallel.
+  - Run the backfill up to a point X and the tail from X. A request created
+    before X that turns terminal after it has `updatedAt > X` and comes
+    through the tail.
+- **Never tail by `createdAt`.** A request that turns terminal late lands in
+  an already read `createdAt` window (in the 6-minute poll above, up to 337 s
+  after its `createdAt`).
+
 ### Query surface worth knowing (v3)
 
 - `filters=[{"orderId":[…]}]` — groups are OR-ed, array values are OR-ed. A
@@ -391,6 +537,8 @@ Push channels are not discovery channels:
   `200`, and so did 179 of 180 calls in three parallel streams over 65 s
   (≈166/min; the other one was a network timeout, not a `429`). This matches
   the documented own bucket of 200/min.
+- `/published-requests`: per the changelog, the same per-tier shape as
+  `/requests/v3`; no `429` at ≈60 calls/min (see *`/published-requests`*).
 - No rate-limit headers were returned.
 - The keyless v2 is IP-throttled and returned `429` after a handful of calls.
 - **Lifecycle:** `/requests/v2` was deprecated on 2026-07-22, throttled from
@@ -410,9 +558,10 @@ Two API-based scenarios were measured against the regular-key visibility:
     status updates: well under one 100-row call/min.
   - Covers only the ≈8% visible slice of ≈150 requests/min.
 
-**Both scenarios become complete only if Relay grants global v3 visibility to
-the App.** The default v3 limit is enough at full volume; an elevated one only
-shortens the backfill (see Scheme 1, step 5).
+**Neither scenario is complete with v3 and a regular key.** Global v3
+visibility for the App would have completed both. Since 2026-11-02,
+`/published-requests` gives the same key global visibility of terminal
+requests, which is what Scheme 1 now uses.
 
 ## On-Chain Indexing
 
@@ -623,56 +772,132 @@ Drafted 2026-10-28. Neither scheme is decided or prototyped.
   limits (see `stats-projection-unbatched-pks-lookup-crash.md`) and the
   PostgreSQL bind limit first-order concerns.
 
-### Scheme 1: API with unrestricted visibility
+### Scheme 1: API (`/published-requests`)
 
-Assumes an App with global `/requests/v3` visibility. The default limit
+Drafted on 2026-10-28 assuming Relay would grant global `/requests/v3`
+visibility; reworked on 2026-11-09 onto `/published-requests`, which gives a
+regular key that visibility for terminal requests. The default limit
 (200 calls/min) covers live traffic; an elevated one only shortens the
 backfill.
 
-1. **Poll the change feed:** `/requests/v3` with `sortBy=updatedAt`,
-   `sortDirection=asc`, `startTimestamp`, `limit=100`, `continuation`. The
-   cursor (`updatedAt` + `continuation`) needs its own checkpoint; the
-   existing checkpoints are block ranges per chain.
-2. **Filter:** `protocol.orderId` present, origin chain ≠ destination chain.
+1. **Tail the feed by `updatedAt` windows:** `sortBy=updatedAt`,
+   `sortDirection=asc`, `limit=100`, `continuation` within a window. Read
+   each window ≥ 60 s plus a margin after it ends (see *Paging by time
+   windows*). The checkpoint is the end of the last fully read window. It
+   needs its own storage: the existing checkpoints are block ranges per
+   chain.
+2. **Backfill by `createdAt` windows**, in parallel, up to the point where
+   the tail starts.
+3. **Filter:** `protocol.orderId` present, origin chain ≠ destination chain.
    This drops same-chain swaps and relayed `/execute` calls, which have
    `protocol = null`. It also drops solver-filled same-chain swaps, which do
    have an `orderId`, so both conditions are needed.
    Store requests for every chain and apply the configured-chain rules only
    when exposing data, so adding a chain later needs no API re-read.
-3. **Map each request to a whole message**, written by upsert:
-   - source: `inTxs[]` and `protocol.deposit.origin` (depositor, token,
-     amount, tx);
-   - destination: `outTxs[].txHash` / `chainId` and
-     `protocol.settlement.destination.fills[]`; recipient from `recipient`;
-     output token and amounts from `data.route.quoted|actual.destination
-     .outputCurrency` (confirmed on v3, 2026-10-29); destination calls are not
-     in v3;
-   - original T1 before an origin swap: `route.origin.inputCurrency`;
-   - status: `success` → completed; `refund` → refunded, with the tx from
-     `settlement.destination.refunds[]`; `failure` → failed; the in-flight
-     values → initiated.
-4. **Updates** of the same request overwrite the row. The buffer's
-   source/destination pairing is not needed: both sides arrive in one record.
-5. **History** through the same feed from the chosen start. At today's
-   ≈220k requests/day (all kinds), a year is at most ≈80M rows: ≈2.8 days at
-   the default 200 calls/min × 100 rows, ≈11 h at 20 rps. Live traffic needs
-   ≈5 calls/min.
-6. **Optional, later:** spot-check EVM chains in the config on chain — the
+4. **Map each request to a whole message**, written by upsert (see *Field
+   mapping (`/published-requests`)*).
+5. **Updates** of the same request overwrite the row. `updatedAt` moves after
+   publication (≈9% of requests, within minutes), so a request is read more
+   than once. The buffer's source/destination pairing is not needed: both
+   sides arrive in one record.
+6. **History** through the same feed from the chosen start.
+   - At today's ≈220k requests/day (all kinds), a year is at most ≈80M rows:
+     ≈2.8 days at the default 200 calls/min × 100 rows, ≈11 h at 20 rps.
+   - One sequential stream does ≈45 rows/s (≈27 calls/min), so either rate
+     needs parallel windows.
+   - Live traffic needs a few calls/min.
+7. **Optional, later:** spot-check EVM chains in the config on chain — the
    deposit and fill receipts, and the `orderId` in the event or calldata
    suffix. About 2 RPC calls per order.
 
 - **Closes:**
-  - all 59 chains, including non-EVM;
-  - full destination data and the intended output of the order;
-  - refunds and the original T1;
-  - history from 2024-01-16 (v3's earliest record).
+  - all 59 chains, including non-EVM, except private chains without a grant;
+  - the delivered output: destination chain, tx, recipient, token, amount;
+  - refunds, as a status and a refund tx;
+  - history from 2024-01-16.
 - **Does not close:**
+  - the intended output (`route.quoted`, `minimumAmount`) and destination
+    calls: the endpoint has `route.actual` only and no calls;
+  - in-flight requests: a message appears already terminal, ≥ 60 s after
+    creation;
+  - the destination of most refunds, and the origin-swap input token in
+    `route` (only through `stateChanges`);
   - trust: the data is off chain and Relay-operated;
-  - the dependency on API availability and format (v2 is already being
-    retired);
-  - visibility and limits stay an agreement with Relay;
+  - the dependency on API availability, format and access terms (the
+    endpoint is new; v2 is already being retired);
   - a new ingestion path for this service: a poller with its own cursor, not
     a `LogStream`.
+
+#### Field mapping (`/published-requests`)
+
+Sample: 917 requests with `updatedAt` on 2026-11-09, 12:45–12:50 UTC. 815
+have an `orderId`; 25 of those are same-chain (21 on Polygon), leaving 790
+cross-chain orders.
+
+`crosschain_messages`:
+
+| Column | Field | Notes |
+|---|---|---|
+| `native_id` | `protocol.orderId` | |
+| `id` | — | `keccak256(orderId)[..8]` |
+| `src_chain_id` | `protocol.deposit.origin.chainId` | fallback `data.inTxs[0].chainId`; Relay chain id → chain id via `/chains` |
+| `dst_chain_id` | `data.route.actual.destination.outputCurrency.currency.chainId` | fallback `protocol.settlement.destination.fills[0].chainId`; never a refund's `outTxs` |
+| `src_tx_hash` | `protocol.deposit.origin.transactionId` | absent on TON (114 of 114): use `data.inTxs[0].txHash` |
+| `dst_tx_hash` | `protocol.settlement.destination.fills[0].transactionId` | equals `outTxs[0].txHash` for fills; on a refund `outTxs` holds the refund tx |
+| `sender_address` | `user` or `protocol.deposit.origin.depositor` | differ in 44 of 815; `user` can be an aggregator contract (see *Edge Cases*). Not decided |
+| `recipient_address` | `recipient` | |
+| `init_timestamp` | `data.inTxs[0].timestamp` (unix s) | fallback `createdAt` |
+| `last_update_timestamp` | `data.outTxs[0].timestamp` | fallback `updatedAt` |
+| `status` | `status` | `success` → `completed`, `failure` → `failed`; no value for `refund` (gap 1) |
+| `payload` | — | calls are not in the API |
+| `protocol_metadata` | `id` (`requestId`), `protocol.solver.address`, `protocol.settlement.destination.refunds[]`, origin T1 when known | a new Relay namespace |
+
+`crosschain_transfers`, one row per order (every sampled order had one
+`inTx` and at most one `outTx`):
+
+| Column | Field | Notes |
+|---|---|---|
+| `token_src_chain_id`, `token_dst_chain_id` | the message's chains | `token_dst_chain_id` is non-nullable |
+| `token_src_address`, `src_amount` | `protocol.deposit.origin.currency`, `.amount` | what entered the Depository, checkable on chain; equals `route.actual.origin.outputCurrency` in 811 of 815 |
+| `token_dst_address`, `dst_amount` | `data.route.actual.destination.outputCurrency.currency.address`, `.amount` | what the recipient got. A destination swap (142 of 815, 17%) makes it differ from what the solver paid (`destination.inputCurrency`) |
+| `sender_address`, `recipient_address` | as on the message | |
+| `asset_linkage` | — | `conversion` |
+
+`tokens`: `symbol`, `name` and `decimals` come with every
+`route.actual.*.currency`. They help with non-EVM tokens that
+`TokenInfoService` cannot resolve.
+
+Not needed: raw `data.*Txs[].data`, `fee`, `block`, `sender`. `stateChanges`
+only as a fallback (gaps 2 and 3).
+
+Gaps:
+
+1. **Refunds.** 16 of 18 refunds (all from TON) have no
+   `route.actual.destination`, so the destination chain, token and amount are
+   unknown. The refund tx is on the origin chain. `token_dst_chain_id` cannot
+   be filled, and `MessageStatus` has no refund value: either `failed` plus
+   metadata, or a new value.
+2. **Origin-swap input token.** `route.actual.origin.inputCurrency` is
+   present on 727 rows and equals the deposited token on 725. It is absent on
+   88. On 78 of those, `inTxs[].stateChanges` show the user spending a
+   different token than the one deposited: origin swaps whose T1 the endpoint
+   leaves out of `route`. T1 is recoverable from the user's negative balance
+   diff in `stateChanges`. That puts origin swaps at ≥ 80 of 815 orders
+   (≈10%, all origins) in this sample, against 14% of EVM-origin orders
+   measured on v2 (see `relay-protocol-model.md`).
+3. **Destination route missing on successes.** 20 `success` orders lack
+   `destination.outputCurrency`. The chain comes from `fills[]`; token and
+   amount would come from the recipient's balance diff in
+   `outTxs[0].stateChanges`. Not verified on these 20.
+4. **Non-EVM.**
+   - Relay's own chain ids: Solana `792703809`, TON `224235520`, Bitcoin
+     `8253038`, Tron `728126428`, Lighter `3586256`.
+   - Base58 and other string hashes and addresses, against byte columns:
+     an encoding decision.
+   - The native token appears as a 20-byte `0x000…0`, a 16-byte `0x000…0`,
+     `111…1` (Solana) and `"0"`. Normalise it per chain to the ADR-012
+     sentinel.
+5. **No in-flight stage.** `initiated` never comes from this feed.
 
 ### Scheme 2: on chain only
 
@@ -913,25 +1138,33 @@ option) was considered and dropped:
 
 ### Comparison
 
-| | Scheme 1 (API) | Scheme 2 (on chain) |
+| | Scheme 1 (`/published-requests`) | Scheme 2 (on chain) |
 |---|---|---|
-| Chains | all 59, incl. non-EVM | configured EVM chains; other destinations stay "destination unknown" |
-| Destination data | chain, tx, recipient, token, amount | actual payout; recipient inferred; destination-chain refunds look like fills |
-| Intended output of the order | yes | no |
+| Chains | all 59, incl. non-EVM; private chains need a grant | configured EVM chains; other destinations stay "destination unknown" |
+| Destination data | chain, tx, recipient, token, amount; none on most refunds | actual payout; recipient inferred; destination-chain refunds look like fills |
+| Intended output of the order | no: `route.actual` only | no |
+| When a message appears | terminal, ≥ 60 s after creation | deposit as soon as its block is read; fill when found |
 | Trust | off chain, Relay | verifiable on chain |
 | History | from 2024-01-16 | from 2025-07-09 |
-| Load | ≈5 calls/min live | every block of every chain + candidate receipts |
+| Load | a few calls/min live | every block of every chain + candidate receipts |
 | Architecture | new path: API poller with its own cursor | a `LogStream`, a new block scanner, the buffer as is, a durable candidate table |
 | Adding a chain later | free, if all requests are stored | scan only the new chain |
-| Dependencies | key, visibility, limits, API format | RPC (full history for backfill), `/chains` |
+| Dependencies | key, the endpoint's access terms, API format | RPC (full history for backfill), `/chains` |
 
 ### Recommendation
 
-- **If Relay grants global visibility:** Scheme 1. It is cheaper and more
-  complete. Add the on-chain spot-check only when it is needed.
-- **If not:** Scheme 2 with its two streams. Neither a regular key (see
-  *Rejected variant*) nor, by default, the Relay Chain stream (see *Is the
-  Relay Chain stream needed in Scheme 2?*) is worth adding.
+- **Scheme 1 on `/published-requests`.** Global visibility no longer depends
+  on an agreement with Relay, and the scheme is cheaper and more complete than
+  Scheme 2. Add the on-chain spot-check only when it is needed.
+- **Scheme 2, with its two streams, is the fallback** if the endpoint is
+  withdrawn or restricted. Neither a regular key on v3 (see *Rejected
+  variant*) nor, by default, the Relay Chain stream (see *Is the Relay Chain
+  stream needed in Scheme 2?*) is worth adding to it.
+- **Still worth asking Relay**, each only if the product needs it:
+  - in-flight requests, for an `initiated` stage;
+  - `route.quoted` / `minimumAmount` and destination calls;
+  - the destination of refunds and the origin-swap input token in `route`;
+  - the list of private chains, and a grant for them.
 
 ## Invariants
 
@@ -947,6 +1180,11 @@ option) was considered and dropped:
   `orderId`, so settlement can be joined without the API.
 - API records are keyed by `requestId`, on-chain records by `orderId`. A
   design that mixes sources must keep both.
+- In Scheme 1, a request enters `/published-requests` with an `updatedAt` up
+  to ≈60 s in the past. An `updatedAt` window is complete only once its end is
+  more than 60 s old; windows are contiguous (`[a, b]`, `[b, c]`).
+- `createdAt` never changes and `updatedAt` only grows. The first makes
+  backfill windows stable; the second makes the `updatedAt` tail lossless.
 
 ## Failure Modes / Observability
 
@@ -976,6 +1214,13 @@ option) was considered and dropped:
   that a request does not exist.
 - **Status drift:** the API flips `inTxs[].status` to `failure` on reorged or
   canonically failed deposits (Base, since 2026-06-10).
+- **Scheme 1 silently skips requests** when an `updatedAt` window is read
+  less than 60 s after its end, when the next window starts one second after
+  the previous end, or when the feed is tailed by `createdAt` instead of
+  `updatedAt`. The API answers `200` in every case.
+- **Scheme 1 cannot write a refund as is**: most refunds have no destination
+  chain, but `token_dst_chain_id` is non-nullable and `MessageStatus` has no
+  refund value.
 
 ## Edge Cases / Gotchas
 
@@ -1002,6 +1247,18 @@ option) was considered and dropped:
   deposit set in the fill/refund key "to support duplicate deposit fills /
   refunds", and the API reports duplicates as linked child requests. A
   message key from `orderId` alone would merge them. Not observed on chain.
+- **`/published-requests` timing:**
+  - `createdAt` can precede the deposit tx (by 7–11 s in the sampled cases);
+  - `updatedAt` is ≈30 s after the fill, not the fill time;
+  - the terminal status can come minutes after the fill (311–334 s seen);
+  - `updatedAt` moves after publication (≈9% of requests) with no status
+    change.
+- **`/published-requests` field quirks:**
+  - TON deposits have no `protocol.deposit.origin.transactionId`;
+  - on a refund, `outTxs` holds the refund tx on the origin chain, so
+    `outTxs[].chainId` is not the destination;
+  - the native token has four encodings across chains (see *Field mapping*,
+    gap 4).
 
 ## Change Triggers
 
@@ -1010,6 +1267,8 @@ Update this note when any of these happen:
 - a Relay indexer is implemented (record the chosen scheme, link an ADR, mark
   the other as superseded)
 - API changes: v2 sunset, v3 auth or scoping, `orderData` in v3
+- `/published-requests` changes: its delay, field set, access terms or
+  private-chain list, or its deprecation
 - Relay grants (or refuses) global v3 visibility or elevated limits to the
   App
 - `/chains` `solverAddresses` changes, a second solver identity appears in
@@ -1021,12 +1280,19 @@ Update this note when any of these happen:
 
 ## Open Questions
 
-- Will Relay grant a third-party App the global v3 visibility that the
-  relay.link proxy has, and at which rate limit? The answer picks the scheme.
-  (Answered so far: v3 does **not** return other integrators' requests to a
-  regular key.)
-- Scheme 1: the full list of in-flight `status` values, and how (or whether)
-  v3 exposes the destination calls of a cross-chain order with calls.
+- ~~Will Relay grant a third-party App global visibility?~~ Answered for
+  terminal requests: `/published-requests` (2026-11-02). v3 still does not
+  return other integrators' requests to a regular key.
+- Scheme 1: which chains are private on `/published-requests`, and whether
+  any indexed chain is among them.
+- Scheme 1: how to store a refund — status value (`failed` plus metadata, or
+  a new one) and `token_dst_chain_id` when the destination is unknown.
+- Scheme 1: `sender_address` from `user` or from the Depository `depositor`.
+- Scheme 1: how non-EVM hashes and addresses are encoded in the byte columns.
+- Scheme 1: whether the recipient's `stateChanges` diff reliably gives the
+  output token and amount when `route.actual.destination` is missing.
+- Scheme 1: neither v3 nor `/published-requests` exposes destination calls.
+  Is there any API path to them besides `orderData` on the retiring v2?
 - Scheme 2: the TTL after which a deposit without a found fill is persisted
   as "destination unknown", and how a later fill is merged into it.
 - Scheme 2, only if the optional Relay Chain stream is added: which status a

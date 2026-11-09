@@ -218,17 +218,21 @@ Small topics may keep some sections brief.
 - `relay-indexing-schemes.md` — how Relay orders can be ingested, and two
   candidate schemes. Covers:
   - the REST API as a source: payload by `orderId`, visibility scoping (a
-    regular key's `/requests/v3` sees ≈8% of traffic; only the relay.link
-    proxy was seen with global visibility), query surface, rate limits, v2
-    sunset 2026-11-24;
+    regular key's `/requests/v3` sees ≈8% of traffic), query surface, rate
+    limits, v2 sunset 2026-11-24;
+  - `/published-requests` (2026-11-02): global visibility of terminal
+    requests for a regular key, publication at `createdAt` + 60 s or on
+    turning terminal, lossless paging by `updatedAt` / `createdAt` time
+    windows, and the column-by-column mapping with its gaps (refunds,
+    origin-swap input token, non-EVM encoding);
   - on-chain indexing: what to index, one protocol solver identity behind 42
     public EVM hot wallets, fill discovery (log-based vs full-block), and the
     Relay Chain `Executed` keys as a per-order "settled" signal computable
     from origin data;
-  - the schema mapping, Scheme 1 (API with unrestricted visibility) and
-    Scheme 2 (on chain only: Depository logs and full-block suffix matching;
-    the Relay Chain stream is optional and why), their comparison and a
-    recommendation;
+  - the schema mapping, Scheme 1 (API: `/published-requests`, recommended)
+    and Scheme 2 (on chain only, the fallback: Depository logs and full-block
+    suffix matching; the Relay Chain stream is optional and why), their
+    comparison and a recommendation;
   - growing the indexed chain set without rescans: a durable fill-candidate
     table keyed by suffix, a shape-based candidate rule measured on Base, and
     what still forces a rescan;
