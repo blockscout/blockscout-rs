@@ -5,7 +5,7 @@ import {
   newMockEvent,
   test,
 } from "matchstick-as/assembly/index";
-import { handleProxyDeployed } from "../src/ensv2Discovery";
+import { getOrCreateRegistry, handleProxyDeployed } from "../src/ensv2Discovery";
 import { ProxyDeployed } from "../src/types/VerifiableFactory/VerifiableFactory";
 
 const FACTORY_ADDRESS = "0xD2a632D8a8b67c2c4398c255CbD7aF8dd7236198";
@@ -206,4 +206,39 @@ test("mainnet: both live UserRegistry implementations classify as USER, the supe
   assert.fieldEquals("ENSv2Registry", Address.fromString(c).toHexString(), "kind", "UNKNOWN");
 
   dataSourceMock.setNetwork("sepolia");
+});
+
+// SubregistryUpdated/ParentUpdated can reference a registry address before
+// its ProxyDeployed is processed (data sources with different start blocks,
+// or a testnet redeploy). getOrCreateRegistry then creates the row with no
+// implementation, so it is classified UNKNOWN. ProxyDeployed must reclassify
+// it once the implementation is known instead of leaving it frozen.
+test("handleProxyDeployed reclassifies a registry row created UNKNOWN by an earlier reference", () => {
+  dataSourceMock.setNetwork("sepolia");
+
+  let earlyProxyAddress = "0x88888888888888888888888888888888888888aa";
+  let address = Address.fromString(earlyProxyAddress);
+  let id = address.toHexString();
+
+  // What handleSubregistryUpdated does for a not-yet-deployed child.
+  getOrCreateRegistry(address, address, newMockEvent().block);
+  assert.fieldEquals("ENSv2Registry", id, "kind", "UNKNOWN");
+  assert.fieldEquals("ENSv2Registry", id, "implementation", "null");
+
+  handleProxyDeployed(createProxyDeployedEvent(earlyProxyAddress, USER_REGISTRY_IMPL));
+  assert.fieldEquals("ENSv2Registry", id, "kind", "USER");
+  assert.fieldEquals(
+    "ENSv2Registry",
+    id,
+    "implementation",
+    Address.fromString(USER_REGISTRY_IMPL).toHexString()
+  );
+
+  // Still UNKNOWN after ProxyDeployed when the implementation itself is
+  // unrecognized: reclassification never invents a kind.
+  let unknownProxyAddress = "0x88888888888888888888888888888888888888bb";
+  let unknownAddress = Address.fromString(unknownProxyAddress);
+  getOrCreateRegistry(unknownAddress, unknownAddress, newMockEvent().block);
+  handleProxyDeployed(createProxyDeployedEvent(unknownProxyAddress, IMPLEMENTATION));
+  assert.fieldEquals("ENSv2Registry", unknownAddress.toHexString(), "kind", "UNKNOWN");
 });

@@ -485,6 +485,32 @@ test("handleTransferOldRegistry processes a non-migrated domain but skips an alr
   );
 });
 
+// Both registries start at their deployment blocks, so the 2017 registry
+// never emits for a node without a Domain on mainnet or Sepolia. If it ever
+// did (a gap in indexed history on a testnet), the gated handlers must warn
+// and skip rather than abort indexing on a non-null assertion.
+test("the *OldRegistry handlers skip a node with no Domain instead of aborting", () => {
+  const NODE_MISSING =
+    "0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddead";
+  assert.notInStore("Domain", NODE_MISSING);
+
+  handleNewResolverOldRegistry(
+    createNewResolverEvent(NODE_MISSING, DEFAULT_RESOLVER)
+  );
+  handleNewTTLOldRegistry(createNewTTLEvent(NODE_MISSING, BigInt.fromI32(60)));
+  handleTransferOldRegistry(createTransferEvent(NODE_MISSING, DEFAULT_OWNER));
+
+  // Nothing materialised: no Domain, no Resolver, no history rows.
+  assert.notInStore("Domain", NODE_MISSING);
+  assert.notInStore(
+    "Resolver",
+    Address.fromString(DEFAULT_RESOLVER)
+      .toHexString()
+      .concat("-")
+      .concat(NODE_MISSING)
+  );
+});
+
 // --- wrapped names leaving the NameWrapper through the registry ---
 
 const NAME_WRAPPER = "0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401";

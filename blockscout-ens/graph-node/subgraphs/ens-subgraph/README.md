@@ -2,7 +2,7 @@
 
 > forked from [https://github.com/ensdomains/ens-subgraph](https://github.com/ensdomains/ens-subgraph)
 
-This directory is the upstream subgraph at tag `v2.1.2` (commit `3302935`)
+This directory is the upstream subgraph at tag `v2.1.3` (commit `0ced815`)
 plus the Blockscout/BENS extension fields listed below. It indexes ENSv1
 (registry, BaseRegistrar, controllers, NameWrapper, resolvers) and ENSv2
 (RootRegistry, ETHRegistry, ETHRegistrar, user registries created through
@@ -59,7 +59,7 @@ just deploy-subgraph ens          # mainnet,  subgraph name ens-subgraph
 just deploy-subgraph ens-sepolia  # sepolia,  subgraph name ens-sepolia-subgraph
 ```
 
-Or directly: `just network=sepolia name=ens-sepolia-subgraph deploy v2.1.2`.
+Or directly: `just network=sepolia name=ens-sepolia-subgraph deploy v2.1.3`.
 
 ## BENS configuration
 

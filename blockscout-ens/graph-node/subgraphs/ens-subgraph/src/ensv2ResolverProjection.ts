@@ -220,21 +220,34 @@ export function attachDomainResolver(
     legacy.save();
   }
   domain.resolver = legacy.id;
-  domain.save();
 
   let link = ENSv2ResolverLink.load(resolverLinkId(resolverAddress, node));
-  if (link != null) {
-    if (link.active) {
-      let recordId = link.record;
-      if (recordId) {
-        let record = ENSv2ResolverRecord.load(recordId);
-        if (record != null) {
-          replaceLegacyResolverSnapshot(record, node);
-          return;
-        }
+  if (link == null) {
+    // No ENSv2ResolverLink means this is not a PermissionedResolver record
+    // we project from native entities; it is a classic node-keyed resolver
+    // (PublicResolverV2 and friends) whose records the ENSv1 resolver
+    // handlers in resolver.ts already keep on the legacy Resolver row. Same
+    // behaviour as handleNewResolver in ensRegistry.ts: keep the snapshot
+    // and carry its addr over to the Domain rather than wiping it.
+    domain.resolvedAddress = legacy.addr;
+    domain.save();
+    return;
+  }
+  domain.save();
+
+  if (link.active) {
+    let recordId = link.record;
+    if (recordId) {
+      let record = ENSv2ResolverRecord.load(recordId);
+      if (record != null) {
+        replaceLegacyResolverSnapshot(record, node);
+        return;
       }
     }
   }
+  // The link exists but is explicitly inactive (linkToRecord(name, 0)) or
+  // points at nothing: the native side says this name has no record here,
+  // so the legacy projection must say the same.
   clearLegacyResolverSnapshot(resolverAddress, node);
 }
 

@@ -1,5 +1,13 @@
 // Import types and APIs from graph-ts
-import { Address, BigInt, Bytes, crypto, ens, store } from "@graphprotocol/graph-ts";
+import {
+  Address,
+  BigInt,
+  Bytes,
+  crypto,
+  ens,
+  log,
+  store,
+} from "@graphprotocol/graph-ts";
 
 import {
   checkValidLabel,
@@ -284,22 +292,48 @@ export function handleNewOwnerOldRegistry(event: NewOwnerEvent): void {
   }
 }
 
+// The three gated handlers below need the Domain to read isMigrated. Both
+// registries are indexed from their deployment blocks, so every node the
+// 2017 registry emits for already has a Domain from its NewOwner (two full
+// mainnet syncs agree) — but a missing row must not abort indexing, so each
+// warns and skips instead of asserting non-null.
 export function handleNewResolverOldRegistry(event: NewResolverEvent): void {
   let node = event.params.node;
-  let domain = getDomain(node, event.block.timestamp)!;
+  let domain = getDomain(node, event.block.timestamp);
+  if (domain == null) {
+    log.warning(
+      "handleNewResolverOldRegistry: no Domain for {}, skipping",
+      [node.toHexString()]
+    );
+    return;
+  }
   if (node.equals(ROOT_NODE) || !domain.isMigrated) {
     handleNewResolver(event);
   }
 }
 export function handleNewTTLOldRegistry(event: NewTTLEvent): void {
-  let domain = getDomain(event.params.node)!;
+  let node = event.params.node;
+  let domain = getDomain(node);
+  if (domain == null) {
+    log.warning("handleNewTTLOldRegistry: no Domain for {}, skipping", [
+      node.toHexString(),
+    ]);
+    return;
+  }
   if (domain.isMigrated == false) {
     handleNewTTL(event);
   }
 }
 
 export function handleTransferOldRegistry(event: TransferEvent): void {
-  let domain = getDomain(event.params.node)!;
+  let node = event.params.node;
+  let domain = getDomain(node);
+  if (domain == null) {
+    log.warning("handleTransferOldRegistry: no Domain for {}, skipping", [
+      node.toHexString(),
+    ]);
+    return;
+  }
   if (domain.isMigrated == false) {
     handleTransfer(event);
   }

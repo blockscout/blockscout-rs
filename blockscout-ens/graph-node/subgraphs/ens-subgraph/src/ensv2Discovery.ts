@@ -133,7 +133,15 @@ export function handleProxyDeployed(event: ProxyDeployed): void {
     implementation
   );
   // Also populate an existing row if another event referenced the address
-  // before ProxyDeployed was processed.
+  // before ProxyDeployed was processed (SubregistryUpdated/ParentUpdated
+  // from a data source whose start block precedes the factory's, or a
+  // testnet redeploy). Such a row was created without an implementation and
+  // therefore classified UNKNOWN; now that the implementation is known,
+  // classify it the same way a fresh row would be. A row that already has a
+  // definite kind is left alone.
   registry.implementation = implementation;
+  if (registry.kind == "UNKNOWN") {
+    registry.kind = kindForAddress(event.params.proxyAddress, implementation);
+  }
   registry.save();
 }

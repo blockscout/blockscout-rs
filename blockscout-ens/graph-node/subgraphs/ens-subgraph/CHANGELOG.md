@@ -3,6 +3,33 @@
 Version labels match the Subgraph Studio deployments of the mainnet subgraph
 `5XqPmWe6gjyrJtFn9cLy237i4cWw2j9HcUJEXsP5qGtH`.
 
+## v2.1.3 (2026-11-09)
+
+Hardening of three edge cases raised in review of the ENSv2 mappings. None of
+them has produced wrong data on mainnet (checked against a fully synced
+mainnet database on 2026-11-09), so no re-index is required.
+
+### Fixed
+
+- An ENSv2 registry `ResolverUpdated` pointing a name at a classic node-keyed
+  resolver (PublicResolverV2 and friends, which have no `ENSv2ResolverLink`)
+  no longer wipes the `addr`/`contentHash`/`texts`/`coinTypes` snapshot that
+  the ENSv1 resolver handlers keep on the legacy `Resolver` row, nor nulls
+  `Domain.resolvedAddress`. It now behaves like the ENSv1 `NewResolver`
+  handler: the snapshot is kept and its `addr` is copied to
+  `Domain.resolvedAddress`. The snapshot is still cleared when a link exists
+  and is explicitly inactive (`linkToRecord(name, 0)`), and an active link
+  still projects the native record.
+- `ProxyDeployed` now reclassifies an `ENSv2Registry` row that an earlier
+  `SubregistryUpdated`/`ParentUpdated` created as `UNKNOWN` (possible only
+  across data-source start blocks or on a redeployed testnet) once the
+  implementation is known, instead of leaving `kind` frozen at `UNKNOWN`.
+- The gated 2017-registry handlers (`handleNewResolverOldRegistry`,
+  `handleNewTTLOldRegistry`, `handleTransferOldRegistry`) log a warning and
+  skip an event for a node with no `Domain` instead of aborting indexing on a
+  non-null assertion. Both registries are indexed from their deployment
+  blocks, so this does not occur on mainnet or Sepolia.
+
 ## v2.1.2 (2026-11-09)
 
 ### Fixed

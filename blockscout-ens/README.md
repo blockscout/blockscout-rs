@@ -27,7 +27,7 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 ## ENSv2
 
 `ens-subgraph` is [ensdomains/ens-subgraph](https://github.com/ensdomains/ens-subgraph)
-`v2.1.2` with Blockscout's extension fields (see its
+`v2.1.3` with Blockscout's extension fields (see its
 [README](./graph-node/subgraphs/ens-subgraph/README.md)). It indexes ENSv1 and
 ENSv2 on mainnet and Sepolia and projects ENSv2 names into the legacy `Domain`
 tables, so BENS keeps working on the same schema. Specific to it:
@@ -63,7 +63,7 @@ tables, so BENS keeps working on the same schema. Specific to it:
 - **Expired names retired by the Graveyard.** `Graveyard.clear()` (run on
   mainnet by ENS Labs since late October 2026, ~946,000 names in its first
   sweep) re-registers an expired ENSv1 `.eth` name to the Graveyard with a
-  near-`2^64` expiry. Subgraph v2.1.2 keeps the lapsed `registrant` and
+  near-`2^64` expiry. Subgraph v2.1.2+ keeps the lapsed `registrant` and
   `expiry_date` for such a name instead, so BENS reports it as expired with
   its last registrant as `owner`, exactly as before the sweep; only
   `Domain.owner` moves to the Graveyard, which the migration-contract

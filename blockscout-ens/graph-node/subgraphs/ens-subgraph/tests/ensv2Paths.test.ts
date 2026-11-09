@@ -22,10 +22,11 @@ import {
   handleSubregistryUpdated,
 } from "../src/ensv2Registry";
 import {
+  handleAddressUpdated,
   handleContenthashUpdated,
   handleLinked,
 } from "../src/ensv2Resolver";
-import { namespaceId, pathNamehash } from "../src/ensv2Utils";
+import { namespaceId, pathNamehash, resolverLinkId } from "../src/ensv2Utils";
 import { createResolverID, handleAddrChanged } from "../src/resolver";
 import { AddrChanged } from "../src/types/Resolver/Resolver";
 import {
@@ -35,6 +36,7 @@ import {
   Resolver,
 } from "../src/types/schema";
 import {
+  AddressUpdated,
   ContenthashUpdated,
   Linked,
 } from "../src/types/PermissionedResolver/PermissionedResolver";
@@ -1628,4 +1630,232 @@ test("never-expiring ENSv2 slots (uint64 max) clamp legacy Domain/Registration e
     createExpiryUpdatedEvent(ETH_REGISTRY, slotToken(2), BigInt.fromI32(2100000000))
   );
   assert.fieldEquals("Domain", laterPathId, "expiryDate", "2102419200");
+});
+
+const createAddressUpdatedEvent = (
+  resolverAddress: string,
+  recordId: BigInt,
+  coinType: BigInt,
+  addressBytes: Bytes
+): AddressUpdated => {
+  let mockEvent = newMockEvent();
+  let event = new AddressUpdated(
+    Address.fromString(resolverAddress),
+    mockEvent.logIndex,
+    mockEvent.transactionLogIndex,
+    mockEvent.logType,
+    mockEvent.block,
+    mockEvent.transaction,
+    mockEvent.parameters,
+    mockEvent.receipt
+  );
+  event.parameters = new Array();
+  event.parameters.push(
+    new ethereum.EventParam(
+      "recordId",
+      ethereum.Value.fromUnsignedBigInt(recordId)
+    )
+  );
+  event.parameters.push(
+    new ethereum.EventParam(
+      "coinType",
+      ethereum.Value.fromUnsignedBigInt(coinType)
+    )
+  );
+  event.parameters.push(
+    new ethereum.EventParam(
+      "addressBytes",
+      ethereum.Value.fromBytes(addressBytes)
+    )
+  );
+  return event;
+};
+
+const createAddrChangedEvent = (
+  resolverAddress: string,
+  node: Bytes,
+  a: string
+): AddrChanged => {
+  let mockEvent = newMockEvent();
+  let event = new AddrChanged(
+    Address.fromString(resolverAddress),
+    mockEvent.logIndex,
+    mockEvent.transactionLogIndex,
+    mockEvent.logType,
+    mockEvent.block,
+    mockEvent.transaction,
+    mockEvent.parameters,
+    mockEvent.receipt
+  );
+  event.parameters = new Array();
+  event.parameters.push(
+    new ethereum.EventParam("node", ethereum.Value.fromFixedBytes(node))
+  );
+  event.parameters.push(
+    new ethereum.EventParam(
+      "a",
+      ethereum.Value.fromAddress(Address.fromString(a))
+    )
+  );
+  return event;
+};
+
+// Registers parent/<label> under a fresh child registry and returns the
+// namehash of the child name. Shared by the attachDomainResolver tests below.
+function registerChildName(
+  childRegistry: string,
+  parentLabelHash: Bytes,
+  childLabelHash: Bytes
+): Bytes {
+  handleLabelRegistered(
+    createLabelRegisteredEvent(
+      ROOT_REGISTRY,
+      slotToken(1),
+      parentLabelHash,
+      "parent"
+    )
+  );
+  handleSubregistryUpdated(
+    createSubregistryUpdatedEvent(ROOT_REGISTRY, slotToken(1), childRegistry)
+  );
+  handleLabelRegistered(
+    createLabelRegisteredEvent(childRegistry, slotToken(1), childLabelHash, "child")
+  );
+  return pathNamehash(
+    pathNamehash(Bytes.fromHexString(ROOT_NAMEHASH), parentLabelHash),
+    childLabelHash
+  );
+}
+
+// A classic node-keyed resolver (PublicResolverV2 etc.) has no
+// ENSv2ResolverLink: its records live on the legacy Resolver row, written by
+// the ENSv1 resolver handlers, and can arrive before the registry points the
+// name at it (as AddrChanged before NewResolver does under ENSv1).
+// attachDomainResolver must then behave like handleNewResolver: keep the
+// snapshot and copy addr to Domain.resolvedAddress, not wipe it.
+test("ENSv2 ResolverUpdated to a classic resolver with pre-existing records keeps them and sets resolvedAddress", () => {
+  dataSourceMock.setNetwork("sepolia");
+  const CHILD_REGISTRY = "0x66666666666666666666666666666666666666bb";
+  const CLASSIC_RESOLVER = "0x4848484848484848484848484848484848484848";
+  const RESOLVED = "0x5959595959595959595959595959595959595959";
+
+  let node = registerChildName(CHILD_REGISTRY, Bytes.fromI32(60), Bytes.fromI32(61));
+  let legacyId = createResolverID(node, Address.fromString(CLASSIC_RESOLVER));
+
+  // Records first: the Resolver row exists with addr, but the Domain is not
+  // yet pointed at it so resolvedAddress stays unset.
+  handleAddrChanged(createAddrChangedEvent(CLASSIC_RESOLVER, node, RESOLVED));
+  assert.fieldEquals(
+    "Resolver",
+    legacyId,
+    "addr",
+    Address.fromString(RESOLVED).toHexString()
+  );
+  assert.assertTrue(!Domain.load(node.toHexString())!.resolver);
+  assert.assertTrue(!Domain.load(node.toHexString())!.resolvedAddress);
+
+  // Then the ENSv2 registry association.
+  handleResolverUpdated(
+    createResolverUpdatedEvent(CHILD_REGISTRY, slotToken(1), CLASSIC_RESOLVER)
+  );
+  assert.fieldEquals("Domain", node.toHexString(), "resolver", legacyId);
+  assert.fieldEquals(
+    "Resolver",
+    legacyId,
+    "addr",
+    Address.fromString(RESOLVED).toHexString()
+  );
+  assert.fieldEquals(
+    "Domain",
+    node.toHexString(),
+    "resolvedAddress",
+    Address.fromString(RESOLVED).toHexString()
+  );
+});
+
+// linkToRecord(name, 0) leaves an explicitly inactive ENSv2ResolverLink. If
+// the registry then (re)points the name at that resolver, the native side
+// says there is no record, so a stale legacy snapshot must be cleared. This
+// is the one case attachDomainResolver still clears.
+test("ENSv2 ResolverUpdated to a PermissionedResolver whose link is inactive clears the legacy snapshot", () => {
+  dataSourceMock.setNetwork("sepolia");
+  const CHILD_REGISTRY = "0x67676767676767676767676767676767676767bb";
+  const RESOLVER_ADDRESS = "0x4949494949494949494949494949494949494949";
+  const STALE = "0x5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a";
+
+  let node = registerChildName(CHILD_REGISTRY, Bytes.fromI32(62), Bytes.fromI32(63));
+  let legacyId = createResolverID(node, Address.fromString(RESOLVER_ADDRESS));
+
+  // Explicit unlink: recordId 0.
+  handleLinked(
+    createLinkedEvent(RESOLVER_ADDRESS, BigInt.zero(), node, encodeLabel("child"))
+  );
+  assert.fieldEquals(
+    "ENSv2ResolverLink",
+    resolverLinkId(Address.fromString(RESOLVER_ADDRESS), node).toHexString(),
+    "active",
+    "false"
+  );
+
+  // A stale legacy snapshot that must not survive the association.
+  let stale = new Resolver(legacyId);
+  stale.domain = node.toHexString();
+  stale.address = Address.fromString(RESOLVER_ADDRESS);
+  stale.addr = Address.fromString(STALE).toHexString();
+  stale.texts = ["avatar"];
+  stale.save();
+
+  handleResolverUpdated(
+    createResolverUpdatedEvent(CHILD_REGISTRY, slotToken(1), RESOLVER_ADDRESS)
+  );
+  assert.fieldEquals("Domain", node.toHexString(), "resolver", legacyId);
+  let cleared = Resolver.load(legacyId)!;
+  assert.assertTrue(!cleared.addr);
+  assert.assertTrue(!cleared.texts);
+  assert.assertTrue(!Domain.load(node.toHexString())!.resolvedAddress);
+});
+
+// An active link projects the native record (ETH address, coinTypes) onto
+// the legacy Resolver and Domain.resolvedAddress at association time.
+test("ENSv2 ResolverUpdated to a PermissionedResolver whose link is active projects the native record", () => {
+  dataSourceMock.setNetwork("sepolia");
+  const CHILD_REGISTRY = "0x68686868686868686868686868686868686868bb";
+  const RESOLVER_ADDRESS = "0x4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a";
+  const RESOLVED = "0x5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b";
+  let recordId = BigInt.fromI32(64);
+
+  let node = registerChildName(CHILD_REGISTRY, Bytes.fromI32(65), Bytes.fromI32(66));
+  let legacyId = createResolverID(node, Address.fromString(RESOLVER_ADDRESS));
+
+  handleLinked(
+    createLinkedEvent(RESOLVER_ADDRESS, recordId, node, encodeLabel("child"))
+  );
+  handleAddressUpdated(
+    createAddressUpdatedEvent(
+      RESOLVER_ADDRESS,
+      recordId,
+      BigInt.fromI32(60),
+      Bytes.fromHexString(RESOLVED)
+    )
+  );
+  // Not associated yet: nothing projected.
+  assert.notInStore("Resolver", legacyId);
+
+  handleResolverUpdated(
+    createResolverUpdatedEvent(CHILD_REGISTRY, slotToken(1), RESOLVER_ADDRESS)
+  );
+  assert.fieldEquals("Domain", node.toHexString(), "resolver", legacyId);
+  assert.fieldEquals(
+    "Resolver",
+    legacyId,
+    "addr",
+    Address.fromString(RESOLVED).toHexString()
+  );
+  assert.fieldEquals("Resolver", legacyId, "coinTypes", "[60]");
+  assert.fieldEquals(
+    "Domain",
+    node.toHexString(),
+    "resolvedAddress",
+    Address.fromString(RESOLVED).toHexString()
+  );
 });
