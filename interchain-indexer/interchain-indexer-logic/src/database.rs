@@ -3746,48 +3746,68 @@ fn tx_hash_condition(hash: &[u8]) -> Condition {
         .add(crosschain_messages::Column::DstTxHash.eq(hash.to_vec()))
 }
 
-/// `ListSubject::Address` on messages: one arm per address column, each in
-/// list order with its own LIMIT, so each arm is one range of
-/// `crosschain_messages_{sender,recipient}_ts_idx`. An OR over the two
-/// columns can use neither index's order. `query` already carries the
-/// keyset, the `ChainBridgeFilter` and the direction's ORDER BY. The
-/// recipient arm skips rows the sender arm returns (`sender = recipient`).
+/// `ListSubject::Address` on messages. An OR over the two address columns can
+/// use neither index's order, so there is one arm per column, each in list
+/// order with its own LIMIT: one range of
+/// `crosschain_messages_{sender,recipient}_ts_idx`. The arms select only the
+/// key, and those indexes INCLUDE `src_chain_id` / `dst_chain_id` (all the
+/// `ChainBridgeFilter` reads besides the key), so each arm is an index-only
+/// scan: an address whose rows the scope rejects costs index entries, not
+/// heap reads. `UNION` drops the `sender = recipient` duplicates; the first
+/// `limit + 1` distinct keys always lie within the two arms' first `limit + 1`.
+/// Full rows are joined back by primary key. `query` already carries the
+/// keyset, the `ChainBridgeFilter` and the direction's ORDER BY.
 fn messages_address_union(
     query: &Select<crosschain_messages::Entity>,
     address: &[u8],
     direction: PaginationDirection,
     limit: u64,
 ) -> SelectStatement {
-    use crosschain_messages::Column::{RecipientAddress, SenderAddress};
-    let arm = |condition: SimpleExpr| {
+    use crosschain_messages::Column::{
+        BridgeId, Id, InitTimestamp, RecipientAddress, SenderAddress,
+    };
+    let arm = |column: crosschain_messages::Column| {
         query
             .clone()
-            .filter(condition)
+            .select_only()
+            .columns([InitTimestamp, Id, BridgeId])
+            .filter(column.eq(address.to_vec()))
             .limit(limit + 1)
             .into_query()
     };
-    let sender_arm = arm(SenderAddress.eq(address.to_vec()));
-    // `sender IS DISTINCT FROM $a`, which sea-query 0.32 lacks.
-    let recipient_arm = arm(RecipientAddress.eq(address.to_vec()).and(
-        SenderAddress
-            .is_null()
-            .or(SenderAddress.ne(address.to_vec())),
-    ));
     let order = match direction {
         PaginationDirection::Next => Order::Desc,
         PaginationDirection::Prev => Order::Asc,
     };
-    Query::select()
+    let keys = Query::select()
         .column(Asterisk)
         // sea-query writes the first arm's own ORDER BY/LIMIT after the whole
         // UNION, so that arm is wrapped; later arms keep theirs in parentheses.
-        .from_subquery(sender_arm, Alias::new("sender_arm"))
-        .union(UnionType::All, recipient_arm)
+        .from_subquery(arm(SenderAddress), Alias::new("sender_arm"))
+        .union(UnionType::Distinct, arm(RecipientAddress))
         // A set operation's ORDER BY names output columns: unqualified.
-        .order_by(crosschain_messages::Column::InitTimestamp, order.clone())
-        .order_by(crosschain_messages::Column::Id, order.clone())
-        .order_by(crosschain_messages::Column::BridgeId, order)
+        .order_by(InitTimestamp, order.clone())
+        .order_by(Id, order.clone())
+        .order_by(BridgeId, order.clone())
         .limit(limit + 1)
+        .to_owned();
+    let keys_alias = Alias::new("keys");
+    crosschain_messages::Entity::find()
+        .into_query()
+        .join_subquery(
+            JoinType::InnerJoin,
+            keys,
+            keys_alias.clone(),
+            Expr::col((crosschain_messages::Entity, Id))
+                .equals((keys_alias.clone(), Id))
+                .and(
+                    Expr::col((crosschain_messages::Entity, BridgeId))
+                        .equals((keys_alias, BridgeId)),
+                ),
+        )
+        .order_by((crosschain_messages::Entity, InitTimestamp), order.clone())
+        .order_by((crosschain_messages::Entity, Id), order.clone())
+        .order_by((crosschain_messages::Entity, BridgeId), order)
         .to_owned()
 }
 
@@ -14698,7 +14718,7 @@ mod tests {
                 ..Default::default()
             }
         };
-        // NULL sender: the recipient arm must keep it (`sender IS NULL OR sender <> a`).
+        // NULL sender: only the recipient arm matches it.
         let mut null_sender = message(3003, 1, t, &a, Some(&a));
         null_sender.sender_address = Set(None);
         crosschain_messages::Entity::insert_many([

@@ -3232,8 +3232,25 @@ See `NAME_SORT_PREFIX_CHARS` in
   the join, is what starts the messages pagination-index walk at the cursor.
 - The same root cause applies to `sender = $a OR recipient = $a`: a BitmapOr
   loses order. Messages address search (`q`, `:byAddress`) is therefore a
-  `UNION ALL` of one ordered, limited arm per column over
-  `crosschain_messages_{sender,recipient}_ts_idx`.
+  `UNION` of one ordered, limited arm per column over
+  `crosschain_messages_{sender,recipient}_ts_idx`, with full rows joined back
+  by primary key (`messages_address_union`).
+- The arms select only the key, and the indexes `INCLUDE (src_chain_id,
+  dst_chain_id)`. That is everything the `ChainBridgeFilter` reads besides the
+  key, so an arm is an index-only scan. This matters when the scope rejects an
+  address's rows:
+  - Production (3.0M messages): `0x59211b…` has 1.04M messages as sender and
+    0.35M as recipient, all on unindexed chain 68414, so the default scope
+    rejects every row.
+  - The old single-OR query walked the whole table and ran for more than 2
+    minutes.
+  - Without `INCLUDE`, the arms would still fetch 1.4M heap rows just to
+    check the chain ids.
+  - With it, the arms read only index entries: O(freq(address)), not
+    O(table) or O(page). An index cannot know which chains the config
+    indexes.
+  - Adding a filter column to the messages scope means adding it to these
+    `INCLUDE` lists, or the arms lose index-only scans.
 - The arms are still a planner choice, not a guarantee. With the default
   `random_page_cost = 4`, a very hot address (29% of rows on the dev DB) made
   the recipient arm walk `crosschain_messages_pagination_idx` on keyset
