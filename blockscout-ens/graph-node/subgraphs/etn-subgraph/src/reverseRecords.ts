@@ -6,6 +6,7 @@ import {
   Domain,
   PrimaryNameClaim,
   PrimaryNameRecord,
+  Resolver,
   ReverseClaim,
 } from "./types/schema";
 import { concat, ROOT_NODE, byteArrayFromHex } from "./utils";
@@ -89,13 +90,33 @@ function loadOrCreateClaim(address: string): PrimaryNameClaim {
   return claim;
 }
 
-// Records the classic (`<addr>.addr.reverse` name() record) primary name
-// claimed for an address and rebuilds its primary-name record.
-export function setPrimaryNameRecord(address: string, name: string): void {
-  let claim = loadOrCreateClaim(address);
+// Re-reads the classic primary name of a claimed `<addr>.addr.reverse` node
+// from the resolver currently set on that node and rebuilds the address's
+// primary-name record.
+//
+// Resolver events are indexed from any contract (the Resolver data source has
+// no fixed address), so the name is only ever taken from the resolver the
+// reverse node actually points to; a NameChanged emitted by any other contract
+// is ignored. Called whenever the name, the node's resolver or the claim
+// changes, so switching resolvers picks up the new resolver's name (or clears
+// it) right away.
+export function syncClassicPrimaryName(node: string): void {
+  let reverseClaim = ReverseClaim.load(node);
+  if (reverseClaim == null) return;
+
+  let name: string | null = null;
+  let domain = Domain.load(node);
+  if (domain != null && domain.resolver != null) {
+    let resolver = Resolver.load(domain.resolver!);
+    if (resolver != null) {
+      name = resolver.name;
+    }
+  }
+
+  let claim = loadOrCreateClaim(reverseClaim.address);
   claim.name = name;
   claim.save();
-  refreshPrimaryNameRecord(address);
+  refreshPrimaryNameRecord(reverseClaim.address);
 }
 
 // Records the ENSIP-19 default reverse registrar name claimed for an address
@@ -135,10 +156,13 @@ export function handleNameForAddrChanged(event: NameForAddrChangedEvent): void {
 }
 
 // Classic reverse registrar: ReverseClaimed maps <addr>.addr.reverse nodes to
-// their address; the name itself arrives later via the resolver's NameChanged
-// event (see handleNameChanged in resolver.ts, which consults this mapping).
+// their address; the name itself lives in the name() record of the node's
+// resolver (see syncClassicPrimaryName). The resolver may already hold a name
+// at claim time, so sync immediately.
 export function handleReverseClaimed(event: ReverseClaimedEvent): void {
-  let claim = new ReverseClaim(event.params.node.toHexString());
+  let node = event.params.node.toHexString();
+  let claim = new ReverseClaim(node);
   claim.address = event.params.addr.toHexString();
   claim.save();
+  syncClassicPrimaryName(node);
 }

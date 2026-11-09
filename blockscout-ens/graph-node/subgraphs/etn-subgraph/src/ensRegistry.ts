@@ -28,7 +28,10 @@ import {
   Transfer,
 } from "./types/schema";
 
-import { onResolvedAddressChanged } from "./reverseRecords";
+import {
+  onResolvedAddressChanged,
+  syncClassicPrimaryName,
+} from "./reverseRecords";
 
 const BIG_INT_ZERO = BigInt.fromI32(0);
 
@@ -211,6 +214,8 @@ export function handleNewResolver(event: NewResolverEvent): void {
   }
   saveDomain(domain);
   onResolvedAddressChanged(previousResolvedAddress, domain.resolvedAddress);
+  // A claimed reverse node's primary name comes from its current resolver.
+  syncClassicPrimaryName(node);
 
   let domainEvent = new NewResolver(createEventID(event));
   domainEvent.blockNumber = event.block.number.toI32();

@@ -301,6 +301,8 @@ type Resolver @entity {
   texts: [String!]
   "The set of observed SLIP-44 coin types for this resolver"
   coinTypes: [BigInt!]
+  "The current value of the 'name' record for this resolver, as determined by the associated events"
+  name: String
   "The events associated with this resolver"
   events: [ResolverEvent!]! @derivedFrom(field: "resolver")
 }

@@ -6,12 +6,14 @@ import {
   newMockEvent,
   test,
 } from "matchstick-as/assembly/index";
+import { handleNewResolver } from "../src/ensRegistry";
 import { handleAddrChanged, handleNameChanged } from "../src/resolver";
 import {
   handleNameForAddrChanged,
   handleReverseClaimed,
 } from "../src/reverseRecords";
 import { AddrChanged, NameChanged } from "../src/types/Resolver/Resolver";
+import { NewResolver } from "../src/types/ENSRegistry/EnsRegistry";
 import { NameForAddrChanged } from "../src/types/DefaultReverseRegistrar/DefaultReverseRegistrar";
 import { ReverseClaimed } from "../src/types/ReverseRegistrar/ReverseRegistrar";
 import { Domain } from "../src/types/schema";
@@ -21,6 +23,9 @@ import { Domain } from "../src/types/schema";
 const WALLET = "0x4eb4b9ce208711a0ea1beff57c83bd66bc563378";
 const OTHER_WALLET = "0x3fd2e5b4ac0eff6dfdf2446abddab3f66b425099";
 const RESOLVER = "0xdb4a3abb6703232e20a118a104e7f4ebb3e2738d";
+const OTHER_RESOLVER = "0x00000000000000000000000000000000000000aa";
+const ATTACKER_CONTRACT = "0x00000000000000000000000000000000000000bb";
+const EMPTY_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 const NAME = "marketing.planetzephyros.etn";
 // namehash(NAME)
@@ -38,8 +43,8 @@ const OTHER_NAME_NODE =
 const RECORD = "PrimaryNameRecord";
 const CLAIM = "PrimaryNameClaim";
 
-function resolverId(node: string): string {
-  return RESOLVER.concat("-").concat(node);
+function resolverId(node: string, resolver: string = RESOLVER): string {
+  return resolver.concat("-").concat(node);
 }
 
 function createDomain(node: string): void {
@@ -82,10 +87,14 @@ function reverseClaimed(addr: string, node: string): ReverseClaimed {
   return event;
 }
 
-function nameChanged(node: string, name: string): NameChanged {
+function nameChanged(
+  node: string,
+  name: string,
+  emitter: string = RESOLVER
+): NameChanged {
   let mock = newMockEvent();
   let event = new NameChanged(
-    Address.fromString(RESOLVER),
+    Address.fromString(emitter),
     mock.logIndex,
     mock.transactionLogIndex,
     mock.logType,
@@ -160,6 +169,34 @@ function nameForAddrChanged(addr: string, name: string): NameForAddrChanged {
   return event;
 }
 
+function newResolver(node: string, resolver: string): NewResolver {
+  let mock = newMockEvent();
+  let event = new NewResolver(
+    mock.address,
+    mock.logIndex,
+    mock.transactionLogIndex,
+    mock.logType,
+    mock.block,
+    mock.transaction,
+    mock.parameters,
+    mock.receipt
+  );
+  event.parameters = new Array();
+  event.parameters.push(
+    new ethereum.EventParam(
+      "node",
+      ethereum.Value.fromFixedBytes(Bytes.fromHexString(node))
+    )
+  );
+  event.parameters.push(
+    new ethereum.EventParam(
+      "resolver",
+      ethereum.Value.fromAddress(Address.fromString(resolver))
+    )
+  );
+  return event;
+}
+
 function setClassicName(name: string): void {
   handleReverseClaimed(reverseClaimed(WALLET, REVERSE_NODE));
   handleNameChanged(nameChanged(REVERSE_NODE, name));
@@ -169,6 +206,7 @@ beforeEach(() => {
   clearStore();
   createDomain(NAME_NODE);
   createDomain(OTHER_NAME_NODE);
+  createDomain(REVERSE_NODE);
 });
 
 test("classic reverse name set before addr record is recorded once addr catches up", () => {
@@ -239,4 +277,61 @@ test("a name that does not forward-resolve to the claimer is never recorded", ()
   handleAddrChanged(addrChanged(NAME_NODE, OTHER_WALLET));
   setClassicName(NAME);
   assert.notInStore(RECORD, WALLET);
+});
+
+test("NameChanged from a contract other than the reverse node's resolver is ignored", () => {
+  // The attacker points a name they own at the victim, then emits NameChanged
+  // for the victim's reverse node from their own contract.
+  handleAddrChanged(addrChanged(NAME_NODE, WALLET));
+  handleAddrChanged(addrChanged(OTHER_NAME_NODE, WALLET));
+  setClassicName(NAME);
+  assert.fieldEquals(RECORD, WALLET, "domain_name", NAME);
+
+  handleNameChanged(nameChanged(REVERSE_NODE, OTHER_NAME, ATTACKER_CONTRACT));
+  assert.fieldEquals(RECORD, WALLET, "domain_name", NAME);
+  assert.fieldEquals(CLAIM, WALLET, "name", NAME);
+});
+
+test("switching the reverse node's resolver picks up the new resolver's name", () => {
+  handleAddrChanged(addrChanged(NAME_NODE, WALLET));
+  handleAddrChanged(addrChanged(OTHER_NAME_NODE, WALLET));
+  setClassicName(NAME);
+  assert.fieldEquals(RECORD, WALLET, "domain_name", NAME);
+
+  // A name set on the other resolver before it is in use has no effect...
+  handleNameChanged(nameChanged(REVERSE_NODE, OTHER_NAME, OTHER_RESOLVER));
+  assert.fieldEquals(RECORD, WALLET, "domain_name", NAME);
+
+  // ...until the reverse node is pointed at it.
+  handleNewResolver(newResolver(REVERSE_NODE, OTHER_RESOLVER));
+  assert.fieldEquals(RECORD, WALLET, "domain_name", OTHER_NAME);
+
+  // Switching back restores the original resolver's name.
+  handleNewResolver(newResolver(REVERSE_NODE, RESOLVER));
+  assert.fieldEquals(RECORD, WALLET, "domain_name", NAME);
+});
+
+test("switching to a resolver without a name clears the classic name", () => {
+  handleAddrChanged(addrChanged(NAME_NODE, WALLET));
+  handleAddrChanged(addrChanged(OTHER_NAME_NODE, WALLET));
+  handleNameForAddrChanged(nameForAddrChanged(WALLET, OTHER_NAME));
+  setClassicName(NAME);
+  assert.fieldEquals(RECORD, WALLET, "domain_name", NAME);
+
+  // Falls back to the default reverse registrar name.
+  handleNewResolver(newResolver(REVERSE_NODE, OTHER_RESOLVER));
+  assert.fieldEquals(CLAIM, WALLET, "name", "null");
+  assert.fieldEquals(RECORD, WALLET, "domain_name", OTHER_NAME);
+
+  handleNewResolver(newResolver(REVERSE_NODE, EMPTY_ADDRESS));
+  assert.fieldEquals(RECORD, WALLET, "domain_name", OTHER_NAME);
+});
+
+test("a name already on the resolver is picked up when the reverse node is claimed", () => {
+  handleAddrChanged(addrChanged(NAME_NODE, WALLET));
+  handleNameChanged(nameChanged(REVERSE_NODE, NAME));
+  assert.notInStore(RECORD, WALLET);
+
+  handleReverseClaimed(reverseClaimed(WALLET, REVERSE_NODE));
+  assert.fieldEquals(RECORD, WALLET, "domain_name", NAME);
 });

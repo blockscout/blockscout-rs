@@ -23,14 +23,13 @@ import {
   NameChanged,
   PubkeyChanged,
   Resolver,
-  ReverseClaim,
   TextChanged,
   VersionChanged,
 } from "./types/schema";
 
 import {
   onResolvedAddressChanged,
-  setPrimaryNameRecord,
+  syncClassicPrimaryName,
 } from "./reverseRecords";
 
 export function handleAddrChanged(event: AddrChangedEvent): void {
@@ -89,19 +88,21 @@ export function handleMulticoinAddrChanged(event: AddressChangedEvent): void {
 export function handleNameChanged(event: NameChangedEvent): void {
   if (event.params.name.indexOf("\u0000") != -1) return;
 
+  let resolver = getOrCreateResolver(event.params.node, event.address);
+  resolver.name = event.params.name;
+  resolver.save();
+
   let resolverEvent = new NameChanged(createEventID(event));
-  resolverEvent.resolver = createResolverID(event.params.node, event.address);
+  resolverEvent.resolver = resolver.id;
   resolverEvent.blockNumber = event.block.number.toI32();
   resolverEvent.transactionID = event.transaction.hash;
   resolverEvent.name = event.params.name;
   resolverEvent.save();
 
   // Classic reverse records: if this node is a claimed <addr>.addr.reverse
-  // node, the name() record is that address's primary name.
-  let claim = ReverseClaim.load(event.params.node.toHexString());
-  if (claim != null) {
-    setPrimaryNameRecord(claim.address, event.params.name);
-  }
+  // node, its name() record is that address's primary name -- but only when
+  // read from the resolver currently set on the node.
+  syncClassicPrimaryName(event.params.node.toHexString());
 }
 
 export function handleABIChanged(event: ABIChangedEvent): void {
