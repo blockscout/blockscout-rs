@@ -25,6 +25,11 @@ pub struct DetailedDomain {
     /// Raw `Domain.owner` from the subgraph (the v1 registry owner).
     #[sqlx(default)]
     pub registry_owner: String,
+    /// The name was migrated from ENSv1 to ENSv2 (`ENSv2NameSlot.migratedFromV1`
+    /// of its active slot). Its v1 tokens are retired. `false` for protocols
+    /// without `ensv2`.
+    #[sqlx(default)]
+    pub ensv2_migrated: bool,
     pub registrant: Option<String>,
     pub wrapped_owner: Option<String>,
     pub created_at: BigDecimal,

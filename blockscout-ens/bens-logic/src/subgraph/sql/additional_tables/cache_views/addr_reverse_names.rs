@@ -63,11 +63,14 @@ impl AddrReverseNamesView {
         addr_reversed_domain.id as reversed_domain_id,
         domain.resolved_address as resolved_address,
         nc.name as name,
-        nc.block_number as block_number
+        nc.block_number as block_number,
+        0 as scheme
     FROM (
+        -- name_changed has no log index; vid is graph-node's write order,
+        -- which follows log order inside a block.
         SELECT DISTINCT ON (resolver) *
         FROM {schema}.name_changed
-        ORDER BY resolver, block_number DESC
+        ORDER BY resolver, block_number DESC, vid DESC
     ) nc
     JOIN {schema}.domain addr_reversed_domain ON nc.resolver = addr_reversed_domain.resolver
     JOIN {schema}.domain domain ON domain.name = nc.name
@@ -92,7 +95,8 @@ impl AddrReverseNamesView {
         '0x' || encode(pn.reverse_node, 'hex') as reversed_domain_id,
         domain.resolved_address as resolved_address,
         pn.name as name,
-        pn.block_number as block_number
+        pn.block_number as block_number,
+        1 as scheme
     FROM {schema}.en_sv_2_primary_name pn
     JOIN {schema}.domain domain ON domain.name = pn.name
     WHERE pn.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
@@ -114,7 +118,9 @@ SELECT DISTINCT ON (reversed_domain_id)
     domain_id, reversed_domain_id, resolved_address, name
 FROM (
 {v1}{v2}) all_sources
-ORDER BY reversed_domain_id, block_number DESC
+-- newest record wins; when both schemes change in the same block the
+-- ENSIP-19 record (scheme 1) is preferred
+ORDER BY reversed_domain_id, block_number DESC, scheme DESC
         "#
         )
     }

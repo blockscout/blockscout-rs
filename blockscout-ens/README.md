@@ -46,16 +46,20 @@ tables, so BENS keeps working on the same schema. Specific to it:
   (`expiry_date: null`, "never expires"). Earlier 2.x releases wrote
   `8640000000000` (year 275760), which Rust's `chrono` cannot represent;
   the same guard covers a schema indexed by them.
-- **Migrated names.** The ENSv1 -> ENSv2 migration parks the v1 registry
-  owner in the Graveyard (or a migration controller), and the subgraph keeps
+- **Migrated names.** The ENSv1 -> ENSv2 migration retires the v1 state: an
+  unwrapped or unlocked name's registry owner moves to the Graveyard (or a
+  migration controller), a locked name stays wrapped under the NameWrapper
+  with its ERC-1155 token parked in the Graveyard. The subgraph keeps
   `Domain.owner` as that v1 registry owner. With
   `specific.ensv2.migration_contracts` listing those contracts, BENS reports
   the name's holder as `owner` instead (the wrapped owner, the registrant, or
   the owner of the ENSv2 name slot for migrated subnames), lists the name
   under its holder's address and not under the migration contract's, and
-  does not link the retired NameWrapper token. The raw registry owner stays available to the code as
-  `registry_owner`. Protocols without `ensv2` are unaffected and never touch
-  the ENSv2 tables.
+  does not link the retired NameWrapper token. A locked migration is
+  recognised through the ENSv2 slot's `migratedFromV1` flag, since its
+  registry owner is not a migration contract. The raw registry owner stays
+  available to the code as `registry_owner`. Protocols without `ensv2` are
+  unaffected and never touch the ENSv2 tables.
 - **Expired names retired by the Graveyard.** `Graveyard.clear()` (run on
   mainnet by ENS Labs since late October 2026, ~946,000 names in its first
   sweep) re-registers an expired ENSv1 `.eth` name to the Graveyard with a

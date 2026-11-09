@@ -78,6 +78,7 @@ mod sql_gen {
 
 fn detailed_domain_select_clause(protocol: &Protocol) -> String {
     let owner = owner_select_expr(protocol);
+    let ensv2_migrated = ensv2_migrated_expr(protocol);
     format!(
         r#"
 vid,
@@ -98,6 +99,7 @@ created_at,
 to_timestamp(created_at) as registration_date,
 {owner} as owner,
 owner as registry_owner,
+{ensv2_migrated} as ensv2_migrated,
 registrant,
 wrapped_owner,
 CASE WHEN expiry_date < 253402300799 THEN to_timestamp(expiry_date) END as expiry_date,
@@ -129,12 +131,14 @@ COALESCE(to_timestamp(LEAST(expiry_date, 253402300799)) < now(), false) AS is_ex
 }
 
 // ENSv2 (ensdomains/ens-subgraph 2.x) keeps `Domain.owner` as the ENSv1
-// registry owner. For a migrated name that is a migration contract (the
-// Graveyard or a migration controller), which is the migration's voiding step
-// and not the holder. The holder is the wrapped owner (locked migration), the
-// registrant (unlocked .eth migration) or, for migrated subnames that have
-// neither, the owner of the ENSv2 name slot the Domain is projected from
-// (`ENSv2NamePath.domain` -> `ENSv2NameSlot.owner`).
+// registry owner. For a migrated name that is either a migration contract
+// (the Graveyard or a migration controller: the migration's voiding step for
+// an unwrapped name or an unlocked wrapped one) or still the NameWrapper (a
+// locked migration leaves the name wrapped and parks the ERC-1155 token in
+// the Graveyard). Neither is the holder. The holder is the wrapped owner
+// (locked migration), the registrant (unlocked .eth migration) or, for
+// migrated subnames that have neither, the owner of the ENSv2 name slot the
+// Domain is projected from (`ENSv2NamePath.domain` -> `ENSv2NameSlot.owner`).
 //
 // `migration_contracts` is empty for every protocol without `ensv2` in its
 // config, so other ENS-like subgraphs (which have no ENSv2 tables) keep the
@@ -146,17 +150,43 @@ fn owner_select_expr(protocol: &Protocol) -> String {
             let contracts = migration_contracts_array(&v2.migration_contracts);
             // A locked migration can park the v1 BaseRegistrar token in the
             // Graveyard as well, so a registrant (or wrapped owner) that is a
-            // migration contract is skipped like the owner.
+            // migration contract is skipped like the owner. The wrapped-owner
+            // check for the NameWrapper case is a cheap guard in front of the
+            // slot lookup: a migrated name whose registry owner is not a
+            // migration contract is always a locked (wrapped) one.
             format!(
-                "(CASE WHEN owner = ANY({contracts}) THEN (CASE \
+                "(CASE WHEN owner = ANY({contracts}) \
+                 OR (wrapped_owner IS NOT NULL AND {ENSV2_MIGRATED}) THEN (CASE \
                  WHEN wrapped_owner IS NOT NULL AND NOT (wrapped_owner = ANY({contracts})) THEN wrapped_owner \
                  WHEN registrant IS NOT NULL AND NOT (registrant = ANY({contracts})) THEN registrant \
                  ELSE COALESCE(({ENSV2_SLOT_OWNER_SUBQUERY}), owner) END) ELSE owner END)",
+                ENSV2_MIGRATED = ensv2_migrated_subquery(schema),
                 ENSV2_SLOT_OWNER_SUBQUERY = ensv2_slot_owner_subquery(schema),
             )
         }
         _ => "owner".to_string(),
     }
+}
+
+// Whether the current domain row is an ENSv1 name migrated to ENSv2
+// (`ENSv2NameSlot.migratedFromV1` of its active slot). `false` for protocols
+// without `ensv2`, which have no ENSv2 tables.
+fn ensv2_migrated_expr(protocol: &Protocol) -> String {
+    match protocol.info.protocol_specific.ensv2() {
+        Some(v2) if !v2.migration_contracts.is_empty() => {
+            ensv2_migrated_subquery(&protocol.subgraph_schema)
+        }
+        _ => "false".to_string(),
+    }
+}
+
+fn ensv2_migrated_subquery(schema: &str) -> String {
+    format!(
+        "EXISTS (SELECT 1 FROM {schema}.en_sv_2_name_path p \
+         JOIN {schema}.en_sv_2_name_slot s ON s.id = p.slot \
+         WHERE p.id = decode(substr(domain.id, 3), 'hex') AND p.active AND s.migrated_from_v1 \
+         AND p.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE} AND s.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE})"
+    )
 }
 
 fn migration_contracts_array(contracts: &[Address]) -> String {
@@ -540,15 +570,21 @@ mod tests {
 
         let detailed = detailed_domain_select_clause(&protocol());
         assert!(detailed.contains("owner as registry_owner"), "{detailed}");
+        assert!(detailed.contains("false as ensv2_migrated"), "{detailed}");
     }
 
     #[test]
     fn owner_substitutes_migration_contracts_with_ensv2() {
         let sql = sql_gen::domain_select(&ensv2_protocol()).to_string(PostgresQueryBuilder);
         let contracts = format!("ARRAY['{GRAVEYARD}']::text[]");
+        let migrated = "EXISTS (SELECT 1 FROM sgd1.en_sv_2_name_path p \
+                        JOIN sgd1.en_sv_2_name_slot s ON s.id = p.slot \
+                        WHERE p.id = decode(substr(domain.id, 3), 'hex') AND p.active AND s.migrated_from_v1 \
+                        AND p.block_range @> 2147483647 AND s.block_range @> 2147483647)";
         assert!(
             sql.contains(&format!(
-                "CASE WHEN owner = ANY({contracts}) THEN (CASE \
+                "CASE WHEN owner = ANY({contracts}) \
+                 OR (wrapped_owner IS NOT NULL AND {migrated}) THEN (CASE \
                  WHEN wrapped_owner IS NOT NULL AND NOT (wrapped_owner = ANY({contracts})) THEN wrapped_owner \
                  WHEN registrant IS NOT NULL AND NOT (registrant = ANY({contracts})) THEN registrant \
                  ELSE COALESCE((SELECT s.owner FROM sgd1.en_sv_2_name_path p"
@@ -559,6 +595,10 @@ mod tests {
 
         let detailed = detailed_domain_select_clause(&ensv2_protocol());
         assert!(detailed.contains("owner as registry_owner"), "{detailed}");
+        assert!(
+            detailed.contains(&format!("{migrated} as ensv2_migrated")),
+            "{detailed}"
+        );
     }
 
     #[test]

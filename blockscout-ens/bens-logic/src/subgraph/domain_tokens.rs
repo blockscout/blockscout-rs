@@ -75,12 +75,16 @@ fn extract_tokens_for_ens_like(
             &domain.registry_owner
         };
         let contract = Address::from_str(registry_owner).context("parse owner as address")?;
-        // A migrated name's v1 wrapper token is parked in a migration
-        // contract and no longer represents the name.
-        let retired = ens_like
-            .ensv2
-            .as_ref()
-            .is_some_and(|v2| v2.migration_contracts.contains(&contract));
+        // A migrated name's v1 wrapper token no longer represents the name:
+        // an unlocked migration unwraps it into a migration contract (then
+        // the registry owner is one too), a locked migration leaves the
+        // name wrapped under the NameWrapper and parks the ERC-1155 token in
+        // the Graveyard, which only the ENSv2 slot's migration flag reveals.
+        let retired = domain.ensv2_migrated
+            || ens_like
+                .ensv2
+                .as_ref()
+                .is_some_and(|v2| v2.migration_contracts.contains(&contract));
         if !retired {
             tokens.push(DomainToken {
                 id,
@@ -257,9 +261,10 @@ mod tests {
         }
     }
 
-    // An ENSv2-migrated locked name: the registry owner is the Graveyard, the
-    // reported owner is the holder (wrapped owner). The v1 NameWrapper token is
-    // retired, so only the native token is linked, and never against the holder.
+    // An ENSv2-migrated locked name whose registry owner moved to the
+    // Graveyard; the reported owner is the holder (wrapped owner). The v1
+    // NameWrapper token is retired, so only the native token is linked, and
+    // never against the holder.
     #[test]
     fn migrated_wrapped_name_links_no_retired_wrapper_token() {
         let native_contract = "0x1234567890123456789012345678901234567890";
@@ -336,5 +341,46 @@ mod tests {
             "failed for domain: {}",
             name.inner.name()
         );
+    }
+
+    // A locked migration on mainnet usually leaves the registry owner as the
+    // NameWrapper (24 of ~27,800 migrated names at 2026-11-09) while the
+    // ERC-1155 token sits in the Graveyard. The address check cannot see that;
+    // the ENSv2 slot's migration flag retires the token. A plain wrapped v1
+    // name, not migrated, still links its wrapper token.
+    #[test]
+    fn locked_migrated_name_under_name_wrapper_links_no_wrapper_token() {
+        let native_contract = "0x1234567890123456789012345678901234567890";
+        let name_wrapper = "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401";
+        let graveyard = "0xda021a2c1c2f99574d861ef8c6fa745851beb7f6";
+        let holder = "0x1111111111111111111111111111111111111111";
+        let mut protocol = Protocol::default();
+        protocol.info.tld_list = nonempty![Tld::new("eth")];
+        protocol.info.protocol_specific = ProtocolSpecific::EnsLike(EnsLikeProtocol {
+            native_token_contract: addr(native_contract),
+            ensv2: Some(EnsV2Settings {
+                migration_contracts: vec![Address::from_str(graveyard).unwrap()],
+            }),
+            ..Default::default()
+        });
+        let native = DomainToken {
+            id: "256".to_string(),
+            contract: Address::from_str(native_contract).unwrap(),
+            _type: DomainTokenType::Native,
+        };
+        let wrapped = DomainToken {
+            id: "512".to_string(),
+            contract: Address::from_str(name_wrapper).unwrap(),
+            _type: DomainTokenType::Wrapped,
+        };
+
+        let mut migrated = domain("levvv.eth", "0x0200", "0x0100", holder, Some(holder));
+        migrated.registry_owner = name_wrapper.to_string();
+        migrated.ensv2_migrated = true;
+        check(&protocol, migrated, vec![native.clone()]);
+
+        let mut wrapped_v1 = domain("levvv.eth", "0x0200", "0x0100", name_wrapper, Some(holder));
+        wrapped_v1.registry_owner = name_wrapper.to_string();
+        check(&protocol, wrapped_v1, vec![native, wrapped]);
     }
 }
