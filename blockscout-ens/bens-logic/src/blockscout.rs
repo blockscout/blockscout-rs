@@ -127,7 +127,7 @@ impl BlockscoutClient {
             let client = self.clone();
             async move {
                 let result = client.transaction(&hash).await;
-                result.map(|r| (TxHash::clone(&hash), r))
+                result.map(|r| (hash, r))
             }
         }))
         .buffer_unordered(self.max_concurrent_requests)

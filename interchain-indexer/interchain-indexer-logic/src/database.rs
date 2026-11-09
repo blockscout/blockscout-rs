@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use chrono::{Duration, NaiveDate, NaiveDateTime};
+use chrono::{NaiveDate, NaiveDateTime};
 use interchain_indexer_entity::{
     avalanche_icm_blockchain_ids, bridge_contracts, bridges, chains, crosschain_messages,
     crosschain_transfers, indexer_checkpoints, indexer_failures, pending_messages,
@@ -11,9 +11,14 @@ use interchain_indexer_entity::{
 use parking_lot::RwLock;
 use sea_orm::{
     ActiveValue, ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, DatabaseConnection,
-    DatabaseTransaction, DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait,
-    QueryFilter, QueryOrder, QuerySelect, RelationTrait, Statement, TransactionTrait, Value,
-    entity::prelude::*, prelude::Expr, sea_query::OnConflict,
+    DatabaseTransaction, DbErr, EntityTrait, FromQueryResult, IntoSimpleExpr, JoinType,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, RelationTrait, Select,
+    Statement, TransactionTrait, Value,
+    entity::prelude::*,
+    prelude::Expr,
+    sea_query::{
+        Alias, Asterisk, OnConflict, Order, Query, SelectStatement, SimpleExpr, UnionType,
+    },
 };
 use std::{
     collections::{BTreeSet, HashMap},
@@ -48,23 +53,27 @@ pub enum CrosschainMessageLookup {
     Ambiguous,
 }
 
-pub struct InterchainTotalCounters {
-    pub timestamp: NaiveDateTime,
-    pub total_messages: u64,
-    pub total_transfers: u64,
-}
-
-pub struct InterchainDailyCounters {
-    pub date: NaiveDate,
-    pub daily_messages: u64,
-    pub daily_transfers: u64,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, FromQueryResult)]
 pub struct MessagePathStatsRow {
     pub src_chain_id: i64,
     pub dst_chain_id: i64,
     pub messages_count: i64,
+}
+
+/// What a messages/transfers list is restricted to on top of its
+/// `ChainBridgeFilter`: a `:byTx` / `:byAddress` path param or a plain
+/// list's `q`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ListSubject {
+    All,
+    /// `:byTx`: source or destination tx hash. A static list: page 1 has no
+    /// prev marker.
+    Transaction(Vec<u8>),
+    /// `:byAddress` and a 20-byte `q`: the row's own sender or recipient.
+    Address(Vec<u8>),
+    /// A 32-byte `q`: source/destination tx hash or message `native_id`
+    /// (the parent message's on transfers). Keeps its prev marker.
+    Hash(Vec<u8>),
 }
 
 #[derive(Debug, FromQueryResult)]
@@ -376,28 +385,38 @@ pub(crate) fn push_indexed_pairs_predicate(
 /// NOT NULL` escape, a bare `c.id IN (..)` would delete that row outright
 /// instead of merely denying it a zero row — see coding-task-2b item 5.
 ///
-/// No-op when `ids` is `None` or empty, mirroring `push_in_predicate`.
-/// Advances `*placeholder` by `ids.len()`, same as every other predicate-
-/// pushing block in this file — this is the last predicate built in both call
-/// sites today, but the counter must stay correct regardless of what a future
-/// change appends afterward.
+/// `ids` contract:
+/// - `None` is a no-op: no restriction. This is how the caller encodes
+///   "restrict nothing" (opt-in, `AllIndexed`, or no bridge configured at all).
+/// - `Some(empty)` means no chain is a zero-row candidate, so only real rows
+///   survive (`sm.messages_count IS NOT NULL`). It binds no value and leaves
+///   the placeholder untouched. This deliberately differs from
+///   `push_in_predicate`, whose empty no-op is the "no bridge configured"
+///   convention for real rows.
+/// - A non-empty list advances `*placeholder` by `ids.len()`, same as every
+///   other predicate-pushing block in this file. This is the last predicate
+///   built in both call sites today, but the counter must stay correct
+///   regardless of what a future change appends afterward.
 fn push_zero_chains_guard_predicate(
     where_parts: &mut Vec<String>,
     values: &mut Vec<Value>,
     placeholder: &mut usize,
     ids: Option<&[i64]>,
 ) {
-    if let Some(ids) = ids.filter(|ids| !ids.is_empty()) {
-        let start = *placeholder;
-        let placeholders: Vec<String> = (0..ids.len()).map(|i| format!("${}", start + i)).collect();
-        for id in ids {
-            values.push(Value::BigInt(Some(*id)));
+    match ids {
+        None => {}
+        Some([]) => where_parts.push("sm.messages_count IS NOT NULL".to_string()),
+        Some(ids) => {
+            let start = *placeholder;
+            let placeholders: Vec<String> =
+                (0..ids.len()).map(|i| format!("${}", start + i)).collect();
+            values.extend(ids.iter().map(|id| Value::BigInt(Some(*id))));
+            where_parts.push(format!(
+                "(c.id IN ({}) OR sm.messages_count IS NOT NULL)",
+                placeholders.join(", ")
+            ));
+            *placeholder += ids.len();
         }
-        where_parts.push(format!(
-            "(c.id IN ({}) OR sm.messages_count IS NOT NULL)",
-            placeholders.join(", ")
-        ));
-        *placeholder += ids.len();
     }
 }
 
@@ -2249,8 +2268,7 @@ impl InterchainDatabase {
     // Returns paginated list of crosschain messages with transfers for each message
     pub async fn get_crosschain_messages(
         &self,
-        tx_hash: Option<Vec<u8>>,
-        address: Option<Vec<u8>>,
+        subject: ListSubject,
         filter: ChainBridgeFilter,
         page_size: usize,
         last_page: bool,
@@ -2283,76 +2301,30 @@ impl InterchainDatabase {
 
                     // Apply keyset pagination if marker is provided (and not requested the last page)
                     if !last_page && let Some(marker) = input_pagination {
-                        let marker_ts = marker.timestamp;
-                        let marker_id = marker.message_id as i64;
-                        let marker_bridge_id = marker.bridge_id as i32;
-
-                        let cond = match query_direction {
-                            PaginationDirection::Next => {
-                                // Older messages: (ts, id, bridge_id) < marker
-                                Expr::col(crosschain_messages::Column::InitTimestamp)
-                                    .lt(marker_ts)
-                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                        .eq(marker_ts)
-                                        .and(
-                                            Expr::col(crosschain_messages::Column::Id)
-                                                .lt(marker_id),
-                                        ))
-                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                        .eq(marker_ts)
-                                        .and(
-                                            Expr::col(crosschain_messages::Column::Id)
-                                                .eq(marker_id),
-                                        )
-                                        .and(
-                                            Expr::col(crosschain_messages::Column::BridgeId)
-                                                .lt(marker_bridge_id),
-                                        ))
-                            }
-                            PaginationDirection::Prev => {
-                                // Newer messages: (ts, id, bridge_id) > marker
-                                Expr::col(crosschain_messages::Column::InitTimestamp)
-                                    .gt(marker_ts)
-                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                        .eq(marker_ts)
-                                        .and(
-                                            Expr::col(crosschain_messages::Column::Id)
-                                                .gt(marker_id),
-                                        ))
-                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                        .eq(marker_ts)
-                                        .and(
-                                            Expr::col(crosschain_messages::Column::Id)
-                                                .eq(marker_id),
-                                        )
-                                        .and(
-                                            Expr::col(crosschain_messages::Column::BridgeId)
-                                                .gt(marker_bridge_id),
-                                        ))
-                            }
-                        };
-
-                        query = query.filter(cond);
+                        query = query.filter(keyset_row_condition(
+                            query_direction,
+                            false,
+                            [
+                                crosschain_messages::Column::InitTimestamp.into_simple_expr(),
+                                crosschain_messages::Column::Id.into_simple_expr(),
+                                crosschain_messages::Column::BridgeId.into_simple_expr(),
+                            ],
+                            [
+                                marker.timestamp.into(),
+                                (marker.message_id as i64).into(),
+                                (marker.bridge_id as i32).into(),
+                            ],
+                        ));
                     }
 
-                    // Apply tx_hash filter if provided
-                    if let Some(tx_hash) = tx_hash.clone() {
-                        let tx_filter = Expr::col(crosschain_messages::Column::SrcTxHash)
-                            .eq(tx_hash.clone())
-                            .or(Expr::col(crosschain_messages::Column::DstTxHash).eq(tx_hash));
-
-                        query = query.filter(tx_filter);
-                    }
-
-                    // Apply address filter if provided
-                    if let Some(address) = address.clone() {
-                        let address_filter = Expr::col(crosschain_messages::Column::SenderAddress)
-                            .eq(address.clone())
-                            .or(Expr::col(crosschain_messages::Column::RecipientAddress)
-                                .eq(address));
-
-                        query = query.filter(address_filter);
-                    }
+                    // `Address` is served by one ordered arm per column (`messages_address_union`).
+                    let subject_condition = match &subject {
+                        ListSubject::All | ListSubject::Address(_) => Condition::all(),
+                        ListSubject::Transaction(hash) => tx_hash_condition(hash),
+                        ListSubject::Hash(hash) => tx_hash_condition(hash)
+                            .add(crosschain_messages::Column::NativeId.eq(hash.clone())),
+                    };
+                    query = query.filter(subject_condition); // an empty `Condition::all()` renders nothing
 
                     if !filter.is_empty() {
                         query = query.filter(filter.messages_condition());
@@ -2377,8 +2349,18 @@ impl InterchainDatabase {
                     }
 
                     // Fetch one extra row to detect "has more"
-                    let mut messages: Vec<crosschain_messages::Model> =
-                        query.limit(limit + 1).all(tx).await?;
+                    let mut messages: Vec<crosschain_messages::Model> = match &subject {
+                        ListSubject::Address(address) => {
+                            let union =
+                                messages_address_union(&query, address, query_direction, limit);
+                            crosschain_messages::Model::find_by_statement(
+                                tx.get_database_backend().build(&union),
+                            )
+                            .all(tx)
+                            .await?
+                        }
+                        _ => query.limit(limit + 1).all(tx).await?,
+                    };
 
                     let has_more = messages.len() as u64 > limit;
 
@@ -2415,7 +2397,8 @@ impl InterchainDatabase {
                         last_page,
                     );
 
-                    if tx_hash.is_some() && input_pagination.is_none() {
+                    if matches!(subject, ListSubject::Transaction(_)) && input_pagination.is_none()
+                    {
                         // Remove prev marker for a static list of messages
                         // (we assume there are no more new messages appearing after the initial request)
                         pagination = OutputPagination {
@@ -2441,11 +2424,23 @@ impl InterchainDatabase {
     /// unbounded result set or picking an arbitrary winner. When `bridge_id` is
     /// `Some`, the bridge predicate is applied to whichever public-ID predicate
     /// is used, so a native/long ID is qualified as safely as a numeric ID.
+    ///
+    /// `scope_filter` (cluster routes) restricts the candidate rows *before* the
+    /// two-candidate ambiguity probe, so rows outside the scope neither match nor
+    /// make an unqualified lookup ambiguous. Transfers of the selected row are
+    /// loaded unfiltered. `None` (legacy route) keeps the unrestricted lookup.
     pub async fn get_crosschain_message(
         &self,
         message_id: Vec<u8>,
         bridge_id: Option<i32>,
+        scope_filter: Option<&ChainBridgeFilter>,
     ) -> anyhow::Result<CrosschainMessageLookup> {
+        // Owned before the transaction: its `for<'c>` closure cannot capture a
+        // borrowed filter. An empty filter adds nothing, as in
+        // `get_crosschain_messages`.
+        let scope_condition = scope_filter
+            .filter(|filter| !filter.is_empty())
+            .map(ChainBridgeFilter::messages_condition);
         self.db
             .transaction(|tx| {
                 Box::pin(async move {
@@ -2462,6 +2457,9 @@ impl InterchainDatabase {
                     };
 
                     let mut query = crosschain_messages::Entity::find().filter(f);
+                    if let Some(condition) = scope_condition {
+                        query = query.filter(condition);
+                    }
                     if let Some(bridge_id) = bridge_id {
                         query = query.filter(crosschain_messages::Column::BridgeId.eq(bridge_id));
                     }
@@ -2502,8 +2500,7 @@ impl InterchainDatabase {
     // VIEW TABLE: crosschain_transfers
     pub async fn get_crosschain_transfers(
         &self,
-        tx_hash: Option<Vec<u8>>,
-        address: Option<Vec<u8>>,
+        subject: ListSubject,
         filter: ChainBridgeFilter,
         page_size: usize,
         last_page: bool,
@@ -2518,8 +2515,7 @@ impl InterchainDatabase {
             .db
             .transaction(|tx| {
                 let pagination_marker = input_pagination;
-                let tx_hash_filter = tx_hash.clone();
-                let address_filter = address.clone();
+                let subject = subject.clone();
 
                 Box::pin(async move {
                     let query_direction = if last_page {
@@ -2557,114 +2553,55 @@ impl InterchainDatabase {
                         .column(crosschain_messages::Column::DstTxHash);
 
                     if !last_page && let Some(marker) = pagination_marker {
-                        let cond = match query_direction {
-                            PaginationDirection::Next => {
-                                Expr::col(crosschain_messages::Column::InitTimestamp)
-                                    .lt(marker.timestamp)
-                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                        .eq(marker.timestamp)
-                                        .and(
-                                            Expr::col(crosschain_transfers::Column::MessageId)
-                                                .lt(marker.message_id as i64),
-                                        ))
-                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                        .eq(marker.timestamp)
-                                        .and(
-                                            Expr::col(crosschain_transfers::Column::MessageId)
-                                                .eq(marker.message_id as i64),
-                                        )
-                                        .and(
-                                            Expr::col((
-                                                crosschain_transfers::Entity,
-                                                crosschain_transfers::Column::BridgeId,
-                                            ))
-                                            .lt(marker.bridge_id as i32),
-                                        ))
-                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                        .eq(marker.timestamp)
-                                        .and(
-                                            Expr::col(crosschain_transfers::Column::MessageId)
-                                                .eq(marker.message_id as i64),
-                                        )
-                                        .and(
-                                            Expr::col((
-                                                crosschain_transfers::Entity,
-                                                crosschain_transfers::Column::BridgeId,
-                                            ))
-                                            .eq(marker.bridge_id as i32),
-                                        )
-                                        .and(
-                                            Expr::col(crosschain_transfers::Column::Index)
-                                                .lt(marker.index as i64),
-                                        ))
-                            }
-                            PaginationDirection::Prev => {
-                                Expr::col(crosschain_messages::Column::InitTimestamp)
-                                    .gt(marker.timestamp)
-                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                        .eq(marker.timestamp)
-                                        .and(
-                                            Expr::col(crosschain_transfers::Column::MessageId)
-                                                .gt(marker.message_id as i64),
-                                        ))
-                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                        .eq(marker.timestamp)
-                                        .and(
-                                            Expr::col(crosschain_transfers::Column::MessageId)
-                                                .eq(marker.message_id as i64),
-                                        )
-                                        .and(
-                                            Expr::col((
-                                                crosschain_transfers::Entity,
-                                                crosschain_transfers::Column::BridgeId,
-                                            ))
-                                            .gt(marker.bridge_id as i32),
-                                        ))
-                                    .or(Expr::col(crosschain_messages::Column::InitTimestamp)
-                                        .eq(marker.timestamp)
-                                        .and(
-                                            Expr::col(crosschain_transfers::Column::MessageId)
-                                                .eq(marker.message_id as i64),
-                                        )
-                                        .and(
-                                            Expr::col((
-                                                crosschain_transfers::Entity,
-                                                crosschain_transfers::Column::BridgeId,
-                                            ))
-                                            .eq(marker.bridge_id as i32),
-                                        )
-                                        .and(
-                                            Expr::col(crosschain_transfers::Column::Index)
-                                                .gt(marker.index as i64),
-                                        ))
-                            }
-                        };
-
-                        query = query.filter(cond);
+                        let (ts, message_id, bridge_id) = (
+                            marker.timestamp,
+                            marker.message_id as i64,
+                            marker.bridge_id as i32,
+                        );
+                        query = query
+                            .filter(keyset_row_condition(
+                                query_direction,
+                                false,
+                                [
+                                    crosschain_messages::Column::InitTimestamp.into_simple_expr(),
+                                    crosschain_transfers::Column::MessageId.into_simple_expr(),
+                                    crosschain_transfers::Column::BridgeId.into_simple_expr(),
+                                    crosschain_transfers::Column::Index.into_simple_expr(),
+                                ],
+                                [
+                                    ts.into(),
+                                    message_id.into(),
+                                    bridge_id.into(),
+                                    (marker.index as i64).into(),
+                                ],
+                            ))
+                            // Implied by the join (t.message_id = m.id, t.bridge_id = m.bridge_id).
+                            // Inclusive: the marker's message may still have transfers on the
+                            // next page. Lets the messages pagination index start at the cursor.
+                            .filter(keyset_row_condition(
+                                query_direction,
+                                true,
+                                [
+                                    crosschain_messages::Column::InitTimestamp.into_simple_expr(),
+                                    crosschain_messages::Column::Id.into_simple_expr(),
+                                    crosschain_messages::Column::BridgeId.into_simple_expr(),
+                                ],
+                                [ts.into(), message_id.into(), bridge_id.into()],
+                            ));
                     }
 
-                    if let Some(hash) = tx_hash_filter.as_ref() {
-                        let tx_filter = Expr::col(crosschain_messages::Column::SrcTxHash)
-                            .eq(hash.clone())
-                            .or(Expr::col(crosschain_messages::Column::DstTxHash).eq(hash.clone()));
-
-                        query = query.filter(tx_filter);
-                    }
-
-                    if let Some(address) = address_filter.as_ref() {
-                        let address_filter = Expr::col((
-                            crosschain_transfers::Entity,
-                            crosschain_transfers::Column::SenderAddress,
-                        ))
-                        .eq(address.clone())
-                        .or(Expr::col((
-                            crosschain_transfers::Entity,
-                            crosschain_transfers::Column::RecipientAddress,
-                        ))
-                        .eq(address.clone()));
-
-                        query = query.filter(address_filter);
-                    }
+                    let subject_condition = match &subject {
+                        ListSubject::All => Condition::all(),
+                        ListSubject::Transaction(hash) => tx_hash_condition(hash),
+                        ListSubject::Hash(hash) => tx_hash_condition(hash)
+                            .add(crosschain_messages::Column::NativeId.eq(hash.clone())),
+                        ListSubject::Address(address) => Condition::any()
+                            .add(crosschain_transfers::Column::SenderAddress.eq(address.clone()))
+                            .add(
+                                crosschain_transfers::Column::RecipientAddress.eq(address.clone()),
+                            ),
+                    };
+                    query = query.filter(subject_condition);
 
                     if !filter.is_empty() {
                         query = query.filter(filter.transfers_condition());
@@ -2721,7 +2658,8 @@ impl InterchainDatabase {
                         last_page,
                     );
 
-                    if tx_hash_filter.is_some() && pagination_marker.is_none() {
+                    if matches!(subject, ListSubject::Transaction(_)) && pagination_marker.is_none()
+                    {
                         pagination.prev_marker = None;
                     }
 
@@ -3614,92 +3552,6 @@ impl InterchainDatabase {
             .map_err(|e| e.into())
     }
 
-    /// Statistics
-    ///
-    /// DEPRECATED, and no longer reachable from the API: the only callers were
-    /// `/api/v1/stats/common` and `/api/v1/stats/daily`, which now answer zeros
-    /// without querying, because these unbounded uncached `COUNT(*)`s were the
-    /// heaviest work this service did and the stats service in interchain mode
-    /// precomputes the same numbers. Kept only so the deprecated endpoints can
-    /// be removed in one step; the parity tests below still exercise them.
-    ///
-    /// TODO(next API iteration): delete `get_total_counters`,
-    /// `get_daily_counters`, `InterchainTotalCounters`,
-    /// `InterchainDailyCounters` and their tests together with the endpoints.
-    pub async fn get_total_counters(
-        &self,
-        timestamp: NaiveDateTime,
-        filter: &ChainBridgeFilter,
-    ) -> anyhow::Result<InterchainTotalCounters> {
-        let filter = filter.clone();
-        self.db
-            .transaction::<_, InterchainTotalCounters, DbErr>(|tx| {
-                Box::pin(async move {
-                    let total_messages = crosschain_messages::Entity::find()
-                        .filter(Expr::col(crosschain_messages::Column::InitTimestamp).lt(timestamp))
-                        .filter(filter.messages_condition())
-                        .count(tx)
-                        .await?;
-
-                    let total_transfers = crosschain_transfers::Entity::find()
-                        .join(
-                            JoinType::InnerJoin,
-                            crosschain_transfers::Relation::CrosschainMessages.def(),
-                        )
-                        .filter(Expr::col(crosschain_messages::Column::InitTimestamp).lt(timestamp))
-                        .filter(filter.transfers_condition())
-                        .count(tx)
-                        .await?;
-
-                    Ok(InterchainTotalCounters {
-                        timestamp,
-                        total_messages,
-                        total_transfers,
-                    })
-                })
-            })
-            .await
-            .map_err(|e| e.into())
-    }
-
-    /// DEPRECATED alongside [`Self::get_total_counters`] — see its doc comment
-    /// for why and for the removal plan.
-    pub async fn get_daily_counters(
-        &self,
-        timestamp: NaiveDateTime,
-        filter: &ChainBridgeFilter,
-    ) -> anyhow::Result<InterchainDailyCounters> {
-        let day = timestamp.date();
-        let day_start = day.and_hms_opt(0, 0, 0).expect("valid day start");
-        let next_day_start = day_start + Duration::days(1);
-
-        let time_range = Condition::all()
-            .add(Expr::col(crosschain_messages::Column::InitTimestamp).gte(day_start))
-            .add(Expr::col(crosschain_messages::Column::InitTimestamp).lt(next_day_start));
-
-        let daily_messages = crosschain_messages::Entity::find()
-            .filter(time_range.clone())
-            .filter(filter.messages_condition())
-            .count(self.db.as_ref())
-            .await?;
-
-        let daily_transfers = crosschain_transfers::Entity::find()
-            .join(
-                JoinType::InnerJoin,
-                crosschain_transfers::Relation::CrosschainMessages.def(),
-            )
-            .filter(time_range)
-            .filter(filter.transfers_condition())
-            .count(self.db.as_ref())
-            .await?;
-
-        Ok(InterchainDailyCounters {
-            date: day,
-            daily_messages,
-            daily_transfers,
-        })
-    }
-
     // STAGING TABLE: pending_messages
     /// Insert or update a pending message (destination event arrived before source)
     pub async fn upsert_pending_message(
@@ -3868,6 +3720,97 @@ impl InterchainDatabase {
     }
 }
 
+/// Keyset predicate `(columns) OP (values)`: `<` / `<=` for Next, `>` / `>=`
+/// for Prev. A row comparison is an index range on an index over `columns`;
+/// the equivalent OR expansion is only a filter (see gotchas).
+fn keyset_row_condition(
+    direction: PaginationDirection,
+    inclusive: bool,
+    columns: impl IntoIterator<Item = SimpleExpr>,
+    values: impl IntoIterator<Item = SimpleExpr>,
+) -> SimpleExpr {
+    let (columns, values) = (Expr::tuple(columns), Expr::tuple(values));
+    match (direction, inclusive) {
+        (PaginationDirection::Next, false) => columns.lt(values),
+        (PaginationDirection::Next, true) => columns.lte(values),
+        (PaginationDirection::Prev, false) => columns.gt(values),
+        (PaginationDirection::Prev, true) => columns.gte(values),
+    }
+}
+
+/// Source or destination tx hash of a message (through the join, of a
+/// transfer's parent message).
+fn tx_hash_condition(hash: &[u8]) -> Condition {
+    Condition::any()
+        .add(crosschain_messages::Column::SrcTxHash.eq(hash.to_vec()))
+        .add(crosschain_messages::Column::DstTxHash.eq(hash.to_vec()))
+}
+
+/// `ListSubject::Address` on messages. An OR over the two address columns can
+/// use neither index's order, so there is one arm per column, each in list
+/// order with its own LIMIT: one range of
+/// `crosschain_messages_{sender,recipient}_ts_idx`. The arms select only the
+/// key, and those indexes INCLUDE `src_chain_id` / `dst_chain_id` (all the
+/// `ChainBridgeFilter` reads besides the key), so each arm is an index-only
+/// scan: an address whose rows the scope rejects costs index entries, not
+/// heap reads. `UNION` drops the `sender = recipient` duplicates; the first
+/// `limit + 1` distinct keys always lie within the two arms' first `limit + 1`.
+/// Full rows are joined back by primary key. `query` already carries the
+/// keyset, the `ChainBridgeFilter` and the direction's ORDER BY.
+fn messages_address_union(
+    query: &Select<crosschain_messages::Entity>,
+    address: &[u8],
+    direction: PaginationDirection,
+    limit: u64,
+) -> SelectStatement {
+    use crosschain_messages::Column::{
+        BridgeId, Id, InitTimestamp, RecipientAddress, SenderAddress,
+    };
+    let arm = |column: crosschain_messages::Column| {
+        query
+            .clone()
+            .select_only()
+            .columns([InitTimestamp, Id, BridgeId])
+            .filter(column.eq(address.to_vec()))
+            .limit(limit + 1)
+            .into_query()
+    };
+    let order = match direction {
+        PaginationDirection::Next => Order::Desc,
+        PaginationDirection::Prev => Order::Asc,
+    };
+    let keys = Query::select()
+        .column(Asterisk)
+        // sea-query writes the first arm's own ORDER BY/LIMIT after the whole
+        // UNION, so that arm is wrapped; later arms keep theirs in parentheses.
+        .from_subquery(arm(SenderAddress), Alias::new("sender_arm"))
+        .union(UnionType::Distinct, arm(RecipientAddress))
+        // A set operation's ORDER BY names output columns: unqualified.
+        .order_by(InitTimestamp, order.clone())
+        .order_by(Id, order.clone())
+        .order_by(BridgeId, order.clone())
+        .limit(limit + 1)
+        .to_owned();
+    let keys_alias = Alias::new("keys");
+    crosschain_messages::Entity::find()
+        .into_query()
+        .join_subquery(
+            JoinType::InnerJoin,
+            keys,
+            keys_alias.clone(),
+            Expr::col((crosschain_messages::Entity, Id))
+                .equals((keys_alias.clone(), Id))
+                .and(
+                    Expr::col((crosschain_messages::Entity, BridgeId))
+                        .equals((keys_alias, BridgeId)),
+                ),
+        )
+        .order_by((crosschain_messages::Entity, InitTimestamp), order.clone())
+        .order_by((crosschain_messages::Entity, Id), order.clone())
+        .order_by((crosschain_messages::Entity, BridgeId), order)
+        .to_owned()
+}
+
 /// Build OutputPagination from a page of messages.
 /// prev_marker and next_marker are built from the first and last element (if exists) respectively.
 /// We must take into account a few query parameters.
@@ -3966,7 +3909,7 @@ mod tests {
     };
 
     use super::{
-        BlockRange, CrosschainMessageLookup, JoinedTransfer, StatsChainsOverlapSample,
+        BlockRange, CrosschainMessageLookup, JoinedTransfer, ListSubject, StatsChainsOverlapSample,
         push_indexed_pairs_predicate, push_zero_chains_guard_predicate,
     };
     use crate::{
@@ -4148,7 +4091,7 @@ mod tests {
     }
 
     #[test]
-    fn test_push_zero_chains_guard_predicate_empty_ids_is_noop() {
+    fn test_push_zero_chains_guard_predicate_empty_ids_keeps_real_rows_only() {
         let mut where_parts: Vec<String> = Vec::new();
         let mut values: Vec<Value> = Vec::new();
         let mut placeholder = 1usize;
@@ -4160,9 +4103,31 @@ mod tests {
             Some(&[]),
         );
 
-        assert!(where_parts.is_empty());
+        assert_eq!(
+            where_parts,
+            vec!["sm.messages_count IS NOT NULL".to_string()]
+        );
         assert!(values.is_empty());
-        assert_eq!(placeholder, 1);
+        assert_eq!(placeholder, 1, "placeholder must stay untouched");
+    }
+
+    #[test]
+    fn test_push_zero_chains_guard_predicate_empty_ids_contiguous_with_predicate_after() {
+        let mut where_parts = vec!["dst_chain_id IN ($1, $2)".to_string()];
+        let mut values = vec![Value::BigInt(Some(1)), Value::BigInt(Some(2))];
+        let mut placeholder = 3usize;
+
+        push_zero_chains_guard_predicate(
+            &mut where_parts,
+            &mut values,
+            &mut placeholder,
+            Some(&[]),
+        );
+        where_parts.push(format!("dummy_col = ${placeholder}"));
+
+        assert_eq!(where_parts[1], "sm.messages_count IS NOT NULL");
+        assert_eq!(where_parts[2], "dummy_col = $3");
+        assert_eq!(values.len(), 2);
     }
 
     #[test]
@@ -4259,13 +4224,25 @@ mod tests {
         assert_eq!(bridge_contract.address, bridge_contracts[0].address);
 
         let (crosschain_messages, _) = interchain_db
-            .get_crosschain_messages(None, None, ChainBridgeFilter::default(), 100, false, None)
+            .get_crosschain_messages(
+                ListSubject::All,
+                ChainBridgeFilter::default(),
+                100,
+                false,
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(crosschain_messages.len(), 7);
 
         let crosschain_transfers = interchain_db
-            .get_crosschain_transfers(None, None, ChainBridgeFilter::default(), 50, false, None)
+            .get_crosschain_transfers(
+                ListSubject::All,
+                ChainBridgeFilter::default(),
+                50,
+                false,
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(crosschain_transfers.0.len(), 7);
@@ -5457,7 +5434,7 @@ mod tests {
         // Unique numeric ID, unqualified -> Found.
         let (msg, transfers) = expect_found(
             interchain_db
-                .get_crosschain_message(1001i64.to_be_bytes().to_vec(), None)
+                .get_crosschain_message(1001i64.to_be_bytes().to_vec(), None, None)
                 .await
                 .unwrap(),
         );
@@ -5482,7 +5459,7 @@ mod tests {
 
         let (msg, transfers) = expect_found(
             interchain_db
-                .get_crosschain_message(native_id.clone(), None)
+                .get_crosschain_message(native_id.clone(), None, None)
                 .await
                 .unwrap(),
         );
@@ -5493,7 +5470,7 @@ mod tests {
         // only under bridge 1.)
         assert!(matches!(
             interchain_db
-                .get_crosschain_message(1001i64.to_be_bytes().to_vec(), Some(2))
+                .get_crosschain_message(1001i64.to_be_bytes().to_vec(), Some(2), None)
                 .await
                 .unwrap(),
             CrosschainMessageLookup::NotFound
@@ -5502,7 +5479,7 @@ mod tests {
         // Wholly nonexistent numeric ID, unqualified -> NotFound.
         assert!(matches!(
             interchain_db
-                .get_crosschain_message(9999i64.to_be_bytes().to_vec(), None)
+                .get_crosschain_message(9999i64.to_be_bytes().to_vec(), None, None)
                 .await
                 .unwrap(),
             CrosschainMessageLookup::NotFound
@@ -5581,7 +5558,7 @@ mod tests {
         // Unqualified numeric collision -> Ambiguous.
         assert!(matches!(
             interchain_db
-                .get_crosschain_message(id_bytes.clone(), None)
+                .get_crosschain_message(id_bytes.clone(), None, None)
                 .await
                 .unwrap(),
             CrosschainMessageLookup::Ambiguous
@@ -5590,7 +5567,7 @@ mod tests {
         // Qualified with bridge 1 -> that distinct row and only its transfers.
         let (msg, transfers) = expect_found(
             interchain_db
-                .get_crosschain_message(id_bytes.clone(), Some(1))
+                .get_crosschain_message(id_bytes.clone(), Some(1), None)
                 .await
                 .unwrap(),
         );
@@ -5603,7 +5580,7 @@ mod tests {
         // Qualified with bridge 2 -> the other distinct row and only its transfers.
         let (msg, transfers) = expect_found(
             interchain_db
-                .get_crosschain_message(id_bytes, Some(2))
+                .get_crosschain_message(id_bytes, Some(2), None)
                 .await
                 .unwrap(),
         );
@@ -5687,7 +5664,7 @@ mod tests {
         // Unqualified native collision -> Ambiguous.
         assert!(matches!(
             interchain_db
-                .get_crosschain_message(native_id.clone(), None)
+                .get_crosschain_message(native_id.clone(), None, None)
                 .await
                 .unwrap(),
             CrosschainMessageLookup::Ambiguous
@@ -5696,7 +5673,7 @@ mod tests {
         // Qualified with bridge 1 -> that distinct row and only its transfers.
         let (msg, transfers) = expect_found(
             interchain_db
-                .get_crosschain_message(native_id.clone(), Some(1))
+                .get_crosschain_message(native_id.clone(), Some(1), None)
                 .await
                 .unwrap(),
         );
@@ -5710,7 +5687,7 @@ mod tests {
         // Qualified with bridge 2 -> the other distinct row and only its transfers.
         let (msg, transfers) = expect_found(
             interchain_db
-                .get_crosschain_message(native_id, Some(2))
+                .get_crosschain_message(native_id, Some(2), None)
                 .await
                 .unwrap(),
         );
@@ -5724,47 +5701,146 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn counters_cover_all_filters() {
-        let db = init_db("counters_cover_all_filters").await;
+    async fn get_crosschain_message_scope_filter_restricts_candidates_before_the_ambiguity_probe() {
+        let db = init_db(
+            "get_crosschain_message_scope_filter_restricts_candidates_before_the_ambiguity_probe",
+        )
+        .await;
         fill_mock_interchain_database(&db).await;
 
         let interchain_db = InterchainDatabase::new(db.client());
-        let ts = mock_base_ts() + chrono::Duration::seconds(1);
 
-        // Unfiltered: 7 messages + 7 transfers (extended fixtures).
-        let totals = interchain_db
-            .get_total_counters(ts, &ChainBridgeFilter::default())
-            .await
-            .unwrap();
-        assert_eq!(totals.total_messages, 7);
-        assert_eq!(totals.total_transfers, 7);
+        // The mock database has no chain 999, and `dst_chain_id` is a foreign key.
+        chains::Entity::insert(chains::ActiveModel {
+            id: Set(999),
+            name: Set("Unindexed".to_string()),
+            ..Default::default()
+        })
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
 
-        // home_chain_id touching-OR: 6 messages / 6 transfers touch chain 1
-        // (excludes loopback 100→100 message/transfer).
-        let home_filter = ChainBridgeFilter {
-            home_chain_id: Some(1),
+        // 3101 exists under bridge 1 (1 -> 100) and bridge 2 (1 -> 250);
+        // 3102 exists only under bridge 1 (1 -> 999).
+        crosschain_messages::Entity::insert_many([
+            crosschain_messages::ActiveModel {
+                id: Set(3101),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(100)),
+                ..Default::default()
+            },
+            crosschain_messages::ActiveModel {
+                id: Set(3101),
+                bridge_id: Set(2),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(250)),
+                ..Default::default()
+            },
+            crosschain_messages::ActiveModel {
+                id: Set(3102),
+                bridge_id: Set(1),
+                status: Set(MessageStatus::Initiated),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(999)),
+                ..Default::default()
+            },
+        ])
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        let id = |n: i64| n.to_be_bytes().to_vec();
+
+        // Baseline: no filter -> the two bridges collide.
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(id(3101), None, None)
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::Ambiguous
+        ));
+
+        // An empty filter restricts nothing.
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(id(3101), None, Some(&ChainBridgeFilter::default()))
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::Ambiguous
+        ));
+
+        // Restricting to bridge 1 removes the other candidate before the
+        // probe, so the lookup is no longer ambiguous.
+        let by_bridge = ChainBridgeFilter {
+            bridge_ids: Some(vec![1]),
             ..Default::default()
         };
-        let home_filtered = interchain_db
-            .get_total_counters(ts, &home_filter)
-            .await
-            .unwrap();
-        assert_eq!(home_filtered.total_messages, 6);
-        assert_eq!(home_filtered.total_transfers, 6);
+        let (msg, _) = expect_found(
+            interchain_db
+                .get_crosschain_message(id(3101), None, Some(&by_bridge))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(msg.bridge_id, 1);
 
-        let daily = interchain_db
-            .get_daily_counters(ts, &ChainBridgeFilter::default())
-            .await
-            .unwrap();
-        assert_eq!(daily.daily_messages, 7);
-        assert_eq!(daily.daily_transfers, 7);
+        // Same through the chain dimension: only bridge 2's row touches 250.
+        let by_chain = ChainBridgeFilter {
+            home_chain_id: Some(250),
+            ..Default::default()
+        };
+        let (msg, _) = expect_found(
+            interchain_db
+                .get_crosschain_message(id(3101), None, Some(&by_chain))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(msg.bridge_id, 2);
 
-        let daily_home = interchain_db
-            .get_daily_counters(ts, &home_filter)
-            .await
-            .unwrap();
-        assert_eq!(daily_home.daily_messages, 6);
-        assert_eq!(daily_home.daily_transfers, 6);
+        // No candidate left inside the scope -> NotFound.
+        let elsewhere = ChainBridgeFilter {
+            home_chain_id: Some(42),
+            ..Default::default()
+        };
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(id(3101), None, Some(&elsewhere))
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::NotFound
+        ));
+
+        // A bridge qualifier outside the scope also finds nothing.
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(id(3101), Some(2), Some(&by_bridge))
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::NotFound
+        ));
+
+        // The unindexed-chain restriction applies as well: 999 is not indexed
+        // by bridge 1.
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(id(3102), None, None)
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::Found(..)
+        ));
+        let only_indexed = ChainBridgeFilter {
+            only_indexed_by_bridge: Some(vec![(1, vec![1, 100])]),
+            ..Default::default()
+        };
+        assert!(matches!(
+            interchain_db
+                .get_crosschain_message(id(3102), None, Some(&only_indexed))
+                .await
+                .unwrap(),
+            CrosschainMessageLookup::NotFound
+        ));
     }
 
     fn message_ids(
@@ -5820,7 +5896,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_messages(None, None, filter, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         assert_eq!(message_ids(&rows), vec![1005]);
@@ -5839,7 +5915,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_messages(None, None, filter, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         assert_eq!(message_ids(&rows), vec![1005]);
@@ -5858,7 +5934,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_messages(None, None, filter, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         assert_eq!(message_ids(&rows), vec![1007]);
@@ -5876,7 +5952,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_messages(None, None, filter, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         assert_eq!(message_ids(&rows), vec![1005]);
@@ -5898,7 +5974,7 @@ mod tests {
             ..Default::default()
         };
         let (set_rows, _) = interchain_db
-            .get_crosschain_messages(None, None, set_filter, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, set_filter, 100, false, None)
             .await
             .unwrap();
         let set_ids = message_ids(&set_rows);
@@ -5910,7 +5986,7 @@ mod tests {
             ..Default::default()
         };
         let (focal_rows, _) = interchain_db
-            .get_crosschain_messages(None, None, focal, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, focal, 100, false, None)
             .await
             .unwrap();
         let focal_ids = message_ids(&focal_rows);
@@ -5933,7 +6009,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_messages(None, None, filter, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         assert_eq!(message_ids(&rows), vec![1005]);
@@ -5953,7 +6029,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_messages(None, None, filter, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         assert_eq!(message_ids(&rows), vec![1005]);
@@ -5974,14 +6050,14 @@ mod tests {
         };
 
         let (page1, pag1) = interchain_db
-            .get_crosschain_messages(None, None, filter.clone(), 1, false, None)
+            .get_crosschain_messages(ListSubject::All, filter.clone(), 1, false, None)
             .await
             .unwrap();
         assert_eq!(page1.len(), 1);
         let next = pag1.next_marker.expect("next marker");
 
         let (page2, pag2) = interchain_db
-            .get_crosschain_messages(None, None, filter.clone(), 1, false, Some(next))
+            .get_crosschain_messages(ListSubject::All, filter.clone(), 1, false, Some(next))
             .await
             .unwrap();
         assert_eq!(page2.len(), 1);
@@ -5989,7 +6065,7 @@ mod tests {
         let prev = pag2.prev_marker.expect("prev marker");
 
         let (page1b, _) = interchain_db
-            .get_crosschain_messages(None, None, filter, 1, false, Some(prev))
+            .get_crosschain_messages(ListSubject::All, filter, 1, false, Some(prev))
             .await
             .unwrap();
         assert_eq!(page1b.len(), 1);
@@ -6009,7 +6085,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_transfers(None, None, filter, 100, false, None)
+            .get_crosschain_transfers(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         assert_eq!(transfer_ids(&rows), vec![6]);
@@ -6027,7 +6103,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_transfers(None, None, filter, 100, false, None)
+            .get_crosschain_transfers(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         assert_eq!(transfer_ids(&rows), vec![6]);
@@ -6045,7 +6121,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_transfers(None, None, filter, 100, false, None)
+            .get_crosschain_transfers(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         assert_eq!(transfer_ids(&rows), vec![6]);
@@ -6065,7 +6141,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_transfers(None, None, filter, 100, false, None)
+            .get_crosschain_transfers(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         assert_eq!(transfer_ids(&rows), vec![7]);
@@ -6073,11 +6149,10 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn test_counters_filter_parity_with_filtered_lists() {
-        let db = init_db("test_counters_filter_parity_with_filtered_lists").await;
+    async fn test_lists_compose_home_set_and_bridge_filters() {
+        let db = init_db("test_lists_compose_home_set_and_bridge_filters").await;
         fill_mock_interchain_database(&db).await;
         let interchain_db = InterchainDatabase::new(db.client());
-        let ts = mock_base_ts() + chrono::Duration::seconds(1);
 
         let filter = ChainBridgeFilter {
             home_chain_id: Some(1),
@@ -6087,23 +6162,15 @@ mod tests {
         };
 
         let (messages, _) = interchain_db
-            .get_crosschain_messages(None, None, filter.clone(), 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter.clone(), 100, false, None)
             .await
             .unwrap();
         let (transfers, _) = interchain_db
-            .get_crosschain_transfers(None, None, filter.clone(), 100, false, None)
+            .get_crosschain_transfers(ListSubject::All, filter.clone(), 100, false, None)
             .await
             .unwrap();
 
-        let totals = interchain_db.get_total_counters(ts, &filter).await.unwrap();
-        assert_eq!(totals.total_messages, messages.len() as u64);
-        assert_eq!(totals.total_transfers, transfers.len() as u64);
-
-        let daily = interchain_db.get_daily_counters(ts, &filter).await.unwrap();
-        assert_eq!(daily.daily_messages, messages.len() as u64);
-        assert_eq!(daily.daily_transfers, transfers.len() as u64);
-
-        // Sanity: set mode + bridge 1 keeps 1↔100 rows, drops NULL-dst / bridge-2 / loopback.
+        // Set mode + bridge 1 keeps 1↔100 rows, drops NULL-dst / bridge-2 / loopback.
         assert_eq!(message_ids(&messages), vec![1001, 1002, 1003, 1004]);
         assert_eq!(transfer_ids(&transfers), vec![1, 2, 3, 4, 5]);
     }
@@ -6122,7 +6189,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_messages(None, None, filter, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         // src_chain_id = 1 includes the NULL-destination row 1006.
@@ -6141,7 +6208,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_messages(None, None, filter, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         let ids = message_ids(&rows);
@@ -6165,7 +6232,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_messages(None, None, filter, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         assert_eq!(message_ids(&rows), vec![1001, 1002]);
@@ -6184,7 +6251,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_transfers(None, None, filter, 100, false, None)
+            .get_crosschain_transfers(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         assert_eq!(transfer_ids(&rows), vec![1, 2, 5]);
@@ -6206,7 +6273,7 @@ mod tests {
             ..Default::default()
         };
         let (focal_rows, _) = interchain_db
-            .get_crosschain_messages(None, None, focal, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, focal, 100, false, None)
             .await
             .unwrap();
         assert_eq!(message_ids(&focal_rows), vec![1001, 1002, 1003, 1004, 1005]);
@@ -6219,7 +6286,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_messages(None, None, narrowed, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, narrowed, 100, false, None)
             .await
             .unwrap();
         assert_eq!(message_ids(&rows), vec![1001, 1002]);
@@ -6239,7 +6306,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_messages(None, None, filter, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         assert_eq!(message_ids(&rows), vec![1005]);
@@ -6258,7 +6325,13 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_messages(Some(vec![0x11; 32]), None, msg_filter, 100, false, None)
+            .get_crosschain_messages(
+                ListSubject::Transaction(vec![0x11; 32]),
+                msg_filter,
+                100,
+                false,
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(message_ids(&rows), vec![1003]);
@@ -6274,7 +6347,7 @@ mod tests {
             ..Default::default()
         };
         let (rows, _) = interchain_db
-            .get_crosschain_transfers(None, Some(sender), xfer_filter, 100, false, None)
+            .get_crosschain_transfers(ListSubject::Address(sender), xfer_filter, 100, false, None)
             .await
             .unwrap();
         assert_eq!(transfer_ids(&rows), vec![1]);
@@ -6306,14 +6379,14 @@ mod tests {
 
         // Transfer list matches on the transfer's own token chains: only 6.
         let (transfers, _) = interchain_db
-            .get_crosschain_transfers(None, None, dir.clone(), 100, false, None)
+            .get_crosschain_transfers(ListSubject::All, dir.clone(), 100, false, None)
             .await
             .unwrap();
         assert_eq!(transfer_ids(&transfers), vec![6]);
 
         // Message list uses message chains: 1005 is 1 -> 250, so 250 -> 1 matches nothing.
         let (messages, _) = interchain_db
-            .get_crosschain_messages(None, None, dir.clone(), 100, false, None)
+            .get_crosschain_messages(ListSubject::All, dir.clone(), 100, false, None)
             .await
             .unwrap();
         assert!(
@@ -6321,25 +6394,14 @@ mod tests {
             "message 1005 (1 -> 250) must not match a 250 -> 1 direction filter"
         );
         assert!(message_ids(&messages).is_empty());
-
-        // Counters use token endpoints too: transfer count equals filtered list length.
-        let ts = mock_base_ts() + chrono::Duration::seconds(1);
-        let totals = interchain_db.get_total_counters(ts, &dir).await.unwrap();
-        assert_eq!(totals.total_transfers, transfers.len() as u64);
-        assert_eq!(totals.total_messages, messages.len() as u64);
-
-        let daily = interchain_db.get_daily_counters(ts, &dir).await.unwrap();
-        assert_eq!(daily.daily_transfers, transfers.len() as u64);
-        assert_eq!(daily.daily_messages, messages.len() as u64);
     }
 
     #[tokio::test]
     #[ignore = "needs database to run"]
-    async fn test_counters_parity_with_focal_direction_bridge_filter() {
-        let db = init_db("test_counters_parity_with_focal_direction_bridge_filter").await;
+    async fn test_lists_compose_focal_direction_and_bridge_filters() {
+        let db = init_db("test_lists_compose_focal_direction_and_bridge_filters").await;
         fill_mock_interchain_database(&db).await;
         let interchain_db = InterchainDatabase::new(db.client());
-        let ts = mock_base_ts() + chrono::Duration::seconds(1);
 
         let filter = ChainBridgeFilter {
             home_chain_id: Some(1),
@@ -6351,21 +6413,13 @@ mod tests {
         };
 
         let (messages, _) = interchain_db
-            .get_crosschain_messages(None, None, filter.clone(), 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter.clone(), 100, false, None)
             .await
             .unwrap();
         let (transfers, _) = interchain_db
-            .get_crosschain_transfers(None, None, filter.clone(), 100, false, None)
+            .get_crosschain_transfers(ListSubject::All, filter.clone(), 100, false, None)
             .await
             .unwrap();
-
-        let totals = interchain_db.get_total_counters(ts, &filter).await.unwrap();
-        assert_eq!(totals.total_messages, messages.len() as u64);
-        assert_eq!(totals.total_transfers, transfers.len() as u64);
-
-        let daily = interchain_db.get_daily_counters(ts, &filter).await.unwrap();
-        assert_eq!(daily.daily_messages, messages.len() as u64);
-        assert_eq!(daily.daily_transfers, transfers.len() as u64);
 
         // Concrete cardinalities: narrowed to 1 -> 100 bridge-1 rows.
         assert_eq!(message_ids(&messages), vec![1001, 1002]);
@@ -6386,7 +6440,7 @@ mod tests {
         };
 
         let full = interchain_db
-            .get_crosschain_messages(None, None, filter.clone(), 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter.clone(), 100, false, None)
             .await
             .unwrap()
             .0;
@@ -6403,7 +6457,7 @@ mod tests {
 
         // Page 1 (size 2), full page.
         let (page1, pag1) = interchain_db
-            .get_crosschain_messages(None, None, filter.clone(), 2, false, None)
+            .get_crosschain_messages(ListSubject::All, filter.clone(), 2, false, None)
             .await
             .unwrap();
         assert_eq!(page1.len(), 2, "first page must be dense");
@@ -6411,7 +6465,7 @@ mod tests {
 
         // Page 2 (size 2), no duplicates from page 1.
         let (page2, pag2) = interchain_db
-            .get_crosschain_messages(None, None, filter.clone(), 2, false, Some(next))
+            .get_crosschain_messages(ListSubject::All, filter.clone(), 2, false, Some(next))
             .await
             .unwrap();
         assert_eq!(page2.len(), 2, "second page must be dense");
@@ -6428,7 +6482,7 @@ mod tests {
         // Previous marker from page 2 returns page 1.
         let prev = pag2.prev_marker.expect("prev marker");
         let (page1b, _) = interchain_db
-            .get_crosschain_messages(None, None, filter.clone(), 2, false, Some(prev))
+            .get_crosschain_messages(ListSubject::All, filter.clone(), 2, false, Some(prev))
             .await
             .unwrap();
         let p1b: Vec<i64> = page1b.iter().map(|(m, _)| m.id).collect();
@@ -6436,7 +6490,7 @@ mod tests {
 
         // last_page returns the filtered tail (2 oldest).
         let (last, _) = interchain_db
-            .get_crosschain_messages(None, None, filter, 2, true, None)
+            .get_crosschain_messages(ListSubject::All, filter, 2, true, None)
             .await
             .unwrap();
         assert_eq!(last.len(), 2, "last page must be dense here");
@@ -6458,7 +6512,7 @@ mod tests {
         };
 
         let full = interchain_db
-            .get_crosschain_transfers(None, None, filter.clone(), 100, false, None)
+            .get_crosschain_transfers(ListSubject::All, filter.clone(), 100, false, None)
             .await
             .unwrap()
             .0;
@@ -6472,14 +6526,14 @@ mod tests {
         assert_eq!(ts_seq, sorted, "list must be newest-first");
 
         let (page1, pag1) = interchain_db
-            .get_crosschain_transfers(None, None, filter.clone(), 2, false, None)
+            .get_crosschain_transfers(ListSubject::All, filter.clone(), 2, false, None)
             .await
             .unwrap();
         assert_eq!(page1.len(), 2);
         let next = pag1.next_marker.expect("next marker");
 
         let (page2, pag2) = interchain_db
-            .get_crosschain_transfers(None, None, filter.clone(), 2, false, Some(next))
+            .get_crosschain_transfers(ListSubject::All, filter.clone(), 2, false, Some(next))
             .await
             .unwrap();
         assert_eq!(page2.len(), 2);
@@ -6495,14 +6549,14 @@ mod tests {
 
         let prev = pag2.prev_marker.expect("prev marker");
         let (page1b, _) = interchain_db
-            .get_crosschain_transfers(None, None, filter.clone(), 2, false, Some(prev))
+            .get_crosschain_transfers(ListSubject::All, filter.clone(), 2, false, Some(prev))
             .await
             .unwrap();
         let p1b: Vec<i64> = page1b.iter().map(|t| t.id).collect();
         assert_eq!(p1b, p1, "prev marker must reproduce the first page");
 
         let (last, _) = interchain_db
-            .get_crosschain_transfers(None, None, filter, 2, true, None)
+            .get_crosschain_transfers(ListSubject::All, filter, 2, true, None)
             .await
             .unwrap();
         assert_eq!(last.len(), 2);
@@ -7394,7 +7448,13 @@ mod tests {
         fill_mock_interchain_database(&_db).await;
         let interchain_db = InterchainDatabase::new(_db.client());
         let (transfers_list, _) = interchain_db
-            .get_crosschain_transfers(None, None, ChainBridgeFilter::default(), 10, false, None)
+            .get_crosschain_transfers(
+                ListSubject::All,
+                ChainBridgeFilter::default(),
+                10,
+                false,
+                None,
+            )
             .await
             .unwrap();
         let transfer_id = transfers_list[0].id;
@@ -12412,6 +12472,74 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database to run"]
+    async fn message_paths_zero_chains_empty_union_invents_no_zero_rows() {
+        // A bridge selection naming only a bridge absent from the config:
+        // pairs and union are both `Some([])`. No chain is a zero-row
+        // candidate, but the bridge's real row (permissive arm) must stay.
+        let _db = init_db("message_paths_zero_chains_empty_union").await;
+        let interchain_db = InterchainDatabase::new(_db.client());
+        seed_bridge_row(interchain_db.db.as_ref(), 7).await;
+        interchain_db
+            .upsert_chains(
+                [1, 100, 250, 999]
+                    .into_iter()
+                    .map(|id| chains::ActiveModel {
+                        id: Set(id),
+                        name: Set(format!("Chain{id}")),
+                        ..Default::default()
+                    })
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        interchain_db
+            .create_or_update_stats_messages(7, 1, 100, 5)
+            .await
+            .unwrap();
+        stats_messages_days::Entity::insert(stats_messages_days::ActiveModel {
+            bridge_id: Set(7),
+            date: Set(NaiveDate::from_ymd_opt(2026, 3, 1).unwrap()),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(100),
+            messages_count: Set(5),
+            ..Default::default()
+        })
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        let expected = vec![MessagePathStatsRow {
+            src_chain_id: 1,
+            dst_chain_id: 100,
+            messages_count: 5,
+        }];
+
+        // All-time query, outgoing.
+        let all_time = interchain_db
+            .get_outgoing_message_paths(1, None, None, None, Some(&[7]), true, Some(&[]), Some(&[]))
+            .await
+            .unwrap();
+        assert_eq!(all_time, expected, "no zero rows for an empty union");
+
+        // Bounded query, incoming.
+        let bounded = interchain_db
+            .get_incoming_message_paths(
+                100,
+                Some(NaiveDate::from_ymd_opt(2026, 2, 1).unwrap()),
+                Some(NaiveDate::from_ymd_opt(2026, 4, 1).unwrap()),
+                None,
+                Some(&[7]),
+                true,
+                Some(&[]),
+                Some(&[]),
+            )
+            .await
+            .unwrap();
+        assert_eq!(bounded, expected, "no zero rows for an empty union");
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
     async fn message_paths_removed_bridge_included_present_but_empty_excluded() {
         let _db = init_db("message_paths_removed_bridge_vs_present_empty").await;
         let interchain_db = InterchainDatabase::new(_db.client());
@@ -14212,7 +14340,7 @@ mod tests {
         let indexed = mock_indexed_chains();
 
         let (messages, _) = interchain_db
-            .get_crosschain_messages(None, None, default_filter(&indexed), 100, false, None)
+            .get_crosschain_messages(ListSubject::All, default_filter(&indexed), 100, false, None)
             .await
             .unwrap();
         let ids = message_ids(&messages);
@@ -14241,7 +14369,7 @@ mod tests {
         let indexed = mock_indexed_chains();
 
         let (messages, _) = interchain_db
-            .get_crosschain_messages(None, None, default_filter(&indexed), 100, false, None)
+            .get_crosschain_messages(ListSubject::All, default_filter(&indexed), 100, false, None)
             .await
             .unwrap();
         assert!(
@@ -14261,7 +14389,7 @@ mod tests {
         // `include_unindexed_chains=true` translates to a `None` field.
         let filter = ChainBridgeFilter::default();
         let (messages, _) = interchain_db
-            .get_crosschain_messages(None, None, filter, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         let ids = message_ids(&messages);
@@ -14284,7 +14412,7 @@ mod tests {
         let indexed = mock_indexed_chains();
 
         let (transfers, _) = interchain_db
-            .get_crosschain_transfers(None, None, default_filter(&indexed), 100, false, None)
+            .get_crosschain_transfers(ListSubject::All, default_filter(&indexed), 100, false, None)
             .await
             .unwrap();
         let ids = transfer_ids(&transfers);
@@ -14317,7 +14445,7 @@ mod tests {
         let indexed = mock_indexed_chains();
 
         let (messages, _) = interchain_db
-            .get_crosschain_messages(None, None, default_filter(&indexed), 100, false, None)
+            .get_crosschain_messages(ListSubject::All, default_filter(&indexed), 100, false, None)
             .await
             .unwrap();
         let ids = message_ids(&messages);
@@ -14356,7 +14484,13 @@ mod tests {
         let indexed = mock_indexed_chains();
 
         let (all_messages, _) = interchain_db
-            .get_crosschain_messages(None, None, ChainBridgeFilter::default(), 1000, false, None)
+            .get_crosschain_messages(
+                ListSubject::All,
+                ChainBridgeFilter::default(),
+                1000,
+                false,
+                None,
+            )
             .await
             .unwrap();
         let mut unflagged_message_ids: Vec<i64> = all_messages
@@ -14369,13 +14503,25 @@ mod tests {
         unflagged_message_ids.sort_unstable();
 
         let (shown_messages, _) = interchain_db
-            .get_crosschain_messages(None, None, default_filter(&indexed), 1000, false, None)
+            .get_crosschain_messages(
+                ListSubject::All,
+                default_filter(&indexed),
+                1000,
+                false,
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(message_ids(&shown_messages), unflagged_message_ids);
 
         let (all_transfers, _) = interchain_db
-            .get_crosschain_transfers(None, None, ChainBridgeFilter::default(), 1000, false, None)
+            .get_crosschain_transfers(
+                ListSubject::All,
+                ChainBridgeFilter::default(),
+                1000,
+                false,
+                None,
+            )
             .await
             .unwrap();
         let mut unflagged_transfer_ids: Vec<i64> = all_transfers
@@ -14392,39 +14538,16 @@ mod tests {
         unflagged_transfer_ids.sort_unstable();
 
         let (shown_transfers, _) = interchain_db
-            .get_crosschain_transfers(None, None, default_filter(&indexed), 1000, false, None)
+            .get_crosschain_transfers(
+                ListSubject::All,
+                default_filter(&indexed),
+                1000,
+                false,
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(transfer_ids(&shown_transfers), unflagged_transfer_ids);
-    }
-
-    #[tokio::test]
-    #[ignore = "needs database to run"]
-    async fn test_counters_parity_with_default_filtered_lists() {
-        let db = init_db("test_counters_parity_with_default_filtered_lists").await;
-        fill_mock_interchain_database(&db).await;
-        seed_unindexed_chain_fixture_rows(db.client().as_ref()).await;
-        let interchain_db = InterchainDatabase::new(db.client());
-        let indexed = mock_indexed_chains();
-        let filter = default_filter(&indexed);
-        let ts = mock_base_ts() + chrono::Duration::seconds(1);
-
-        let (messages, _) = interchain_db
-            .get_crosschain_messages(None, None, filter.clone(), 1000, false, None)
-            .await
-            .unwrap();
-        let (transfers, _) = interchain_db
-            .get_crosschain_transfers(None, None, filter.clone(), 1000, false, None)
-            .await
-            .unwrap();
-
-        let totals = interchain_db.get_total_counters(ts, &filter).await.unwrap();
-        assert_eq!(totals.total_messages, messages.len() as u64);
-        assert_eq!(totals.total_transfers, transfers.len() as u64);
-
-        let daily = interchain_db.get_daily_counters(ts, &filter).await.unwrap();
-        assert_eq!(daily.daily_messages, messages.len() as u64);
-        assert_eq!(daily.daily_transfers, transfers.len() as u64);
     }
 
     #[tokio::test]
@@ -14437,7 +14560,7 @@ mod tests {
 
         let before = mock_indexed_chains();
         let (before_messages, _) = interchain_db
-            .get_crosschain_messages(None, None, default_filter(&before), 1000, false, None)
+            .get_crosschain_messages(ListSubject::All, default_filter(&before), 1000, false, None)
             .await
             .unwrap();
         assert!(!message_ids(&before_messages).contains(&2001));
@@ -14447,7 +14570,7 @@ mod tests {
         let after =
             IndexedChains::from_bridges([(1, vec![1, 100, 250]), (2, vec![1, 250]), (4, vec![])]);
         let (after_messages, _) = interchain_db
-            .get_crosschain_messages(None, None, default_filter(&after), 1000, false, None)
+            .get_crosschain_messages(ListSubject::All, default_filter(&after), 1000, false, None)
             .await
             .unwrap();
         let after_ids = message_ids(&after_messages);
@@ -14476,7 +14599,7 @@ mod tests {
         // Default-filtered set here: 1001,1002,1003,1004,1005,1007 (1006 is the
         // hidden NULL-dst row).
         let full = interchain_db
-            .get_crosschain_messages(None, None, filter.clone(), 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter.clone(), 100, false, None)
             .await
             .unwrap()
             .0;
@@ -14485,14 +14608,14 @@ mod tests {
         assert_eq!(full_ids.len(), 6);
 
         let (page1, pag1) = interchain_db
-            .get_crosschain_messages(None, None, filter.clone(), 2, false, None)
+            .get_crosschain_messages(ListSubject::All, filter.clone(), 2, false, None)
             .await
             .unwrap();
         assert_eq!(page1.len(), 2, "first page must be dense under the filter");
         let next = pag1.next_marker.expect("next marker");
 
         let (page2, pag2) = interchain_db
-            .get_crosschain_messages(None, None, filter.clone(), 2, false, Some(next))
+            .get_crosschain_messages(ListSubject::All, filter.clone(), 2, false, Some(next))
             .await
             .unwrap();
         assert_eq!(page2.len(), 2, "second page must be dense under the filter");
@@ -14508,7 +14631,7 @@ mod tests {
         // under the same active predicate.
         let prev = pag2.prev_marker.expect("prev marker");
         let (page1b, _) = interchain_db
-            .get_crosschain_messages(None, None, filter.clone(), 2, false, Some(prev))
+            .get_crosschain_messages(ListSubject::All, filter.clone(), 2, false, Some(prev))
             .await
             .unwrap();
         let p1b: Vec<i64> = page1b.iter().map(|(m, _)| m.id).collect();
@@ -14521,6 +14644,317 @@ mod tests {
         assert_eq!(
             ts_seq, sorted,
             "list must remain newest-first under the filter"
+        );
+    }
+
+    /// `(id, bridge_id)` of every message in the returned order (unlike
+    /// `message_ids`, which sorts).
+    fn message_keys(
+        rows: &[(crosschain_messages::Model, Vec<crosschain_transfers::Model>)],
+    ) -> Vec<(i64, i32)> {
+        rows.iter().map(|(m, _)| (m.id, m.bridge_id)).collect()
+    }
+
+    /// Pages forward at `page_size = 1` until `next_marker` is `None`. Every
+    /// page has one row, and every `prev_marker` reproduces the previous page.
+    async fn walk_messages(
+        db: &InterchainDatabase,
+        subject: ListSubject,
+        filter: ChainBridgeFilter,
+    ) -> Vec<(i64, i32)> {
+        let mut keys = Vec::new();
+        let mut marker = None;
+        let mut previous_page: Option<Vec<(i64, i32)>> = None;
+        loop {
+            let (rows, pagination) = db
+                .get_crosschain_messages(subject.clone(), filter.clone(), 1, false, marker)
+                .await
+                .unwrap();
+            let page = message_keys(&rows);
+            assert_eq!(page.len(), 1, "every page must hold exactly one row");
+            if let Some(previous_page) = previous_page {
+                let prev = pagination.prev_marker.expect("prev marker");
+                let (back, _) = db
+                    .get_crosschain_messages(subject.clone(), filter.clone(), 1, false, Some(prev))
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    message_keys(&back),
+                    previous_page,
+                    "prev marker must reproduce the previous page"
+                );
+            }
+            keys.extend(page.iter().copied());
+            previous_page = Some(page);
+            match pagination.next_marker {
+                Some(next) => marker = Some(next),
+                None => break,
+            }
+        }
+        keys
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_list_subject_address_union_pagination() {
+        let db = init_db("test_list_subject_address_union_pagination").await;
+        fill_mock_interchain_database(&db).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        let t = mock_base_ts() + chrono::Duration::hours(1);
+        let a = vec![0xa1u8; 20];
+        let b = vec![0xb2u8; 20];
+        let c = vec![0xc3u8; 20];
+        let message = |id: i64, bridge_id: i32, ts, sender: &[u8], recipient: Option<&[u8]>| {
+            crosschain_messages::ActiveModel {
+                id: Set(id),
+                bridge_id: Set(bridge_id),
+                status: Set(MessageStatus::Completed),
+                src_chain_id: Set(1),
+                dst_chain_id: Set(Some(100)),
+                init_timestamp: Set(ts),
+                sender_address: Set(Some(sender.to_vec())),
+                recipient_address: Set(recipient.map(<[u8]>::to_vec)),
+                ..Default::default()
+            }
+        };
+        // NULL sender: only the recipient arm matches it.
+        let mut null_sender = message(3003, 1, t, &a, Some(&a));
+        null_sender.sender_address = Set(None);
+        crosschain_messages::Entity::insert_many([
+            message(3001, 1, t, &a, Some(&b)),
+            message(3002, 1, t, &b, Some(&a)),
+            message(3002, 2, t, &a, Some(&a)),
+            null_sender,
+            message(3000, 1, t - chrono::Duration::hours(1), &c, Some(&a)),
+            message(3004, 1, t, &b, Some(&c)),
+        ])
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        let expected = vec![(3003, 1), (3002, 2), (3002, 1), (3001, 1), (3000, 1)];
+        let (rows, _) = interchain_db
+            .get_crosschain_messages(
+                ListSubject::Address(a.clone()),
+                ChainBridgeFilter::default(),
+                100,
+                false,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(message_keys(&rows), expected);
+
+        assert_eq!(
+            walk_messages(
+                &interchain_db,
+                ListSubject::Address(a.clone()),
+                ChainBridgeFilter::default()
+            )
+            .await,
+            expected
+        );
+
+        for (page_size, want) in [(1usize, vec![(3000, 1)]), (2, vec![(3001, 1), (3000, 1)])] {
+            let (rows, pagination) = interchain_db
+                .get_crosschain_messages(
+                    ListSubject::Address(a.clone()),
+                    ChainBridgeFilter::default(),
+                    page_size,
+                    true,
+                    None,
+                )
+                .await
+                .unwrap();
+            assert_eq!(message_keys(&rows), want, "last page, size {page_size}");
+            assert!(pagination.next_marker.is_none());
+        }
+
+        let (rows, _) = interchain_db
+            .get_crosschain_messages(
+                ListSubject::Address(a.clone()),
+                ChainBridgeFilter {
+                    bridge_ids: Some(vec![2]),
+                    ..Default::default()
+                },
+                100,
+                false,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(message_keys(&rows), vec![(3002, 2)]);
+
+        let (all_rows, _) = interchain_db
+            .get_crosschain_messages(
+                ListSubject::All,
+                ChainBridgeFilter::default(),
+                100,
+                false,
+                None,
+            )
+            .await
+            .unwrap();
+        let all_keys = message_keys(&all_rows);
+        assert_eq!(all_keys.len(), 13);
+        assert_eq!(
+            walk_messages(
+                &interchain_db,
+                ListSubject::All,
+                ChainBridgeFilter::default()
+            )
+            .await,
+            all_keys
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_list_subject_search_fields() {
+        let db = init_db("test_list_subject_search_fields").await;
+        fill_mock_interchain_database(&db).await;
+        let interchain_db = InterchainDatabase::new(db.client());
+
+        let h = vec![0xe5u8; 32];
+        let x = vec![0xf6u8; 20];
+        let y = vec![0xe7u8; 20];
+        let t = mock_base_ts();
+        let message = |id: i64,
+                       src_tx: Option<Vec<u8>>,
+                       dst_tx: Option<Vec<u8>>,
+                       native: Option<Vec<u8>>,
+                       sender: &[u8]| crosschain_messages::ActiveModel {
+            id: Set(id),
+            bridge_id: Set(1),
+            status: Set(MessageStatus::Completed),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(Some(100)),
+            init_timestamp: Set(t),
+            src_tx_hash: Set(src_tx),
+            dst_tx_hash: Set(dst_tx),
+            native_id: Set(native),
+            sender_address: Set(Some(sender.to_vec())),
+            recipient_address: Set(Some(y.clone())),
+            ..Default::default()
+        };
+        crosschain_messages::Entity::insert_many([
+            message(4001, None, None, Some(h.clone()), &y),
+            message(4002, Some(h.clone()), None, None, &x),
+            message(4003, None, Some(h.clone()), None, &y),
+            message(4004, Some(vec![0x44; 32]), None, Some(vec![0x44; 32]), &y),
+        ])
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        let transfer = |id: i64, message_id: i64, sender: &[u8], recipient: &[u8]| {
+            crosschain_transfers::ActiveModel {
+                id: Set(id),
+                message_id: Set(message_id),
+                bridge_id: Set(1),
+                index: Set(0),
+                token_src_chain_id: Set(1),
+                token_dst_chain_id: Set(100),
+                sender_address: Set(Some(sender.to_vec())),
+                recipient_address: Set(Some(recipient.to_vec())),
+                ..Default::default()
+            }
+        };
+        crosschain_transfers::Entity::insert_many([
+            transfer(4101, 4001, &x, &y),
+            transfer(4102, 4002, &y, &y),
+            transfer(4103, 4003, &y, &y),
+            transfer(4104, 4004, &y, &x),
+        ])
+        .exec(interchain_db.db.as_ref())
+        .await
+        .unwrap();
+
+        let messages = |subject: ListSubject| {
+            let interchain_db = &interchain_db;
+            async move {
+                interchain_db
+                    .get_crosschain_messages(
+                        subject,
+                        ChainBridgeFilter::default(),
+                        100,
+                        false,
+                        None,
+                    )
+                    .await
+                    .unwrap()
+            }
+        };
+        let transfers = |subject: ListSubject| {
+            let interchain_db = &interchain_db;
+            async move {
+                interchain_db
+                    .get_crosschain_transfers(
+                        subject,
+                        ChainBridgeFilter::default(),
+                        100,
+                        false,
+                        None,
+                    )
+                    .await
+                    .unwrap()
+            }
+        };
+
+        assert_eq!(
+            message_ids(&messages(ListSubject::Hash(h.clone())).await.0),
+            vec![4001, 4002, 4003]
+        );
+        assert_eq!(
+            message_ids(&messages(ListSubject::Address(x.clone())).await.0),
+            vec![4002]
+        );
+        assert_eq!(
+            transfer_ids(&transfers(ListSubject::Hash(h.clone())).await.0),
+            vec![4101, 4102, 4103]
+        );
+        assert_eq!(
+            transfer_ids(&transfers(ListSubject::Address(x.clone())).await.0),
+            vec![4101, 4104]
+        );
+        assert_eq!(
+            message_ids(&messages(ListSubject::Transaction(h.clone())).await.0),
+            vec![4002, 4003]
+        );
+        assert_eq!(
+            transfer_ids(&transfers(ListSubject::Transaction(h.clone())).await.0),
+            vec![4102, 4103]
+        );
+
+        // Page-1 prev marker: a static `:byTx` list has none, a `q` search keeps it.
+        assert!(
+            messages(ListSubject::Transaction(h.clone()))
+                .await
+                .1
+                .prev_marker
+                .is_none()
+        );
+        assert!(
+            messages(ListSubject::Hash(h.clone()))
+                .await
+                .1
+                .prev_marker
+                .is_some()
+        );
+        assert!(
+            transfers(ListSubject::Transaction(h.clone()))
+                .await
+                .1
+                .prev_marker
+                .is_none()
+        );
+        assert!(
+            transfers(ListSubject::Hash(h.clone()))
+                .await
+                .1
+                .prev_marker
+                .is_some()
         );
     }
 
@@ -14554,7 +14988,7 @@ mod tests {
         );
 
         let (messages, _) = interchain_db
-            .get_crosschain_messages(None, None, filter, 100, false, None)
+            .get_crosschain_messages(ListSubject::All, filter, 100, false, None)
             .await
             .unwrap();
         let ids = message_ids(&messages);
@@ -14572,11 +15006,23 @@ mod tests {
         let indexed = mock_indexed_chains();
 
         let (all_messages, _) = interchain_db
-            .get_crosschain_messages(None, None, ChainBridgeFilter::default(), 1000, false, None)
+            .get_crosschain_messages(
+                ListSubject::All,
+                ChainBridgeFilter::default(),
+                1000,
+                false,
+                None,
+            )
             .await
             .unwrap();
         let (shown_messages, _) = interchain_db
-            .get_crosschain_messages(None, None, default_filter(&indexed), 1000, false, None)
+            .get_crosschain_messages(
+                ListSubject::All,
+                default_filter(&indexed),
+                1000,
+                false,
+                None,
+            )
             .await
             .unwrap();
         let shown_ids = message_ids(&shown_messages);

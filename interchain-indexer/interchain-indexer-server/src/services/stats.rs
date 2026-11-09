@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use super::{
+    ClusterRegistry,
     chain_info_proto::chain_model_to_proto,
     interchain_service::token_type_to_proto,
-    utils::{build_chain_bridge_filter, non_empty, parse_bridge_ids_csv, parse_chain_ids_csv},
+    scope::{ChainStatsScope, ReadScope},
+    utils::{list_page_params, non_empty, page_params, parse_bridge_ids_csv, parse_chain_ids_csv},
 };
 use crate::{
     // `TokenType` is nested in `TokenInfo` so its value names do not squat the
@@ -11,7 +13,7 @@ use crate::{
     proto::{interchain_statistics_service_server::*, token_info::TokenType, *},
     settings::ApiSettings,
 };
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::NaiveDate;
 use interchain_indexer_logic::{
     BridgedTokenListRow, BridgedTokensPaginationLogic, BridgedTokensSortField, ChainInfoService,
     IndexedChains, StatsChainListRow, StatsChainsPaginationLogic, StatsChainsScope,
@@ -20,11 +22,14 @@ use interchain_indexer_logic::{
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
+mod cluster;
+
 pub struct InterchainStatisticsServiceImpl {
     pub stats: Arc<StatsService>,
     pub api_settings: ApiSettings,
     pub chain_info: Arc<ChainInfoService>,
     pub indexed_chains: Arc<IndexedChains>,
+    pub clusters: Arc<ClusterRegistry>,
 }
 
 impl InterchainStatisticsServiceImpl {
@@ -33,229 +38,169 @@ impl InterchainStatisticsServiceImpl {
         api_settings: ApiSettings,
         chain_info: Arc<ChainInfoService>,
         indexed_chains: Arc<IndexedChains>,
+        clusters: Arc<ClusterRegistry>,
     ) -> Self {
         Self {
             stats,
             api_settings,
             chain_info,
             indexed_chains,
+            clusters,
         }
     }
 }
 
 #[async_trait::async_trait]
 impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
-    /// DEPRECATED — `GET /api/v1/stats/common`. Returns zero counters without
-    /// touching the database.
-    ///
-    /// Every call used to run an unbounded `COUNT(*)` over
-    /// `crosschain_messages` plus a joined `COUNT(*)` over
-    /// `crosschain_transfers`, uncached, inside one transaction — the heaviest
-    /// query this service served, growing with the canonical tables. The same
-    /// numbers now come from the stats service in interchain mode, which
-    /// precomputes them.
-    ///
-    /// The request is still parsed and its filters still validated, so a
-    /// malformed query keeps failing with `400` instead of silently returning
-    /// zeros. `timestamp` is still echoed back, because it is the request's own
-    /// value, not a computed statistic.
-    ///
-    /// TODO(next API iteration): remove this handler, the RPC and its messages
-    /// in `stats.proto`, the HTTP rule in `api_config_http.yaml`, and
-    /// `InterchainDatabase::get_total_counters` with its tests.
-    async fn get_common_statistics(
-        &self,
-        request: Request<GetCommonStatisticsRequest>,
-    ) -> Result<Response<GetCommonStatisticsResponse>, Status> {
-        let inner = request.into_inner();
-        let timestamp = inner
-            .timestamp
-            .and_then(|ts| DateTime::<Utc>::from_timestamp(ts as i64, 0).map(|dt| dt.naive_utc()))
-            .unwrap_or_else(|| Utc::now().naive_utc());
-
-        // Parsed and validated, then dropped: a malformed query keeps failing
-        // with `400` rather than silently answering zeros, and no query runs.
-        build_chain_bridge_filter(
-            inner.home_chain_id,
-            inner.counterparty_chain_ids.as_deref(),
-            inner.src_chain_ids.as_deref(),
-            inner.dst_chain_ids.as_deref(),
-            inner.bridge_ids.as_deref(),
-            self.indexed_chains.as_ref(),
-            inner.include_unindexed_chains.unwrap_or(false),
-        )?;
-
-        let response = GetCommonStatisticsResponse {
-            timestamp: super::utils::db_datetime_to_string(timestamp),
-            total_messages: 0,
-            total_transfers: 0,
-        };
-        Ok(Response::new(response))
-    }
-
-    /// DEPRECATED — `GET /api/v1/stats/daily`. Returns zero counters without
-    /// touching the database. Same reasoning, same removal plan as
-    /// [`Self::get_common_statistics`]; `date` is still the day of the
-    /// request's own `timestamp`.
-    ///
-    /// TODO(next API iteration): remove this handler, the RPC and its messages
-    /// in `stats.proto`, the HTTP rule in `api_config_http.yaml`, and
-    /// `InterchainDatabase::get_daily_counters` with its tests.
-    async fn get_daily_statistics(
-        &self,
-        request: Request<GetDailyStatisticsRequest>,
-    ) -> Result<Response<GetDailyStatisticsResponse>, Status> {
-        let inner = request.into_inner();
-        let timestamp = inner
-            .timestamp
-            .and_then(|ts| DateTime::<Utc>::from_timestamp(ts as i64, 0).map(|dt| dt.naive_utc()))
-            .unwrap_or_else(|| Utc::now().naive_utc());
-
-        // Parsed and validated, then dropped: a malformed query keeps failing
-        // with `400` rather than silently answering zeros, and no query runs.
-        build_chain_bridge_filter(
-            inner.home_chain_id,
-            inner.counterparty_chain_ids.as_deref(),
-            inner.src_chain_ids.as_deref(),
-            inner.dst_chain_ids.as_deref(),
-            inner.bridge_ids.as_deref(),
-            self.indexed_chains.as_ref(),
-            inner.include_unindexed_chains.unwrap_or(false),
-        )?;
-
-        let response = GetDailyStatisticsResponse {
-            date: timestamp.date().to_string(),
-            daily_messages: 0,
-            daily_transfers: 0,
-        };
-        Ok(Response::new(response))
-    }
-
     async fn get_bridged_tokens(
         &self,
         request: Request<GetBridgedTokensRequest>,
     ) -> Result<Response<GetBridgedTokensResponse>, Status> {
-        let inner = request.into_inner();
-        let include_unindexed = inner.include_unindexed_chains.unwrap_or(false);
+        let (inner, input_pagination, page_size, last_page) =
+            list_page_params!(self, request, BridgedTokensPaginationLogic)?;
         let sort = BridgedTokensSortField::from_proto_sort(inner.sort);
         let order = StatsSortOrder::from_proto_order(inner.order)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
-
-        let input_pagination = if self.api_settings.use_pagination_token {
-            if let Some(t) = inner.page_token.as_deref() {
-                let m = BridgedTokensPaginationLogic::from_token(t)
-                    .map_err(|e| Status::invalid_argument(e.to_string()))?;
-                Some(m)
-            } else {
-                None
-            }
-        } else {
-            let lp = BridgedTokensListPagination {
-                page_token: inner.page_token.clone(),
-                direction: inner.direction.clone(),
-                asset_id: inner.asset_id,
-                name: inner.name.clone(),
-                name_blank: inner.name_blank,
-                count: inner.count,
-            };
-            BridgedTokensPaginationLogic::try_from_list_pagination_proto(&lp)
-                .map_err(|e| Status::invalid_argument(e.to_string()))?
-        };
-
-        let page_size = inner
-            .page_size
-            .unwrap_or(self.api_settings.default_page_size)
-            .clamp(1, self.api_settings.max_page_size) as usize;
-        let last_page = inner.last_page.unwrap_or(false);
         let q = normalize_stats_q(inner.q.as_deref());
-        let counterparty = non_empty(parse_chain_ids_csv(
+        let counterparty_chain_ids = non_empty(parse_chain_ids_csv(
             "counterparty_chain_ids",
             inner.counterparty_chain_ids.as_deref(),
         )?);
-        let bridges = non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?);
-
-        // Per-bridge restriction for the edges aggregate, and the union over all
-        // bridges for the per-asset token list (`stats_asset_tokens` has no
-        // `bridge_id`, so it can only use the union). Both derive from
-        // `IndexedChains` so they can never disagree with `/stats/chains` or
-        // `GetChains`. `None` (opt-in, or an `AllIndexed` configuration) applies
-        // no restriction.
-        let pairs = (!include_unindexed)
-            .then(|| self.indexed_chains.configured_pairs(bridges.as_deref()))
-            .flatten();
-        let union = (!include_unindexed)
-            .then(|| self.indexed_chains.configured_union())
-            .flatten();
-
-        let (rows, pagination) = self
-            .stats
-            .get_bridged_tokens_for_chain(
-                inner.chain_id,
-                counterparty.as_deref(),
-                bridges.as_deref(),
-                pairs.as_deref(),
-                union.as_deref(),
-                StatsListQuery {
-                    sort,
-                    order,
-                    page_size,
-                    last_page,
-                    input_pagination,
-                    q,
-                },
-            )
-            .await
-            .map_err(map_stats_error)?;
-
-        let use_tok = self.api_settings.use_pagination_token;
-        let response = GetBridgedTokensResponse {
-            items: rows.into_iter().map(bridged_row_to_proto).collect(),
-            next_page_params: pagination
-                .next_marker
-                .map(|m| m.to_list_pagination_proto(use_tok)),
-            prev_page_params: pagination
-                .prev_marker
-                .map(|m| m.to_list_pagination_proto(use_tok)),
+        let bridge_ids = non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?);
+        let scope = ChainStatsScope {
+            chain_id: inner.chain_id,
+            counterparty_chain_ids,
+            bridge_ids,
+            include_unindexed_chains: inner.include_unindexed_chains.unwrap_or(false),
         };
-        Ok(Response::new(response))
+        self.bridged_tokens_page(
+            &scope,
+            StatsListQuery {
+                sort,
+                order,
+                page_size,
+                last_page,
+                input_pagination,
+                q,
+            },
+        )
+        .await
+        .map(Response::new)
     }
 
     async fn get_chains_stats(
         &self,
         request: Request<GetChainsStatsRequest>,
     ) -> Result<Response<GetChainsStatsResponse>, Status> {
-        let inner = request.into_inner();
-        let include_unindexed = inner.include_unindexed_chains.unwrap_or(false);
+        let (inner, input_pagination, page_size, last_page) =
+            list_page_params!(self, request, StatsChainsPaginationLogic)?;
         let chain_ids = parse_chain_ids_csv("chain_ids", inner.chain_ids.as_deref())?;
         let sort = StatsChainsSortField::from_proto_sort(inner.sort);
         let order = StatsSortOrder::from_proto_order(inner.order)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
-
-        let input_pagination = if self.api_settings.use_pagination_token {
-            if let Some(t) = inner.page_token.as_deref() {
-                let m = StatsChainsPaginationLogic::from_token(t)
-                    .map_err(|e| Status::invalid_argument(e.to_string()))?;
-                Some(m)
-            } else {
-                None
-            }
-        } else {
-            let lp = StatsChainsListPagination {
-                page_token: inner.page_token.clone(),
-                direction: inner.direction.clone(),
-                count: inner.count,
-                chain_id: inner.chain_id,
-            };
-            StatsChainsPaginationLogic::try_from_list_pagination_proto(&lp)
-                .map_err(|e| Status::invalid_argument(e.to_string()))?
-        };
-
-        let page_size = inner
-            .page_size
-            .unwrap_or(self.api_settings.default_page_size)
-            .clamp(1, self.api_settings.max_page_size) as usize;
-        let last_page = inner.last_page.unwrap_or(false);
         let q = normalize_stats_q(inner.q.as_deref());
+        let scope = ReadScope::from_query(
+            None,
+            None,
+            inner.bridge_ids.as_deref(),
+            inner.include_unindexed_chains,
+        )?;
+        self.chains_stats_page(
+            &scope,
+            non_empty(chain_ids),
+            StatsListQuery {
+                sort,
+                order,
+                page_size,
+                last_page,
+                input_pagination,
+                q,
+            },
+        )
+        .await
+        .map(Response::new)
+    }
+
+    async fn get_sent_message_paths(
+        &self,
+        request: Request<GetMessagePathsRequest>,
+    ) -> Result<Response<GetMessagePathsResponse>, Status> {
+        let (scope, from_date, to_date) = message_paths_request(request.get_ref())?;
+        self.message_paths(&scope, from_date, to_date, true)
+            .await
+            .map(Response::new)
+    }
+
+    async fn get_received_message_paths(
+        &self,
+        request: Request<GetMessagePathsRequest>,
+    ) -> Result<Response<GetMessagePathsResponse>, Status> {
+        let (scope, from_date, to_date) = message_paths_request(request.get_ref())?;
+        self.message_paths(&scope, from_date, to_date, false)
+            .await
+            .map(Response::new)
+    }
+}
+
+impl InterchainStatisticsServiceImpl {
+    async fn bridged_tokens_page(
+        &self,
+        scope: &ChainStatsScope,
+        query: StatsListQuery<'_, BridgedTokensSortField, BridgedTokensPaginationLogic>,
+    ) -> Result<GetBridgedTokensResponse, Status> {
+        // Per-bridge restriction for the edges aggregate, and the union over all
+        // bridges for the per-asset token list (`stats_asset_tokens` has no
+        // `bridge_id`, so it can only use the union). Both derive from
+        // `IndexedChains` so they can never disagree with `/stats/chains` or
+        // `GetChains`. `None` (opt-in, or an `AllIndexed` configuration) applies
+        // no restriction.
+        let pairs = (!scope.include_unindexed_chains)
+            .then(|| {
+                self.indexed_chains
+                    .configured_pairs(scope.bridge_ids.as_deref())
+            })
+            .flatten();
+        let union = (!scope.include_unindexed_chains)
+            .then(|| self.indexed_chains.configured_union())
+            .flatten();
+
+        let (rows, pagination) = self
+            .stats
+            .get_bridged_tokens_for_chain(
+                scope.chain_id,
+                scope.counterparty_chain_ids.as_deref(),
+                scope.bridge_ids.as_deref(),
+                pairs.as_deref(),
+                union.as_deref(),
+                query,
+            )
+            .await
+            .map_err(map_stats_error)?;
+
+        let (next_page_params, prev_page_params) = page_params(pagination);
+        Ok(GetBridgedTokensResponse {
+            items: rows.into_iter().map(bridged_row_to_proto).collect(),
+            next_page_params,
+            prev_page_params,
+        })
+    }
+
+    async fn chains_stats_page(
+        &self,
+        scope: &ReadScope,
+        requested_rows: Option<Vec<i64>>,
+        query: StatsListQuery<'_, StatsChainsSortField, StatsChainsPaginationLogic>,
+    ) -> Result<GetChainsStatsResponse, Status> {
+        let rows = scope.select_rows(requested_rows);
+        // An empty selection means "no rows". `get_stats_chains` reads an empty
+        // `chain_ids` as "all chains", so it must never receive one from here.
+        if rows.as_ref().is_some_and(Vec::is_empty) {
+            return Ok(GetChainsStatsResponse {
+                items: Vec::new(),
+                next_page_params: None,
+                prev_page_params: None,
+            });
+        }
 
         // `None` = no restriction (opt-in, or an `AllIndexed` configuration).
         // Derived from the same `configured_union()` accessor `GetChains` uses,
@@ -263,11 +208,11 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         // global even under a bridge-filtered scope: `include_unindexed_chains`
         // means "no configured bridge indexes this chain", never "not indexed
         // by the selected bridges".
-        let indexed = (!include_unindexed)
+        let indexed = (!scope.include_unindexed_chains)
             .then(|| self.indexed_chains.configured_union())
             .flatten();
 
-        let mut bridge_ids = parse_bridge_ids_csv(inner.bridge_ids.as_deref())?;
+        let mut bridge_ids = scope.bridge_ids.clone().unwrap_or_default();
         bridge_ids.sort_unstable();
         bridge_ids.dedup();
         // Current configured chains of the selected bridges, for zero-row
@@ -278,7 +223,7 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         } else {
             self.indexed_chains.selected_configured_union(&bridge_ids)
         };
-        let scope = if bridge_ids.is_empty() {
+        let stats_scope = if bridge_ids.is_empty() {
             StatsChainsScope::Global
         } else {
             StatsChainsScope::Bridges {
@@ -290,85 +235,48 @@ impl InterchainStatisticsService for InterchainStatisticsServiceImpl {
         let (rows, pagination) = self
             .stats
             .get_stats_chains(
-                scope,
-                chain_ids,
+                stats_scope,
+                rows.unwrap_or_default(),
                 indexed.as_deref(),
-                StatsListQuery {
-                    sort,
-                    order,
-                    page_size,
-                    last_page,
-                    input_pagination,
-                    q,
-                },
+                query,
             )
             .await
             .map_err(map_stats_error)?;
 
-        let use_tok = self.api_settings.use_pagination_token;
-        let response = GetChainsStatsResponse {
+        let (next_page_params, prev_page_params) = page_params(pagination);
+        Ok(GetChainsStatsResponse {
             items: rows.into_iter().map(stats_chain_row_to_proto).collect(),
-            next_page_params: pagination
-                .next_marker
-                .map(|m| m.to_list_pagination_proto(use_tok)),
-            prev_page_params: pagination
-                .prev_marker
-                .map(|m| m.to_list_pagination_proto(use_tok)),
-        };
-        Ok(Response::new(response))
+            next_page_params,
+            prev_page_params,
+        })
     }
 
-    async fn get_sent_message_paths(
+    async fn message_paths(
         &self,
-        request: Request<GetMessagePathsRequest>,
-    ) -> Result<Response<GetMessagePathsResponse>, Status> {
-        self.message_paths_response(request.into_inner(), true)
-            .await
-    }
-
-    async fn get_received_message_paths(
-        &self,
-        request: Request<GetMessagePathsRequest>,
-    ) -> Result<Response<GetMessagePathsResponse>, Status> {
-        self.message_paths_response(request.into_inner(), false)
-            .await
-    }
-}
-
-impl InterchainStatisticsServiceImpl {
-    async fn message_paths_response(
-        &self,
-        inner: GetMessagePathsRequest,
+        scope: &ChainStatsScope,
+        from_date: Option<NaiveDate>,
+        to_date: Option<NaiveDate>,
         outgoing: bool,
-    ) -> Result<Response<GetMessagePathsResponse>, Status> {
-        let include_unindexed = inner.include_unindexed_chains.unwrap_or(false);
-        let from_date = parse_optional_utc_date(inner.from_date.as_deref())?;
-        let to_date = parse_optional_utc_date(inner.to_date.as_deref())?;
-        let counterparty_ids = parse_chain_ids_csv(
-            "counterparty_chain_ids",
-            inner.counterparty_chain_ids.as_deref(),
-        )?;
-        let counterparty = (!counterparty_ids.is_empty()).then_some(counterparty_ids.as_slice());
-        let bridge_ids = parse_bridge_ids_csv(inner.bridge_ids.as_deref())?;
-        let bridges = (!bridge_ids.is_empty()).then_some(bridge_ids.as_slice());
+    ) -> Result<GetMessagePathsResponse, Status> {
+        let counterparty = scope.counterparty_chain_ids.as_deref();
+        let bridges = scope.bridge_ids.as_deref();
 
         // Per-bridge pairs plus the union *over the in-scope bridges*, derived
         // from the same `pairs` value so the two restrictions can never
         // disagree about which bridges are in scope (coding-task-2b item 7).
-        let pairs = (!include_unindexed)
+        let pairs = (!scope.include_unindexed_chains)
             .then(|| self.indexed_chains.configured_pairs(bridges))
             .flatten();
-        let union = pairs.as_ref().map(|p| {
-            let mut ids: Vec<i64> = p.iter().flat_map(|(_, c)| c.iter().copied()).collect();
-            ids.sort_unstable();
-            ids.dedup();
-            ids
-        });
+        // Zero-row candidates: see `zero_row_chains` for the two meanings of an
+        // empty union.
+        let union = pairs
+            .as_deref()
+            .and_then(|p| zero_row_chains(p, bridges.is_some()));
 
         let rows = if outgoing {
             self.stats
                 .get_outgoing_message_paths(
-                    inner.chain_id,
+                    scope.chain_id,
                     from_date,
                     to_date,
                     counterparty,
@@ -380,7 +288,7 @@ impl InterchainStatisticsServiceImpl {
         } else {
             self.stats
                 .get_incoming_message_paths(
-                    inner.chain_id,
+                    scope.chain_id,
                     from_date,
                     to_date,
                     counterparty,
@@ -405,8 +313,41 @@ impl InterchainStatisticsServiceImpl {
             });
         }
 
-        Ok(Response::new(GetMessagePathsResponse { items }))
+        Ok(GetMessagePathsResponse { items })
     }
+}
+
+/// Chains that may get an invented zero row in message paths: the union of
+/// the in-scope bridges' configured chains. With a bridge selection, an empty
+/// union (unknown ids, or bridges without contracts) means no candidate, so
+/// no zero rows. Without one, it can only mean no bridge is configured at
+/// all, which restricts nothing (ADR-004 Decision 5): `None`.
+fn zero_row_chains(pairs: &[(i32, Vec<i64>)], has_bridge_selection: bool) -> Option<Vec<i64>> {
+    let mut ids: Vec<i64> = pairs.iter().flat_map(|(_, c)| c.iter().copied()).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    (has_bridge_selection || !ids.is_empty()).then_some(ids)
+}
+
+/// Parses a legacy `GetMessagePathsRequest` in the order the handlers have
+/// always used: dates, then `counterparty_chain_ids`, then `bridge_ids`.
+fn message_paths_request(
+    inner: &GetMessagePathsRequest,
+) -> Result<(ChainStatsScope, Option<NaiveDate>, Option<NaiveDate>), Status> {
+    let from_date = parse_optional_utc_date(inner.from_date.as_deref())?;
+    let to_date = parse_optional_utc_date(inner.to_date.as_deref())?;
+    let counterparty_chain_ids = non_empty(parse_chain_ids_csv(
+        "counterparty_chain_ids",
+        inner.counterparty_chain_ids.as_deref(),
+    )?);
+    let bridge_ids = non_empty(parse_bridge_ids_csv(inner.bridge_ids.as_deref())?);
+    let scope = ChainStatsScope {
+        chain_id: inner.chain_id,
+        counterparty_chain_ids,
+        bridge_ids,
+        include_unindexed_chains: inner.include_unindexed_chains.unwrap_or(false),
+    };
+    Ok((scope, from_date, to_date))
 }
 
 fn parse_optional_utc_date(s: Option<&str>) -> Result<Option<NaiveDate>, Status> {
@@ -487,7 +428,28 @@ fn map_stats_error(err: anyhow::Error) -> Status {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_stats_q, parse_optional_utc_date};
+    use super::{normalize_stats_q, parse_optional_utc_date, zero_row_chains};
+
+    #[test]
+    fn test_zero_row_chains_table() {
+        let pairs = vec![(1, vec![100, 1]), (2, vec![100, 250])];
+        let empty: Vec<(i32, Vec<i64>)> = vec![];
+        let contractless = vec![(5, vec![])];
+        let cases = [
+            (&pairs, false, Some(vec![1, 100, 250])),
+            (&empty, false, None),
+            (&empty, true, Some(vec![])),
+            (&contractless, true, Some(vec![])),
+            (&pairs, true, Some(vec![1, 100, 250])),
+        ];
+        for (pairs, selected, expected) in cases {
+            assert_eq!(
+                zero_row_chains(pairs, selected),
+                expected,
+                "pairs={pairs:?} selected={selected}"
+            );
+        }
+    }
 
     #[test]
     fn parse_optional_utc_date_accepts_valid_yyyy_mm_dd() {

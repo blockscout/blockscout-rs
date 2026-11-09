@@ -262,6 +262,20 @@
   - stats API contract definitions
 - `interchain-indexer-proto/proto/v1/status.proto`
   - status and indexing-progress API contract definitions
+- `interchain-indexer-server/src/services/scope.rs`
+  - `ReadScope`, `ChainStatsScope`, `ClusterRegistry` and the universe
+    derivations (`select_rows`, `chain_stats_scope`, and `narrow_bridges` for
+    a client `bridge_ids` selection inside a cluster)
+- `interchain-indexer-server/src/services/interchain_service/cluster.rs` and
+  `interchain-indexer-server/src/services/stats/cluster.rs`
+  - cluster entry points; each resolves the cluster first, then calls the same
+    core as the legacy entry point
+- `interchain-indexer-proto/proto/v1/cluster.proto`
+  - cluster API contract definitions (`InterchainClusterService`,
+    `InterchainClusterStatisticsService`)
+- `ClusterConfig` / `load_clusters_from_file` / `validate_clusters` in
+  `interchain-indexer-server/src/config.rs`
+  - cluster preset loading and startup validation
 - then continue to:
   - `interchain-indexer-logic/src/database.rs`
 

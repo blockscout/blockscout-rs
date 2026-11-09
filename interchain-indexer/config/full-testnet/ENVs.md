@@ -16,12 +16,23 @@ Every block below stands alone. Copy a chain block to add that chain, a bridge b
 | `1001` | AMB/Omnibridge | `amb` / `amb` | 4 |
 | `1003` | xDai Bridge (testnet) | `xdai` / `xdai` | 3 |
 
+| Cluster | `home_chain_id` | `bridge_ids` | Defined in |
+| --- | --- | --- | --- |
+| `sepolia` | `11155111` | all | `clusters.json` |
+| `chiado` | `10200` | `1001`, `1003` | `clusters.json` |
+| `multichain` | — | all | `clusters.json` |
+
 ## Config files
 
 ```bash
 INTERCHAIN_INDEXER__CHAINS_CONFIG=config/full-testnet/chains.json
 INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/full-testnet/bridges.json
+INTERCHAIN_INDEXER__CLUSTERS_CONFIG=config/full-testnet/clusters.json  # optional
 ```
+
+Without `INTERCHAIN_INDEXER__CLUSTERS_CONFIG` the `sepolia`, `chiado` and
+`multichain` clusters are not loaded; clusters then come only from the environment (see
+[Clusters](#clusters)).
 
 ## Chains
 
@@ -221,3 +232,50 @@ INTERCHAIN_INDEXER_BRIDGES__1003__CONTRACTS__10200__0xccA0Dc2A058884e62082312F09
 ```
 
 </details>
+
+## Clusters
+
+Read API presets served under `/api/v1/clusters/<id>/…`. Field reference and
+startup checks: [`config/ENVs.md`](../ENVs.md#clusters). No cluster below sets
+`include_unindexed_chains`, so all use its default, `false`.
+
+### Cluster `sepolia`
+
+One variable:
+
+```bash
+INTERCHAIN_INDEXER_CLUSTERS__SEPOLIA='{"home_chain_id":11155111}'
+```
+
+Field by field:
+
+```bash
+INTERCHAIN_INDEXER_CLUSTERS__SEPOLIA__HOME_CHAIN_ID=11155111
+```
+
+### Cluster `chiado`
+
+One variable:
+
+```bash
+INTERCHAIN_INDEXER_CLUSTERS__CHIADO='{"home_chain_id":10200,"bridge_ids":[1001,1003]}'
+```
+
+Field by field:
+
+```bash
+INTERCHAIN_INDEXER_CLUSTERS__CHIADO__HOME_CHAIN_ID=10200
+INTERCHAIN_INDEXER_CLUSTERS__CHIADO__BRIDGE_IDS='[1001,1003]'
+```
+
+### Cluster `multichain`
+
+No filters: every chain and every bridge, with unindexed chains hidden, the
+same as a legacy route called without filter params. The one exception is
+message details: the cluster route also hides a message its own bridge could not
+fully observe (404), while the legacy details route returns it. An empty
+cluster has no fields, so there is only the entry form:
+
+```bash
+INTERCHAIN_INDEXER_CLUSTERS__MULTICHAIN='{}'
+```

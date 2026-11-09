@@ -52,7 +52,7 @@ impl CachedView for AddrReverseNamesView {
         AND nc.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
         AND (
             domain.expiry_date is null
-            OR to_timestamp(domain.expiry_date) > now()
+            OR to_timestamp(LEAST(domain.expiry_date, 253402300799)) > now()
         )
         "#
         )
