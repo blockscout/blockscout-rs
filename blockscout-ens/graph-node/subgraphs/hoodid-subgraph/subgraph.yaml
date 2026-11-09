@@ -1,0 +1,44 @@
+specVersion: 0.0.9
+schema:
+  file: ./schema.graphql
+
+dataSources:
+  - kind: ethereum/contract
+    name: HoodNameRegistry
+    # Replace with the graph-node network name used for Robinhood/Hood Chain.
+    network: hood
+    source:
+      # TODO: replace after HoodID deployment.
+      address: "0xF7d6aB3592c29408F074f0590C7769c2ac324445"
+      abi: HoodNameRegistry
+      startBlock: 11010931
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Account
+        - Domain
+        - Resolver
+        - Registration
+        - Transfer
+        - NewResolver
+        - NameRegistered
+        - NameRenewed
+        - NameTransferred
+        - AddrChanged
+      abis:
+        - name: HoodNameRegistry
+          file: ./abis/HoodNameRegistry.json
+      eventHandlers:
+        - event: BensNameRegistered(indexed bytes32,indexed address,indexed address,string,string,uint64,string)
+          handler: handleBensNameRegistered
+        - event: BensNameRenewed(indexed bytes32,string,string,uint64)
+          handler: handleBensNameRenewed
+        - event: BensResolverUpdated(indexed bytes32,indexed address,string,string)
+          handler: handleBensResolverUpdated
+        - event: BensNameTransferred(indexed bytes32,indexed address,indexed address,string,string)
+          handler: handleBensNameTransferred
+        - event: BensPrimaryNameSet(indexed address,indexed bytes32,string,string)
+          handler: handleBensPrimaryNameSet
+      file: ./src/hood-name-registry.ts
