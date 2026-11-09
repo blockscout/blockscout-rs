@@ -179,7 +179,7 @@ where
 mod json {
     use super::Version;
     use primitive_types::H256;
-    use serde::{Deserialize, Serialize};
+    use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
     use serde_with::{serde_as, DisplayFromStr};
     use std::{fmt::Display, str::FromStr};
     use url::Url;
@@ -191,7 +191,45 @@ mod json {
     {
         #[serde(bound(deserialize = "Ver: FromStr, Ver::Err: Display"))]
         #[serde(bound(serialize = "Ver: Display"))]
+        #[serde(deserialize_with = "deserialize_builds")]
         pub builds: Vec<FileInfo<Ver>>,
+    }
+
+    /// Deserializes each build entry on its own and skips the ones that
+    /// fail, so a single malformed entry added upstream (e.g. a version
+    /// format we don't know yet) doesn't take down the whole list.
+    /// Fails only when the list has entries and none of them are valid.
+    fn deserialize_builds<'de, D, Ver>(deserializer: D) -> Result<Vec<FileInfo<Ver>>, D::Error>
+    where
+        D: Deserializer<'de>,
+        Ver: Version,
+        <Ver as FromStr>::Err: Display,
+    {
+        let entries = Vec::<serde_json::Value>::deserialize(deserializer)?;
+        let total = entries.len();
+        let mut first_error = None;
+        let builds: Vec<_> = entries
+            .into_iter()
+            .filter_map(|entry| match FileInfo::<Ver>::deserialize(&entry) {
+                Ok(info) => Some(info),
+                Err(err) => {
+                    let long_version = entry.get("longVersion").and_then(|v| v.as_str());
+                    tracing::warn!(
+                        long_version,
+                        error = %err,
+                        "skipping invalid compiler list entry"
+                    );
+                    first_error.get_or_insert(err);
+                    None
+                }
+            })
+            .collect();
+        if let Some(err) = first_error.filter(|_| builds.is_empty()) {
+            return Err(D::Error::custom(format!(
+                "none of the {total} compiler list entries are valid; first error: {err}"
+            )));
+        }
+        Ok(builds)
     }
 
     #[serde_as]
@@ -437,6 +475,98 @@ mod tests {
             }
         ]
     }"#;
+
+    /// Mirrors the solc-bin vyper.list.json entries that broke fetcher
+    /// initialization: pre-releases written both with and without a dash.
+    const VYPER_PRERELEASE_LIST_JSON: &str = r#"{
+        "builds": [
+            {
+                "path": "https://github.com/vyperlang/vyper/releases/download/v0.5.0b1/vyper.0.5.0b1%2Bcommit.577d2534.linux",
+                "version": "0.5.0",
+                "build": "commit.577d2534",
+                "longVersion": "0.5.0b1+commit.577d2534",
+                "sha256": "16c0e2030cab259bf483a9d05fe137df78a8696af8962c7281c59460d3f97de4"
+            },
+            {
+                "path": "https://github.com/vyperlang/vyper/releases/download/v0.4.3rc1/vyper.0.4.3rc1%2Bcommit.a35bfd5e.linux",
+                "version": "0.4.3",
+                "prerelease": "rc1",
+                "build": "commit.a35bfd5e",
+                "longVersion": "0.4.3-rc1+commit.a35bfd5e",
+                "sha256": "70e79ce24340417d3ca0e1836e479832666bced48b3abd19513a107c95c4cf03"
+            }
+        ]
+    }"#;
+
+    #[test]
+    fn parse_vyper_prerelease_versions() {
+        let list_json_file: json::List<DetailedVersion> =
+            serde_json::from_str(VYPER_PRERELEASE_LIST_JSON).unwrap();
+        let fetcher = ListVersionFetcher::new(Url::from_str(DEFAULT_DOWNLOAD_PREFIX).unwrap());
+        let versions = fetcher.parse_json_versions(list_json_file).unwrap();
+        assert_has_version(
+            &versions,
+            "v0.5.0-b1+commit.577d2534",
+            "https://github.com/vyperlang/vyper/releases/download/v0.5.0b1/vyper.0.5.0b1%2Bcommit.577d2534.linux",
+        );
+        assert_has_version(
+            &versions,
+            "0.4.3rc1+commit.a35bfd5e",
+            "https://github.com/vyperlang/vyper/releases/download/v0.4.3rc1/vyper.0.4.3rc1%2Bcommit.a35bfd5e.linux",
+        );
+    }
+
+    #[test]
+    fn invalid_list_entries_are_skipped() {
+        let list = r#"{
+            "builds": [
+                {
+                    "path": "solc-linux-amd64-v0.4.15+commit.8b45bddb",
+                    "longVersion": "0.4.15+commit.8b45bddb",
+                    "sha256": "0xc71ac6c28bf3b1a425e77e97f5df67a80da3e4c047261875206561c0a110c0cb"
+                },
+                {
+                    "path": "unparseable-version",
+                    "longVersion": "0.5.0dev7+commit.577d2534",
+                    "sha256": "16c0e2030cab259bf483a9d05fe137df78a8696af8962c7281c59460d3f97de4"
+                },
+                {
+                    "path": "missing-sha256",
+                    "longVersion": "0.4.16+commit.d7661dd9"
+                },
+                "not even an object"
+            ]
+        }"#;
+        let list: json::List<DetailedVersion> = serde_json::from_str(list).unwrap();
+        let versions: Vec<_> = list
+            .builds
+            .iter()
+            .map(|b| b.long_version.to_string())
+            .collect();
+        assert_eq!(versions, vec!["v0.4.15+commit.8b45bddb"]);
+    }
+
+    #[test]
+    fn list_with_only_invalid_entries_fails() {
+        let list = r#"{
+            "builds": [
+                {
+                    "path": "unparseable-version",
+                    "longVersion": "0.5.0dev7+commit.577d2534",
+                    "sha256": "16c0e2030cab259bf483a9d05fe137df78a8696af8962c7281c59460d3f97de4"
+                }
+            ]
+        }"#;
+        let err = serde_json::from_str::<json::List<DetailedVersion>>(list).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("none of the 1 compiler list entries are valid"),
+            "{err}"
+        );
+
+        let empty: json::List<DetailedVersion> = serde_json::from_str(r#"{"builds": []}"#).unwrap();
+        assert!(empty.builds.is_empty());
+    }
 
     /// That's will try to download the Vyper compiler from the list.json file.
     /// It check's:

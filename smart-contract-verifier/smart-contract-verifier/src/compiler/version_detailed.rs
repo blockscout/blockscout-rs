@@ -32,10 +32,14 @@ impl FromStr for ReleaseVersion {
     /// `v0.8.9+commit.e5eed63a`
     /// `0.8.4+commit.dea1b9ec`
     /// `0.8.4-beta.16+commit.dea1d`
+    ///
+    /// Python-style (PEP 440) pre-releases without a dash, as Vyper names
+    /// them, are accepted too and normalized to the dashed form, so that
+    /// `0.5.0b1+commit.577d2534` equals `0.5.0-b1+commit.577d2534`.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (_prefix, major, minor, patch, pre, commit) = sscanf::scanf!(
             s,
-            "{:/v?/}{}.{}.{}{:/(?:-.*)?/}+commit.{:/[A-Fa-f0-9]+/}",
+            "{:/v?/}{}.{}.{}{:/(?:-.*|(?:a|b|rc)[0-9]+)?/}+commit.{:/[A-Fa-f0-9]+/}",
             String,
             u64,
             u64,
@@ -221,6 +225,36 @@ mod tests {
         check_parsing::<ReleaseVersion>("v3.2.1+commit.89abcdef");
         check_parsing::<ReleaseVersion>("0.1.0-beta.16+commit.5e4a94a");
         check_parsing::<ReleaseVersion>("0.1.0-beta.17+commit.0671b7b");
+        check_parsing::<ReleaseVersion>("0.4.1-b4+commit.4507d2a6");
+        check_parsing::<ReleaseVersion>("0.4.3-rc1+commit.a35bfd5e");
+    }
+
+    #[test]
+    fn parse_pep440_prerelease() {
+        for (input, pre, commit) in [
+            ("0.5.0a1+commit.7d73c468", "a1", "7d73c468"),
+            ("0.5.0b1+commit.577d2534", "b1", "577d2534"),
+            ("v0.4.3rc1+commit.a35bfd5e", "rc1", "a35bfd5e"),
+            ("0.3.10rc12+commit.42817806", "rc12", "42817806"),
+        ] {
+            let ver = check_parsing::<ReleaseVersion>(input);
+            assert_eq!(ver.version.pre, Prerelease::new(pre).unwrap(), "{input}");
+            assert_eq!(ver.commit, commit, "{input}");
+        }
+
+        // Dashed and undashed spellings name the same compiler.
+        assert_eq!(
+            check_parsing::<DetailedVersion>("0.5.0b1+commit.577d2534"),
+            check_parsing::<DetailedVersion>("0.5.0-b1+commit.577d2534"),
+        );
+    }
+
+    #[test]
+    fn parse_invalid_pep440_prerelease() {
+        ReleaseVersion::from_str("0.5.0b+commit.577d2534").unwrap_err();
+        ReleaseVersion::from_str("0.5.0c1+commit.577d2534").unwrap_err();
+        ReleaseVersion::from_str("0.5.0b1x+commit.577d2534").unwrap_err();
+        ReleaseVersion::from_str("0.5.0.b1+commit.577d2534").unwrap_err();
     }
 
     #[test]
@@ -303,6 +337,7 @@ mod tests {
                 "0.1.0-beta.16+commit.5e4a94a",
                 "v0.1.0-beta.16+commit.5e4a94a",
             ),
+            ("0.5.0b1+commit.577d2534", "v0.5.0-b1+commit.577d2534"),
         ] {
             let version = check_parsing::<DetailedVersion>(initial);
             assert_eq!(version.to_string(), expected,);
@@ -365,6 +400,21 @@ mod tests {
             // test will show unreadable error (it will print a lot of large structures)
             assert_eq!(shuffled, sorted, "seed={}, i={}", seed, i);
         }
+    }
+
+    #[test]
+    fn sort_vyper_prerelease_versions() {
+        test_shuffle_and_sort(
+            vec![
+                "v0.4.3-rc1+commit.a35bfd5e",
+                "v0.4.3+commit.bff19ea2",
+                "v0.5.0-a1+commit.7d73c468",
+                "v0.5.0-a2+commit.0cc5c4ad",
+                "v0.5.0-a3+commit.994bfdec",
+                "v0.5.0-b1+commit.577d2534",
+            ],
+            50,
+        );
     }
 
     #[test]
