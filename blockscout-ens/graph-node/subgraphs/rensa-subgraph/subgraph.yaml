@@ -1,0 +1,46 @@
+specVersion: 0.0.5
+description: Rensa V2 event adapter for Blockscout BENS (Robinhood Chain Mainnet, chain ID 4663)
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: RNSRegistryV2
+    network: robinhood
+    source:
+      address: "0x08ed77b2ec313c7ad5ce23747b07d483071485f9"
+      abi: RNSRegistryV2
+      startBlock: 70985779
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      file: ./src/mapping.ts
+      entities:
+        - Account
+        - Domain
+        - Registration
+        - Resolver
+        - PrimaryNameRecord
+        - TokenIdToDomain
+      abis:
+        - name: RNSRegistryV2
+          file: ./abis/RNSRegistryV2.json
+      eventHandlers:
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleTransfer
+        - event: NameRegistered(indexed bytes32,string,indexed address,uint64,uint256)
+          handler: handleNameRegistered
+        - event: NameRenewed(indexed bytes32,string,uint64,uint256)
+          handler: handleNameRenewed
+        - event: NameExpiredFinalized(indexed bytes32,string,indexed address,uint64)
+          handler: handleNameExpiredFinalized
+        - event: NameTransferred(indexed bytes32,string,indexed address,indexed address)
+          handler: handleNameTransferred
+        - event: ResolvedAddressUpdated(indexed bytes32,string,indexed address)
+          handler: handleResolvedAddressUpdated
+        - event: PrimaryNameSet(indexed address,indexed bytes32,string)
+          handler: handlePrimaryNameSet
+        - event: PrimaryNameCleared(indexed address,indexed bytes32,string)
+          handler: handlePrimaryNameCleared
+        - event: FreeNameClaimed(indexed bytes32,string,indexed address,uint64,uint256)
+          handler: handleFreeNameClaimed
