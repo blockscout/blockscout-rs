@@ -1,0 +1,8 @@
+set shell := ["bash", "-c"]
+
+prepare:
+    yarn codegen
+    yarn build
+
+test:
+    yarn test
