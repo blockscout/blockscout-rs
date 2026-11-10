@@ -139,6 +139,11 @@
       "subgraph_path": "../subgraphs/infinityname-subgraph",
       "subgraph_name": "infinityname-soneium-subgraph",
       "network": "soneium-mainnet"
+    },
+    "etn": {
+      "subgraph_path": "../subgraphs/etn-subgraph",
+      "subgraph_name": "etn-subgraph",
+      "network": "electroneum-mainnet"
     }
   }
 }
