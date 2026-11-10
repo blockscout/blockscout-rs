@@ -121,12 +121,16 @@ export function syncClassicPrimaryName(node: string): void {
 
 // Records the ENSIP-19 default reverse registrar name claimed for an address
 // and rebuilds its primary-name record.
+//
+// Anyone can set an arbitrary string as their default name, and Postgres
+// rejects NUL bytes in text columns, so storing such a name would halt
+// indexing. It could never forward-resolve anyway, so it clears the claim.
 export function setDefaultPrimaryNameRecord(
   address: string,
   name: string,
 ): void {
   let claim = loadOrCreateClaim(address);
-  claim.defaultName = name;
+  claim.defaultName = name.indexOf("\u0000") == -1 ? name : null;
   claim.save();
   refreshPrimaryNameRecord(address);
 }

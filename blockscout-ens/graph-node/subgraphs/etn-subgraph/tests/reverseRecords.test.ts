@@ -258,6 +258,16 @@ test("default reverse registrar name is used and re-verified on addr changes", (
   assert.notInStore(RECORD, WALLET);
 });
 
+test("a default reverse registrar name with a NUL byte is not stored", () => {
+  handleAddrChanged(addrChanged(NAME_NODE, WALLET));
+  handleNameForAddrChanged(nameForAddrChanged(WALLET, NAME));
+  assert.fieldEquals(RECORD, WALLET, "domain_name", NAME);
+
+  handleNameForAddrChanged(nameForAddrChanged(WALLET, NAME + "\u0000"));
+  assert.fieldEquals(CLAIM, WALLET, "defaultName", "null");
+  assert.notInStore(RECORD, WALLET);
+});
+
 test("classic name takes precedence over the default reverse registrar name", () => {
   handleAddrChanged(addrChanged(NAME_NODE, WALLET));
   handleAddrChanged(addrChanged(OTHER_NAME_NODE, WALLET));
