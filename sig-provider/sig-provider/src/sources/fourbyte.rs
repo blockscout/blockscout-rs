@@ -68,21 +68,25 @@ impl Source {
             .collect())
     }
 
-    #[async_recursion::async_recursion]
     async fn try_make_request(&self, path: &str, n: usize) -> anyhow::Result<json::GetResponse> {
-        let response = self
-            .client
-            .get(self.host.join(path).unwrap())
-            .send()
-            .await
-            .map_err(anyhow::Error::msg)?;
-        match response.status() {
-            reqwest::StatusCode::OK => Ok(response.json::<json::GetResponse>().await?),
-            reqwest::StatusCode::BAD_GATEWAY if n > 0 => self.try_make_request(path, n - 1).await,
-            status => Err(anyhow::anyhow!(
-                "invalid status code got as a result: {}",
-                status
-            )),
+        let mut retries_left = n;
+        loop {
+            let response = self
+                .client
+                .get(self.host.join(path).unwrap())
+                .send()
+                .await
+                .map_err(anyhow::Error::msg)?;
+            match response.status() {
+                reqwest::StatusCode::OK => return Ok(response.json::<json::GetResponse>().await?),
+                reqwest::StatusCode::BAD_GATEWAY if retries_left > 0 => retries_left -= 1,
+                status => {
+                    return Err(anyhow::anyhow!(
+                        "invalid status code got as a result: {}",
+                        status
+                    ))
+                }
+            }
         }
     }
 }
