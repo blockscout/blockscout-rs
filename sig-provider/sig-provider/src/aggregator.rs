@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
-use crate::{sources::CompleteSignatureSource, SignatureSource};
+use crate::{
+    sources::{CompleteFunction, CompleteSignatureSource},
+    SignatureSource,
+};
 use anyhow::Context;
 use ethabi::{Event, EventParam, ParamType, RawLog, Token};
 use itertools::Itertools;
 use sig_provider_proto::blockscout::sig_provider::v1::{Abi, Argument};
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 pub struct SourceAggregator {
     sources: Vec<Arc<dyn SignatureSource + Send + Sync + 'static>>,
@@ -98,6 +104,47 @@ impl SourceAggregator {
                     inputs,
                 })
             })
+            .collect())
+    }
+
+    /// Looks up functions by their selectors, without decoding any input data.
+    /// The result contains one list of abis per selector, in the order of `selectors`.
+    pub async fn batch_get_function_abi(
+        &self,
+        selectors: &[[u8; 4]],
+    ) -> Result<Vec<Vec<Abi>>, anyhow::Error> {
+        // Each distinct selector is requested from the sources only once
+        let mut indexes = HashMap::new();
+        let mut hex_sigs = Vec::new();
+        for selector in selectors {
+            indexes.entry(*selector).or_insert_with(|| {
+                hex_sigs.push(hex::encode(selector));
+                hex_sigs.len() - 1
+            });
+        }
+
+        let complete_responses = proxy!(
+            &self.complete_sources,
+            &hex_sigs,
+            batch_get_function_signatures
+        );
+        let responses = proxy!(&self.sources, &hex_sigs, batch_get_function_signatures);
+
+        let unique_abis: Vec<Vec<Abi>> = (0..hex_sigs.len())
+            .map(|index| {
+                let complete_functions = complete_responses
+                    .iter()
+                    .flat_map(|response| response.get(index).cloned().unwrap_or_default());
+                let signatures = responses
+                    .iter()
+                    .flat_map(|response| response.get(index).cloned().unwrap_or_default());
+                process_function_signatures(complete_functions, signatures)
+            })
+            .collect();
+
+        Ok(selectors
+            .iter()
+            .map(|selector| unique_abis[indexes[selector]].clone())
             .collect())
     }
 
@@ -213,6 +260,96 @@ async fn process_event_signatures(
         })
         .collect();
     Ok(result)
+}
+
+/// Converts signatures into abis. Complete functions come first, as they know
+/// the names of the arguments, and each canonical signature is returned only once.
+fn process_function_signatures(
+    complete_functions: impl IntoIterator<Item = CompleteFunction>,
+    signatures: impl IntoIterator<Item = String>,
+) -> Vec<Abi> {
+    let mut seen_signatures = HashSet::new();
+    let mut abis = Vec::new();
+
+    for function in complete_functions {
+        if seen_signatures.insert(function.signature) {
+            abis.push(Abi {
+                name: function.name,
+                inputs: function.inputs.iter().map(argument_from_param).collect(),
+            });
+        }
+    }
+
+    for signature in signatures {
+        let Some((name, args)) = parse_signature(&signature) else {
+            continue;
+        };
+        let canonical = format!("{name}({})", args.iter().map(canonical_type).join(","));
+        if seen_signatures.insert(canonical) {
+            abis.push(Abi {
+                name: name.into(),
+                inputs: arguments_from_types("arg", &args),
+            });
+        }
+    }
+
+    abis
+}
+
+fn argument_from_param(param: &alloy_json_abi::Param) -> Argument {
+    Argument {
+        name: param.name.clone(),
+        r#type: param.ty.clone(),
+        components: param.components.iter().map(argument_from_param).collect(),
+        indexed: None,
+        value: Default::default(),
+    }
+}
+
+fn arguments_from_types(pref: &str, args: &[ParamType]) -> Vec<Argument> {
+    args.iter()
+        .enumerate()
+        .map(|(index, arg)| {
+            let name = format!("{pref}{index}");
+            let (r#type, components) = json_abi_type(arg);
+            Argument {
+                components: arguments_from_types(&format!("{name}_"), components),
+                name,
+                r#type,
+                indexed: None,
+                value: Default::default(),
+            }
+        })
+        .collect()
+}
+
+/// Returns the type the way it is written in json abi (tuples are spelled as
+/// `tuple`, with their fields listed separately) together with those fields.
+fn json_abi_type(param: &ParamType) -> (String, &[ParamType]) {
+    match param {
+        ParamType::Tuple(components) => ("tuple".into(), components),
+        ParamType::Array(inner) => {
+            let (inner, components) = json_abi_type(inner);
+            (format!("{inner}[]"), components)
+        }
+        ParamType::FixedArray(inner, size) => {
+            let (inner, components) = json_abi_type(inner);
+            (format!("{inner}[{size}]"), components)
+        }
+        param => (param.to_string(), &[]),
+    }
+}
+
+/// Returns the type the way it is written in a function signature.
+fn canonical_type(param: &ParamType) -> String {
+    match param {
+        ParamType::Tuple(components) => {
+            format!("({})", components.iter().map(canonical_type).join(","))
+        }
+        ParamType::Array(inner) => format!("{}[]", canonical_type(inner)),
+        ParamType::FixedArray(inner, size) => format!("{}[{size}]", canonical_type(inner)),
+        param => param.to_string(),
+    }
 }
 
 fn parse_signature(sig: &str) -> Option<(&str, Vec<ParamType>)> {
@@ -846,5 +983,110 @@ mod tests {
 
         let event = agg.get_event_abi(input).await.unwrap();
         assert_eq!(abi, event[0]);
+    }
+
+    #[tokio::test]
+    async fn batch_function_by_selectors() {
+        use crate::sources::{CompleteFunction, MockCompleteSignatureSource};
+
+        let transfer = "a9059cbb".to_string();
+        let unknown = "deadbeef".to_string();
+        let tuple = "0d7ac21c".to_string();
+        // each distinct selector must be requested only once
+        let expected_hex = vec![transfer.clone(), unknown.clone(), tuple.clone()];
+
+        let mut complete_source = MockCompleteSignatureSource::new();
+        {
+            let expected_hex = expected_hex.clone();
+            complete_source
+                .expect_batch_get_function_signatures()
+                .withf(move |hex| hex == expected_hex.as_slice())
+                .times(1)
+                .returning(|_| {
+                    Ok(vec![
+                        vec![CompleteFunction {
+                            name: "transfer".into(),
+                            signature: "transfer(address,uint256)".into(),
+                            inputs: serde_json::from_str(
+                                r#"[{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}]"#,
+                            )
+                            .unwrap(),
+                        }],
+                        vec![],
+                        vec![],
+                    ])
+                });
+        }
+
+        let mut source = MockSignatureSource::new();
+        source
+            .expect_batch_get_function_signatures()
+            .withf(move |hex| hex == expected_hex.as_slice())
+            .times(1)
+            .returning(|_| {
+                Ok(vec![
+                    // the first one duplicates the complete function, the second one is a collision
+                    vec![
+                        "transfer(address,uint256)".into(),
+                        "many_msg_babbage(bytes1)".into(),
+                    ],
+                    vec![],
+                    vec![
+                        "f((address,uint256[])[],bytes32[2])".into(),
+                        "invalid".into(),
+                    ],
+                ])
+            });
+
+        let agg = SourceAggregator::new(vec![Arc::new(source)], vec![Arc::new(complete_source)]);
+
+        let selectors = [
+            [0xa9, 0x05, 0x9c, 0xbb],
+            [0xde, 0xad, 0xbe, 0xef],
+            [0x0d, 0x7a, 0xc2, 0x1c],
+            [0xa9, 0x05, 0x9c, 0xbb],
+        ];
+        let result = agg.batch_get_function_abi(&selectors).await.unwrap();
+
+        let arg = |name: &str, ty: &str, components: Vec<Argument>| Argument {
+            name: name.into(),
+            r#type: ty.into(),
+            components,
+            indexed: None,
+            value: "".into(),
+        };
+        let transfer_abis = vec![
+            Abi {
+                name: "transfer".into(),
+                inputs: vec![
+                    arg("to", "address", vec![]),
+                    arg("amount", "uint256", vec![]),
+                ],
+            },
+            Abi {
+                name: "many_msg_babbage".into(),
+                inputs: vec![arg("arg0", "bytes1", vec![])],
+            },
+        ];
+        let expected = vec![
+            transfer_abis.clone(),
+            vec![],
+            vec![Abi {
+                name: "f".into(),
+                inputs: vec![
+                    arg(
+                        "arg0",
+                        "tuple[]",
+                        vec![
+                            arg("arg0_0", "address", vec![]),
+                            arg("arg0_1", "uint256[]", vec![]),
+                        ],
+                    ),
+                    arg("arg1", "bytes32[2]", vec![]),
+                ],
+            }],
+            transfer_abis,
+        ];
+        assert_eq!(expected, result);
     }
 }

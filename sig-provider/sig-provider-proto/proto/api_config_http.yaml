@@ -18,5 +18,10 @@ http:
       body: "*"
       response_body: "responses"
 
+    - selector: blockscout.sig_provider.v1.AbiService.BatchGetFunctionAbis
+      post: /api/v1/abi/functions:batch-get
+      body: "*"
+      response_body: "responses"
+
     - selector: blockscout.sig_provider.v1.Health.Check
       get: /health

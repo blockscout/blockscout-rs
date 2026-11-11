@@ -14,6 +14,10 @@ service AbiService {
   rpc GetEventAbi(GetEventAbiRequest) returns (GetEventAbiResponse) {}
 
   rpc BatchGetEventAbis(BatchGetEventAbisRequest) returns (BatchGetEventAbisResponse) {}
+
+  // Looks up functions by their 4-byte selectors. As there is no input data
+  // to decode, `value` of the returned arguments is always empty.
+  rpc BatchGetFunctionAbis(BatchGetFunctionAbisRequest) returns (BatchGetFunctionAbisResponse) {}
 }
 
 message CreateSignaturesRequest { string abi = 1; }
@@ -53,4 +57,16 @@ message BatchGetEventAbisRequest {
 
 message BatchGetEventAbisResponse {
   repeated GetEventAbiResponse responses = 1;
+}
+
+message BatchGetFunctionAbisRequest {
+  // 4-byte function selectors as hex strings, ex. `0xa9059cbb`.
+  // A maximum of 100 selectors can be requested in a batch.
+  repeated string selectors = 1;
+}
+
+message BatchGetFunctionAbisResponse {
+  // Contains one response per requested selector, in the order of the request.
+  // A response contains several abis if the selector matches several signatures.
+  repeated GetFunctionAbiResponse responses = 1;
 }

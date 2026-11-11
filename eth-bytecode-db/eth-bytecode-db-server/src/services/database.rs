@@ -3,14 +3,20 @@
 use crate::{
     proto::{
         database_server::Database, AllianceStats, BatchSearchEventDescriptionsRequest,
-        BatchSearchEventDescriptionsResponse, BytecodeType, GetAllianceStatsRequest,
+        BatchSearchEventDescriptionsResponse, BatchSearchFunctionDescriptionsRequest,
+        BatchSearchFunctionDescriptionsResponse, BytecodeType, GetAllianceStatsRequest,
         SearchAllSourcesRequest, SearchAllSourcesResponse, SearchAllianceSourcesRequest,
-        SearchEventDescriptionsRequest, SearchEventDescriptionsResponse, SearchSourcesRequest,
-        SearchSourcesResponse, SearchSourcifySourcesRequest, Source, VerifyResponse,
+        SearchEventDescriptionsRequest, SearchEventDescriptionsResponse,
+        SearchFunctionDescriptionsRequest, SearchFunctionDescriptionsResponse,
+        SearchSourcesRequest, SearchSourcesResponse, SearchSourcifySourcesRequest, Source,
+        VerifyResponse,
     },
-    types::{BytecodeTypeWrapper, EventDescriptionWrapper, SourceWrapper, VerifyResponseWrapper},
+    types::{
+        BytecodeTypeWrapper, EventDescriptionWrapper, FunctionDescriptionWrapper, SourceWrapper,
+        VerifyResponseWrapper,
+    },
 };
-use alloy_primitives::B256;
+use alloy_primitives::{Selector, B256};
 use amplify::Wrapper;
 use async_trait::async_trait;
 use blockscout_display_bytes::Bytes as DisplayBytes;
@@ -266,6 +272,57 @@ impl Database for DatabaseService {
         }))
     }
 
+    async fn search_function_descriptions(
+        &self,
+        request: tonic::Request<SearchFunctionDescriptionsRequest>,
+    ) -> Result<tonic::Response<SearchFunctionDescriptionsResponse>, tonic::Status> {
+        let request = request.into_inner();
+        let selector = parse_function_selector(&request.selector)?;
+
+        let function_descriptions =
+            search::find_function_descriptions(self.client.db_client.as_ref(), vec![selector])
+                .await
+                .map_err(|err| tonic::Status::internal(err.to_string()))?
+                .pop()
+                .unwrap_or_default();
+
+        Ok(tonic::Response::new(
+            function_descriptions_to_search_response(function_descriptions),
+        ))
+    }
+
+    async fn batch_search_function_descriptions(
+        &self,
+        request: tonic::Request<BatchSearchFunctionDescriptionsRequest>,
+    ) -> Result<tonic::Response<BatchSearchFunctionDescriptionsResponse>, tonic::Status> {
+        const BATCH_LIMIT: usize = 100;
+
+        let request = request.into_inner();
+        if request.selectors.len() > BATCH_LIMIT {
+            return Err(tonic::Status::invalid_argument(format!(
+                "too many selectors: {} requested, at most {BATCH_LIMIT} allowed",
+                request.selectors.len()
+            )));
+        }
+        let selectors = request
+            .selectors
+            .iter()
+            .map(|selector| parse_function_selector(selector))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let responses: Vec<_> =
+            search::find_function_descriptions(self.client.db_client.as_ref(), selectors)
+                .await
+                .map_err(|err| tonic::Status::internal(err.to_string()))?
+                .into_iter()
+                .map(function_descriptions_to_search_response)
+                .collect();
+
+        Ok(tonic::Response::new(
+            BatchSearchFunctionDescriptionsResponse { responses },
+        ))
+    }
+
     async fn get_alliance_stats(
         &self,
         _request: tonic::Request<GetAllianceStatsRequest>,
@@ -431,4 +488,22 @@ fn event_descriptions_to_search_response(
             .map(|event| EventDescriptionWrapper::from(event).into())
             .collect(),
     }
+}
+
+fn function_descriptions_to_search_response(
+    function_descriptions: Vec<eth_bytecode_db::search::FunctionDescription>,
+) -> SearchFunctionDescriptionsResponse {
+    SearchFunctionDescriptionsResponse {
+        function_descriptions: function_descriptions
+            .into_iter()
+            .map(|function| FunctionDescriptionWrapper::from(function).into())
+            .collect(),
+    }
+}
+
+// todo: remove once https://github.com/hyperium/tonic/pull/2282 is released
+#[allow(clippy::result_large_err)]
+fn parse_function_selector(selector: &str) -> Result<Selector, tonic::Status> {
+    Selector::from_str(selector)
+        .map_err(|err| tonic::Status::invalid_argument(format!("selector is not valid: {err}")))
 }

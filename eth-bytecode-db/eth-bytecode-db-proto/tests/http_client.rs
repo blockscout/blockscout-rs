@@ -65,6 +65,18 @@ async fn database_service() {
             proto::BatchSearchEventDescriptionsRequest,
             proto::BatchSearchEventDescriptionsResponse
         );
+        set_expectation!(
+            mock_service,
+            expect_search_function_descriptions,
+            proto::SearchFunctionDescriptionsRequest,
+            proto::SearchFunctionDescriptionsResponse
+        );
+        set_expectation!(
+            mock_service,
+            expect_batch_search_function_descriptions,
+            proto::BatchSearchFunctionDescriptionsRequest,
+            proto::BatchSearchFunctionDescriptionsResponse
+        );
 
         mock_service
     };
@@ -104,6 +116,18 @@ async fn database_service() {
     assert!(database_client::batch_search_event_descriptions(
         &client,
         proto::BatchSearchEventDescriptionsRequest::default()
+    )
+    .await
+    .is_ok());
+    assert!(database_client::search_function_descriptions(
+        &client,
+        proto::SearchFunctionDescriptionsRequest::default()
+    )
+    .await
+    .is_ok());
+    assert!(database_client::batch_search_function_descriptions(
+        &client,
+        proto::BatchSearchFunctionDescriptionsRequest::default()
     )
     .await
     .is_ok());
