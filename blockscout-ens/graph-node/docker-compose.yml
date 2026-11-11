@@ -31,6 +31,8 @@ services:
     image: ipfs/kubo:v0.14.0
     ports:
       - '5001:5001'
+    environment:
+      - IPFS_PROFILE=server
     volumes:
       - ./data/ipfs:/data/ipfs
   postgres:
