@@ -305,6 +305,12 @@
         "use_protocols": [
           "taiko"
         ]
+      },
+      "52014": {
+        "blockscout": {
+          "url": "https://blockexplorer.electroneum.com"
+        },
+        "use_protocols": ["etn"]
       }
     },
     "protocols": {
@@ -807,6 +813,24 @@
           "description": "InfinityName is a decentralized naming service giving users permanent ownership of their domain names",
           "icon_url": "https://infinityname.com/img/InfinityName-logo.png",
           "docs_url": "https://infinityname.com/documentation"
+        }
+      },
+      "etn": {
+        "tld_list": ["etn"],
+        "network_id": 52014,
+        "subgraph_name": "etn-subgraph",
+        "address_resolve_technique": "primary_name_record",
+        "specific": {
+          "type": "ens_like",
+          "registry_contract": "0x6f311f2212593165988dff84977e24c1005dbb85",
+          "native_token_contract": "0x5207496c1248bbd2aeedd57bde44dd9d4e9f1b59"
+        },
+        "meta": {
+          "short_name": "electroneum",
+          "title": "Electroneum",
+          "description": "Electroneum Name Service is a blockchain naming system on Electroneum mainnet. It connects human-readable .etn domains with on-chain addresses.",
+          "icon_url": "https://blockscout-icons.s3.us-east-1.amazonaws.com/electroneum-logo-symbol.svg",
+          "docs_url": "https://electroneum.com/"
         }
       }
     }
