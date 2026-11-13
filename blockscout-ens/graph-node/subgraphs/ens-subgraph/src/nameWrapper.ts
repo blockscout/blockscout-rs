@@ -1,5 +1,5 @@
 // Import types and APIs from graph-ts
-import { BigInt, ByteArray, Bytes, store } from "@graphprotocol/graph-ts";
+import { Address, BigInt, ByteArray, Bytes, store } from "@graphprotocol/graph-ts";
 // Import event types from the registry contract ABI
 import {
   ApprovalForAll as ApprovalForAllEvent,
@@ -37,6 +37,14 @@ import {
   ETH_NODE,
   uint256ToByteArray,
 } from "./utils";
+import { isSink } from "./ensv2Constants";
+import { isGovernedByEnsv2 } from "./legacyGovernance";
+
+// NameWrapper events never write the holder of a name live in ENSv2, and a
+// wrapper token handed to a sink never becomes its wrapped owner
+// (legacyGovernance.ts); both cases only write the history rows. FusesSet and
+// ExpiryExtended need no guard: they only act on an existing WrappedDomain,
+// which a governed name no longer has.
 
 export function decodeName(buf: Bytes): Array<string> | null {
   let offset = 0;
@@ -92,6 +100,22 @@ export function handleNameWrapped(event: NameWrappedEvent): void {
   let blockNumber = event.block.number.toI32();
   let transactionID = event.transaction.hash;
   let owner = createOrLoadAccount(event.params.owner);
+
+  let nameWrappedEvent = new NameWrapped(createLegacyEventID(event));
+  nameWrappedEvent.domain = node.toHexString();
+  nameWrappedEvent.name = name;
+  nameWrappedEvent.fuses = fuses;
+  nameWrappedEvent.expiryDate = expiryDate;
+  nameWrappedEvent.owner = owner.id;
+  nameWrappedEvent.blockNumber = blockNumber;
+  nameWrappedEvent.transactionID = transactionID;
+
+  if (isGovernedByEnsv2(node, event.block.number)) {
+    // The event row references the Domain, which a governed name has.
+    nameWrappedEvent.save();
+    return;
+  }
+
   let domain = createOrLoadDomain(node);
 
   if (!domain.labelName && label) {
@@ -115,14 +139,6 @@ export function handleNameWrapped(event: NameWrappedEvent): void {
   wrappedDomain.name = name;
   wrappedDomain.save();
 
-  let nameWrappedEvent = new NameWrapped(createLegacyEventID(event));
-  nameWrappedEvent.domain = domain.id;
-  nameWrappedEvent.name = name;
-  nameWrappedEvent.fuses = fuses;
-  nameWrappedEvent.expiryDate = expiryDate;
-  nameWrappedEvent.owner = owner.id;
-  nameWrappedEvent.blockNumber = blockNumber;
-  nameWrappedEvent.transactionID = transactionID;
   nameWrappedEvent.save();
 }
 
@@ -131,6 +147,16 @@ export function handleNameUnwrapped(event: NameUnwrappedEvent): void {
   let blockNumber = event.block.number.toI32();
   let transactionID = event.transaction.hash;
   let owner = createOrLoadAccount(event.params.owner);
+
+  if (isGovernedByEnsv2(node, event.block.number)) {
+    let unwrappedEvent = new NameUnwrapped(createLegacyEventID(event));
+    unwrappedEvent.domain = node.toHexString();
+    unwrappedEvent.owner = owner.id;
+    unwrappedEvent.blockNumber = blockNumber;
+    unwrappedEvent.transactionID = transactionID;
+    unwrappedEvent.save();
+    return;
+  }
 
   let domain = createOrLoadDomain(node);
   domain.wrappedOwner = null;
@@ -228,6 +254,10 @@ function makeWrappedTransfer(
   // 32-byte big-endian value, no reimplementation.
   const namehash = Bytes.fromByteArray(uint256ToByteArray(node));
   const domain = createOrLoadDomain(namehash);
+  if (isSink(Address.fromBytes(to)) || isGovernedByEnsv2(namehash, BigInt.fromI32(blockNumber))) {
+    saveWrappedTransfer(eventID, domain.id, blockNumber, transactionID, _to.id);
+    return;
+  }
   let wrappedDomain = WrappedDomain.load(namehash.toHexString());
   // A transfer (not a mint from 0x0) of a token whose name carries no wrapped
   // state moves a detached ERC-1155 token: the name left the NameWrapper

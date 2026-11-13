@@ -27,7 +27,7 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 ## ENSv2
 
 `ens-subgraph` is [ensdomains/ens-subgraph](https://github.com/ensdomains/ens-subgraph)
-`v2.1.3` with Blockscout's extension fields (see its
+`v2.2.0` with Blockscout's extension fields (see its
 [README](./graph-node/subgraphs/ens-subgraph/README.md)). It indexes ENSv1 and
 ENSv2 on mainnet and Sepolia and projects ENSv2 names into the legacy `Domain`
 tables, so BENS keeps working on the same schema. Specific to it:
@@ -46,28 +46,22 @@ tables, so BENS keeps working on the same schema. Specific to it:
   (`expiry_date: null`, "never expires"). Earlier 2.x releases wrote
   `8640000000000` (year 275760), which Rust's `chrono` cannot represent;
   the same guard covers a schema indexed by them.
-- **Migrated names.** The ENSv1 -> ENSv2 migration retires the v1 state: an
-  unwrapped or unlocked name's registry owner moves to the Graveyard (or a
-  migration controller), a locked name stays wrapped under the NameWrapper
-  with its ERC-1155 token parked in the Graveyard. The subgraph keeps
-  `Domain.owner` as that v1 registry owner. With
-  `specific.ensv2.migration_contracts` listing those contracts, BENS reports
-  the name's holder as `owner` instead (the wrapped owner, the registrant, or
-  the owner of the ENSv2 name slot for migrated subnames), lists the name
-  under its holder's address and not under the migration contract's, and
-  does not link the retired NameWrapper token. A locked migration is
-  recognised through the ENSv2 slot's `migratedFromV1` flag, since its
-  registry owner is not a migration contract. The raw registry owner stays
+- **Migrated and retired names.** The ENSv1 -> ENSv2 migration and the
+  Graveyard's retirement of expired names (`Graveyard.clear()`, about 950,000
+  names on mainnet) hand ENSv1 state to the Graveyard or a migration
+  controller. Since v2.2.0 the subgraph never stores one of those contracts
+  as `Domain.owner`, `registrant` or `wrappedOwner`: a migrated or natively
+  registered ENSv2 name carries its ENSv2 holder, a retired `.eth` name keeps
+  its lapsed holder and expiry (it reads as expired), and a retired subname
+  is deleted with the ENSv1 convention (owner = zero address). BENS needs no
+  rule of its own for this. With `specific.ensv2.migration_contracts`
+  configured, BENS still substitutes the holder when `owner` is a migration
+  contract or the name is a migrated wrapped name, lists names under their
+  holder rather than a migration contract, and does not link the retired
+  NameWrapper token; this guards schemas indexed by subgraph versions
+  before v2.2.0 and is a no-op on v2.2.0. The raw registry owner stays
   available to the code as `registry_owner`. Protocols without `ensv2` are
   unaffected and never touch the ENSv2 tables.
-- **Expired names retired by the Graveyard.** `Graveyard.clear()` (run on
-  mainnet by ENS Labs since late October 2026, ~946,000 names in its first
-  sweep) re-registers an expired ENSv1 `.eth` name to the Graveyard with a
-  near-`2^64` expiry. Subgraph v2.1.2+ keeps the lapsed `registrant` and
-  `expiry_date` for such a name instead, so BENS reports it as expired with
-  its last registrant as `owner`, exactly as before the sweep; only
-  `Domain.owner` moves to the Graveyard, which the migration-contract
-  handling above already covers.
 
 ```json
 "specific": {

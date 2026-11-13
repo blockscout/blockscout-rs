@@ -557,7 +557,7 @@ test("late-link + Domain projection combined: pre-existing child registration st
   assert.assertTrue(!hasParent);
 });
 
-test("migration correction survives unrelated cross-file activity in the same store", () => {
+test("migration projection survives unrelated cross-file activity in the same store", () => {
   dataSourceMock.setNetwork("sepolia");
 
   let ethBaseNamehash = setupEthNamespace(3);
@@ -603,15 +603,10 @@ test("migration correction survives unrelated cross-file activity in the same st
     )
   );
 
-  assert.fieldEquals(
-    "Domain",
-    domainId,
-    "wrappedOwner",
-    Address.fromString(OWNER).toHexString()
-  );
-  assert.fieldEquals("Domain", domainId, "registrant", GRAVEYARD);
-  assert.fieldEquals("Domain", domainId, "owner", GRAVEYARD);
-  assert.fieldEquals("Registration", registrationId, "registrant", GRAVEYARD);
+  assert.notInStore("WrappedDomain", domainId);
+  assert.fieldEquals("Domain", domainId, "registrant", Address.fromString(OWNER).toHexString());
+  assert.fieldEquals("Domain", domainId, "owner", Address.fromString(OWNER).toHexString());
+  assert.fieldEquals("Registration", registrationId, "registrant", Address.fromString(OWNER).toHexString());
 
   // Unrelated activity from three other mapping files, fired into the same
   // store after the migration correction landed.
@@ -637,13 +632,8 @@ test("migration correction survives unrelated cross-file activity in the same st
   );
 
   // Migration-corrected fields are exactly as before the unrelated activity.
-  assert.fieldEquals(
-    "Domain",
-    domainId,
-    "wrappedOwner",
-    Address.fromString(OWNER).toHexString()
-  );
-  assert.fieldEquals("Domain", domainId, "registrant", GRAVEYARD);
-  assert.fieldEquals("Domain", domainId, "owner", GRAVEYARD);
-  assert.fieldEquals("Registration", registrationId, "registrant", GRAVEYARD);
+  assert.notInStore("WrappedDomain", domainId);
+  assert.fieldEquals("Domain", domainId, "registrant", Address.fromString(OWNER).toHexString());
+  assert.fieldEquals("Domain", domainId, "owner", Address.fromString(OWNER).toHexString());
+  assert.fieldEquals("Registration", registrationId, "registrant", Address.fromString(OWNER).toHexString());
 });

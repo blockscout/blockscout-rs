@@ -40,6 +40,7 @@ import {
 import {
   adjustParentSubdomainCount,
   projectPathToDomain,
+  retireProjectedDomain,
 } from "./ensv2Domain";
 import {
   ENSv2NamePath,
@@ -87,7 +88,9 @@ export function clearProjectedDomainResolversForSlot(
       continue;
     }
     let path = ENSv2NamePath.load(pathIndex.path);
-    if (path != null && path.domain != null) {
+    // Skip paths another registry's slot has since taken over (see
+    // materializePathsForSlot).
+    if (path != null && path.domain != null && path.slot.equals(slot.id)) {
       clearDomainResolver(path.namehash);
     }
   }
@@ -245,7 +248,7 @@ function deactivateNamespacesFromParentSlot(
       continue;
     }
     let parentPath = ENSv2NamePath.load(pathIndex.path);
-    if (parentPath == null) {
+    if (parentPath == null || !parentPath.slot.equals(parentSlot.id)) {
       continue;
     }
     let namespace = ENSv2Namespace.load(
@@ -278,16 +281,27 @@ function deactivatePathsForNamespace(
       continue;
     }
     let path = ENSv2NamePath.load(pathIndex.path);
-    if (path == null) {
+    // A path another registry's namespace has since taken over is no longer
+    // this namespace's to deactivate.
+    if (path == null || !path.namespace.equals(namespace.id)) {
       continue;
     }
-    if (path.active) {
+    let wasActive = path.active;
+    if (wasActive) {
       adjustParentSubdomainCount(path, -1);
     }
     path.active = false;
     path.updatedAt = block.timestamp;
     path.updatedAtBlock = block.number;
     path.save();
+    // The name is no longer reachable through ENSv2: its compatibility row
+    // must stop reading as live.
+    if (wasActive) {
+      let slot = ENSv2NameSlot.load(path.slot);
+      if (slot != null) {
+        retireProjectedDomain(path, slot, block.timestamp);
+      }
+    }
   }
 }
 
@@ -408,17 +422,30 @@ export function materializePathsForSlot(
 
     let pathId = pathNamehash(namespace.baseNamehash, slot.labelhash);
     let path = ENSv2NamePath.load(pathId);
+    let pathReactivated = false;
     if (path == null) {
       path = materializeNamePath(pathId, namespace, slot, event);
       appendSlotPathIndex(slot, path);
       appendNamespacePathIndex(namespace, path);
     } else {
+      // A path id is the namehash, so a parent that switched its subregistry
+      // to a new registry hands the same path to the new registry's slot.
+      // Rebind it, or the new slot's transfers, renewals and unregistration
+      // never reach the projected Domain.
+      if (!path.slot.equals(slot.id)) {
+        path.slot = slot.id;
+        path.registry = slot.registry;
+        path.namespace = namespace.id;
+        appendSlotPathIndex(slot, path);
+        appendNamespacePathIndex(namespace, path);
+      }
       // Reactivation of a path deactivated by LabelUnregistered or a
-      // namespace unlink: the projected Domain row (if any) is reused below
-      // with isNewDomain=false, so the parent's subdomainCount is restored
-      // here, before projection, on the inactive -> active transition only.
+      // namespace unlink: the projected Domain row (if any) is reused below,
+      // so the parent's subdomainCount is restored here, before projection,
+      // on the inactive -> active transition only.
       if (!path.active) {
         adjustParentSubdomainCount(path, 1);
+        pathReactivated = true;
       }
       path.active = true;
       path.updatedAt = event.block.timestamp;
@@ -431,7 +458,7 @@ export function materializePathsForSlot(
     // (for example, <eth> and <reverse>), so projecting them would overwrite
     // the existing ENSv1 Domain rows for those nodes.
     if (registry.kind != "ROOT") {
-      projectPathToDomain(path, slot, event, isV1Migration);
+      projectPathToDomain(path, slot, event, isV1Migration, pathReactivated);
     }
   }
 }
@@ -523,7 +550,7 @@ export function handleResolverUpdated(event: ResolverUpdated): void {
     if (path == null) {
       continue;
     }
-    if (!path.active) {
+    if (!path.active || !path.slot.equals(slot.id)) {
       continue;
     }
     if (path.domain == null) {

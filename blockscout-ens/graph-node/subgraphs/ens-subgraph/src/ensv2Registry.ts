@@ -21,21 +21,19 @@ import {
 import {
   checkValidLabel,
   concat,
-  clampLegacyExpiry,
   createEventID,
   createOrLoadAccount,
   i32ToBytes,
 } from "./utils";
 import {
   getEthRegistryAddress,
-  getV2GracePeriod,
   isMigrationController,
 } from "./ensv2Constants";
 import {
-  correctMigratedLegacyOwner,
-  getEthDomainId,
   adjustParentSubdomainCount,
-  updateEthDomainOwner,
+  retireProjectedDomain,
+  syncProjectedExpiry,
+  syncProjectedHolder,
 } from "./ensv2Domain";
 import { processEACRolesChanged } from "./ensv2Roles";
 import { syncRegistrationFromSlot } from "./ensv2Registrar";
@@ -282,19 +280,25 @@ export function handleLabelUnregistered(event: LabelUnregistered): void {
       continue;
     }
     let path = ENSv2NamePath.load(pathIndex.path);
-    if (path == null) {
+    // A path another registry's slot has since taken over is not this
+    // slot's to deactivate.
+    if (path == null || !path.slot.equals(slot.id)) {
       continue;
     }
     // Mirror ENSv1: a child stops counting towards its parent's
     // subdomainCount when it is no longer live. Transition-guarded so a
     // repeated unregister cannot double-decrement.
-    if (path.active) {
+    let wasActive = path.active;
+    if (wasActive) {
       adjustParentSubdomainCount(path, -1);
     }
     path.active = false;
     path.updatedAt = event.block.timestamp;
     path.updatedAtBlock = event.block.number;
     path.save();
+    if (wasActive) {
+      retireProjectedDomain(path, slot, event.block.timestamp);
+    }
   }
 
   let history = new ENSv2LabelUnregistered(createEventID(event));
@@ -327,37 +331,20 @@ export function handleExpiryUpdated(event: ExpiryUpdated): void {
   slot.updatedAtBlock = event.block.number;
   slot.save();
 
-  // Legacy .eth sync — REGISTERED only. ExpiryUpdated also fires for
-  // premigrated RESERVED names renewed through ETHRenewerV1, whose renew()
-  // already calls the authoritative v1 BaseRegistrarImplementation.renew()
-  // in the same transaction; the existing v1 handlers correctly maintain
-  // Registration/Domain for those from that event. Syncing the v2 side too
-  // for a RESERVED slot would race with, and could overwrite, the correct
-  // v1-derived values — so do nothing there.
-  let isEth = slot.registry.equals(getEthRegistryAddress());
-  if (isEth && slot.status == "REGISTERED") {
-    // ExpiryUpdated is the canonical registry-side renewal signal. Keep the
-    // registrar-enriched native row in sync even when no ETHRegistrar
-    // NameRenewed event accompanies it (for example, a direct registry
-    // renewal). The REGISTERED guard preserves the RESERVED/v1 behavior
-    // described above.
-    syncRegistrationFromSlot(slot);
-
-    let registration = Registration.load(slot.labelhash.toHexString());
-    if (registration != null) {
-      registration.expiryDate = clampLegacyExpiry(event.params.newExpiry);
-      registration.save();
+  // Legacy sync — REGISTERED only, in every registry. ExpiryUpdated also
+  // fires for premigrated RESERVED names renewed through ETHRenewerV1, whose
+  // renew() already calls the authoritative v1
+  // BaseRegistrarImplementation.renew() in the same transaction; the ENSv1
+  // handlers maintain Registration/Domain for those, so a RESERVED slot is
+  // left alone.
+  if (slot.status == "REGISTERED") {
+    if (slot.registry.equals(getEthRegistryAddress())) {
+      // Keep the registrar-enriched native row in sync even when no
+      // ETHRegistrar NameRenewed event accompanies it (for example, a direct
+      // registry renewal).
+      syncRegistrationFromSlot(slot);
     }
-    let domainId = getEthDomainId(slot);
-    if (domainId) {
-      let domain = Domain.load(domainId);
-      if (domain != null) {
-        domain.expiryDate = clampLegacyExpiry(
-          event.params.newExpiry.plus(getV2GracePeriod())
-        );
-        domain.save();
-      }
-    }
+    syncProjectedExpiry(slot, event.params.newExpiry);
   }
 
   let history = new ENSv2LabelRenewed(createEventID(event));
@@ -606,26 +593,13 @@ function makeTokenTransfer(
       slot.updatedAtBlock = block.number;
       slot.save();
 
-      // Keep legacy ownership fields synchronized for both migrated and
-      // native ENSv2 .eth names.
-      let isEth = slot.registry.equals(getEthRegistryAddress());
-      // A regeneration burn is an implementation detail and must not zero
-      // legacy ownership. Lifecycle burns retain the legacy zero-address
-      // convention required by the existing non-null schema.
-      if (isEth && (!isBurn || isLifecycleBurn)) {
-        let domainId = getEthDomainId(slot);
-        if (domainId) {
-          if (slot.migratedFromV1) {
-            correctMigratedLegacyOwner(
-              domainId,
-              slot.labelhash.toHexString(),
-              toAccount.id,
-              true
-            );
-          } else {
-            updateEthDomainOwner(domainId, slot.labelhash.toHexString(), toAccount.id);
-          }
-        }
+      // Keep the projected legacy rows on the current holder, migrated or
+      // native, in every registry. Burns write nothing: a regeneration burn
+      // is an implementation detail, an expiry burn precedes the
+      // re-registration that re-projects the name, and an unregister burn
+      // follows the LabelUnregistered that already retired it.
+      if (!isBurn) {
+        syncProjectedHolder(slot, toAccount.id);
       }
     }
 

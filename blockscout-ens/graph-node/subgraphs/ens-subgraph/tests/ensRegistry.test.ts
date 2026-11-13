@@ -23,7 +23,7 @@ import {
   Transfer,
 } from "../src/types/ENSRegistry/EnsRegistry";
 import { Domain, WrappedDomain } from "../src/types/schema";
-import { concat, createLegacyEventID, ROOT_NODE } from "../src/utils";
+import { concat, createLegacyEventID, ETH_NODE, ROOT_NODE } from "../src/utils";
 
 const ETH_NAMEHASH =
   "0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae";
@@ -579,13 +579,22 @@ test("handleTransfer to the NameWrapper itself (wrap in progress) leaves wrapped
   );
 });
 
-test("handleTransfer to the ENSv2 Graveyard (migration voiding step) keeps the wrapped state for correctMigratedLegacyOwner", () => {
+test("handleTransfer of a .eth name to the ENSv2 Graveyard (migration or retirement voiding step) stores no sink and keeps the wrapped state", () => {
   dataSourceMock.setNetwork("mainnet");
   seedWrappedDomain(NODE_WRAPPED_GRAVEYARD);
+  let domain = Domain.load(NODE_WRAPPED_GRAVEYARD)!;
+  domain.parent = ETH_NODE.toHexString();
+  domain.save();
 
   handleTransfer(createTransferEvent(NODE_WRAPPED_GRAVEYARD, MAINNET_GRAVEYARD));
 
-  assert.fieldEquals("Domain", NODE_WRAPPED_GRAVEYARD, "owner", MAINNET_GRAVEYARD);
+  // The registry owner stays the NameWrapper: a sink is never stored.
+  assert.fieldEquals(
+    "Domain",
+    NODE_WRAPPED_GRAVEYARD,
+    "owner",
+    Address.fromString(NAME_WRAPPER).toHexString()
+  );
   assert.fieldEquals(
     "Domain",
     NODE_WRAPPED_GRAVEYARD,
@@ -598,6 +607,31 @@ test("handleTransfer to the ENSv2 Graveyard (migration voiding step) keeps the w
     "owner",
     Address.fromString(WRAPPED_HOLDER).toHexString()
   );
+  // The history row still records the Graveyard.
+  assert.entityCount("Transfer", 1);
+});
+
+test("handleTransfer of a subname to the ENSv2 Graveyard deletes it with the ENSv1 convention", () => {
+  dataSourceMock.setNetwork("mainnet");
+  seedWrappedDomain(NODE_WRAPPED_GRAVEYARD);
+  let domain = Domain.load(NODE_WRAPPED_GRAVEYARD)!;
+  domain.parent =
+    "0x4444444444444444444444444444444444444444444444444444444444444444";
+  domain.expiryDate = BigInt.fromI32(2000000000);
+  domain.save();
+
+  handleTransfer(createTransferEvent(NODE_WRAPPED_GRAVEYARD, MAINNET_GRAVEYARD));
+
+  assert.fieldEquals(
+    "Domain",
+    NODE_WRAPPED_GRAVEYARD,
+    "owner",
+    "0x0000000000000000000000000000000000000000"
+  );
+  assert.notInStore("WrappedDomain", NODE_WRAPPED_GRAVEYARD);
+  domain = Domain.load(NODE_WRAPPED_GRAVEYARD)!;
+  assert.assertTrue(!domain.wrappedOwner);
+  assert.assertTrue(!domain.expiryDate);
 });
 
 test("handleNewOwner from the parent (setSubnodeOwner on a non-emancipated wrapped subname) clears the wrapped state", () => {

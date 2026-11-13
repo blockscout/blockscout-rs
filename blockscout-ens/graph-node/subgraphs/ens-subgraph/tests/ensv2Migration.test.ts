@@ -371,7 +371,7 @@ afterEach(() => {
   clearStore();
 });
 
-test("unwrapped migration corrects registrant only, never owner, and a post-migration transfer keeps tracking it", () => {
+test("unwrapped migration hands owner and registrant to the ENSv2 owner, keeps the v1 registration date, and a post-migration transfer keeps tracking it", () => {
   dataSourceMock.setNetwork("sepolia");
   let ethBaseNamehash = setupEthNamespace();
   let aliasBaseNamehash = addEthRegistryAliasNamespace(
@@ -432,8 +432,10 @@ test("unwrapped migration corrects registrant only, never owner, and a post-migr
     "registrant",
     Address.fromString(OWNER).toHexString()
   );
-  // domain.owner is never touched by migration correction.
-  assert.fieldEquals("Domain", domainId, "owner", GRAVEYARD);
+  // v2.2.0: the Graveyard never stays a holder; the ENSv2 owner controls it.
+  assert.fieldEquals("Domain", domainId, "owner", Address.fromString(OWNER).toHexString());
+  // A migration continues the ENSv1 registration.
+  assert.fieldEquals("Registration", registrationId, "registrationDate", "0");
   assert.fieldEquals("Registration", registrationId, "domain", domainId);
   assert.fieldEquals(
     "Domain",
@@ -462,7 +464,7 @@ test("unwrapped migration corrects registrant only, never owner, and a post-migr
     "registrant",
     Address.fromString(OWNER_2).toHexString()
   );
-  assert.fieldEquals("Domain", domainId, "owner", GRAVEYARD);
+  assert.fieldEquals("Domain", domainId, "owner", Address.fromString(OWNER_2).toHexString());
 });
 
 test("migration-flagged registration with no pre-existing v1 Domain row sets owner instead of crashing", () => {
@@ -549,11 +551,11 @@ test("wrapped-unlocked migration (no WrappedDomain) behaves the same as unwrappe
     "registrant",
     Address.fromString(OWNER).toHexString()
   );
-  assert.fieldEquals("Domain", domainId, "owner", GRAVEYARD);
+  assert.fieldEquals("Domain", domainId, "owner", Address.fromString(OWNER).toHexString());
   assert.notInStore("WrappedDomain", domainId);
 });
 
-test("wrapped-locked migration corrects wrappedOwner only, leaves registrant/owner untouched, and a post-migration transfer keeps tracking it", () => {
+test("wrapped-locked migration retires the v1 wrapper state, hands owner and registrant to the ENSv2 owner, and a post-migration transfer keeps tracking it", () => {
   dataSourceMock.setNetwork("sepolia");
   let ethBaseNamehash = setupEthNamespace();
   let aliasBaseNamehash = addEthRegistryAliasNamespace(
@@ -603,22 +605,12 @@ test("wrapped-locked migration corrects wrappedOwner only, leaves registrant/own
     )
   );
 
-  assert.fieldEquals(
-    "WrappedDomain",
-    domainId,
-    "owner",
-    Address.fromString(OWNER).toHexString()
-  );
-  assert.fieldEquals(
-    "Domain",
-    domainId,
-    "wrappedOwner",
-    Address.fromString(OWNER).toHexString()
-  );
-  // registrant/owner are untouched by the wrapped branch.
-  assert.fieldEquals("Domain", domainId, "registrant", GRAVEYARD);
-  assert.fieldEquals("Registration", registrationId, "registrant", GRAVEYARD);
-  assert.fieldEquals("Domain", domainId, "owner", GRAVEYARD);
+  // The v1 wrapper token now sits in the Graveyard: no wrapped state remains.
+  assert.notInStore("WrappedDomain", domainId);
+  assert.assertTrue(!Domain.load(domainId)!.wrappedOwner);
+  assert.fieldEquals("Domain", domainId, "owner", Address.fromString(OWNER).toHexString());
+  assert.fieldEquals("Domain", domainId, "registrant", Address.fromString(OWNER).toHexString());
+  assert.fieldEquals("Registration", registrationId, "registrant", Address.fromString(OWNER).toHexString());
   assert.fieldEquals("Registration", registrationId, "domain", domainId);
   assert.fieldEquals(
     "Domain",
@@ -640,19 +632,17 @@ test("wrapped-locked migration corrects wrappedOwner only, leaves registrant/own
     createTransferSingleEvent(ETH_REGISTRY, tokenId, OWNER, OWNER_2)
   );
 
+  assert.fieldEquals("Domain", domainId, "owner", Address.fromString(OWNER_2).toHexString());
+  assert.fieldEquals("Domain", domainId, "registrant", Address.fromString(OWNER_2).toHexString());
+  assert.fieldEquals("Registration", registrationId, "registrant", Address.fromString(OWNER_2).toHexString());
+  // Every path of the slot follows the transfer, not only the canonical one.
   assert.fieldEquals(
-    "WrappedDomain",
-    domainId,
+    "Domain",
+    pathNamehash(aliasBaseNamehash, labelHash).toHexString(),
     "owner",
     Address.fromString(OWNER_2).toHexString()
   );
-  assert.fieldEquals(
-    "Domain",
-    domainId,
-    "wrappedOwner",
-    Address.fromString(OWNER_2).toHexString()
-  );
-  assert.fieldEquals("Domain", domainId, "registrant", GRAVEYARD);
+  assert.notInStore("WrappedDomain", domainId);
 });
 
 test("a native ENSv2 .eth registration clears stale ENSv1 wrapped state", () => {

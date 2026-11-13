@@ -169,9 +169,9 @@ describe("Graveyard retirement of expired ENSv1 names", () => {
     assert.fieldEquals("Registration", LABEL_HEX, "registrationDate", "1500000000");
     assert.fieldEquals("Domain", DOMAIN_ID, "registrant", HOLDER);
     assert.fieldEquals("Domain", DOMAIN_ID, "expiryDate", ORIGINAL_DOMAIN_EXPIRY);
-    // The registry really did move the node to the Graveyard, as for
-    // migrated names; consumers already treat that address as "no holder".
-    assert.fieldEquals("Domain", DOMAIN_ID, "owner", MAINNET_GRAVEYARD);
+    // v2.2.0: the registry owner is not moved into the Graveyard either; the
+    // lapsed name keeps its last owner, like any expired ENSv1 name.
+    assert.fieldEquals("Domain", DOMAIN_ID, "owner", HOLDER);
     let domain = Domain.load(DOMAIN_ID)!;
     assert.assertTrue(!domain.resolver);
     assert.assertTrue(domain.expiryDate!.lt(MAX_LEGACY_EXPIRY));
@@ -192,7 +192,7 @@ describe("Graveyard retirement of expired ENSv1 names", () => {
     assert.entityCount("NameRegistered", 2);
   });
 
-  test("clears the stale wrapped state of an expired wrapped name", () => {
+  test("keeps the last wrapped holder of an expired wrapped name", () => {
     seedLapsedRegistration();
     let domain = Domain.load(DOMAIN_ID)!;
     domain.owner = NAME_WRAPPER;
@@ -207,11 +207,12 @@ describe("Graveyard retirement of expired ENSv1 names", () => {
 
     sweep();
 
-    assert.entityCount("WrappedDomain", 0);
-    assert.fieldEquals("Domain", DOMAIN_ID, "owner", MAINNET_GRAVEYARD);
-    assert.fieldEquals("Domain", DOMAIN_ID, "registrant", HOLDER);
-    domain = Domain.load(DOMAIN_ID)!;
-    assert.assertTrue(!domain.wrappedOwner);
+    // Exactly as the expired wrapped name looked before the sweep.
+    assert.entityCount("WrappedDomain", 1);
+    assert.fieldEquals("WrappedDomain", DOMAIN_ID, "owner", HOLDER);
+    assert.fieldEquals("Domain", DOMAIN_ID, "wrappedOwner", HOLDER);
+    assert.fieldEquals("Domain", DOMAIN_ID, "owner", NAME_WRAPPER);
+    assert.fieldEquals("Domain", DOMAIN_ID, "expiryDate", ORIGINAL_DOMAIN_EXPIRY);
   });
 
   test("an ordinary re-registration of an expired name is still a new registration", () => {
@@ -231,15 +232,18 @@ describe("Graveyard retirement of expired ENSv1 names", () => {
     assert.fieldEquals("Domain", DOMAIN_ID, "expiryDate", "1907776000");
   });
 
-  test("a migration transfer of a live name to the Graveyard is unchanged (registrant follows the token until corrected)", () => {
+  test("a migration's transfer of a live token to the Graveyard stores no sink", () => {
     seedLapsedRegistration();
 
     // LockedMigrationController/UnlockedMigrationController move the live
-    // token with a plain transfer from the holder: no burn, no mint.
+    // token with a plain transfer from the holder: no burn, no mint. The
+    // ENSv2 registration that follows in the same transaction writes the new
+    // holder (see ensv2Migration.test.ts).
     handleNameTransferred(transfer(HOLDER, MAINNET_GRAVEYARD));
 
-    assert.fieldEquals("Registration", LABEL_HEX, "registrant", MAINNET_GRAVEYARD);
-    assert.fieldEquals("Domain", DOMAIN_ID, "registrant", MAINNET_GRAVEYARD);
+    assert.fieldEquals("Registration", LABEL_HEX, "registrant", HOLDER);
+    assert.fieldEquals("Domain", DOMAIN_ID, "registrant", HOLDER);
+    assert.entityCount("NameTransferred", 1);
   });
 
   test("a Graveyard registration with no prior Registration is skipped rather than invented", () => {

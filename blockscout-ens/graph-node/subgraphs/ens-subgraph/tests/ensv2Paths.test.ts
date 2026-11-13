@@ -681,17 +681,29 @@ test("resolver set, change, clear, and re-registration reset reach every path of
   assert.assertTrue(!Domain.load(walletUnderTwo)!.resolver);
   assert.entityCount("ENSv2NamePath", 4);
 
-  // Reattach, then prove LabelUnregistered itself leaves the compatibility
-  // association intact and the later LabelRegistered performs the protocol's
-  // silent resolver reset across both materialized paths.
+  // Reattach, then prove LabelUnregistered deletes both compatibility rows
+  // (ENSv1 deletion convention) and the later LabelRegistered performs the
+  // protocol's silent resolver reset across both materialized paths.
   handleResolverUpdated(
     createResolverUpdatedEvent(CHILD_REGISTRY, slotToken(1), RESOLVER_A)
   );
   handleLabelUnregistered(
     createLabelUnregisteredEvent(CHILD_REGISTRY, slotToken(1))
   );
-  assert.assertTrue(!!Domain.load(walletUnderOne)!.resolver);
-  assert.assertTrue(!!Domain.load(walletUnderTwo)!.resolver);
+  assert.assertTrue(!Domain.load(walletUnderOne)!.resolver);
+  assert.assertTrue(!Domain.load(walletUnderTwo)!.resolver);
+  assert.fieldEquals(
+    "Domain",
+    walletUnderOne,
+    "owner",
+    "0x0000000000000000000000000000000000000000"
+  );
+  assert.fieldEquals(
+    "Domain",
+    walletUnderTwo,
+    "owner",
+    "0x0000000000000000000000000000000000000000"
+  );
 
   handleLabelRegistered(
     createLabelRegisteredEvent(

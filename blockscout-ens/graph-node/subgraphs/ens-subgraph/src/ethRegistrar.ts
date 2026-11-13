@@ -49,7 +49,8 @@ import {
   processControllerStatus,
   processOwnershipTransferred,
 } from "./accessControl";
-import { isGraveyard } from "./ensv2Constants";
+import { isRetirementRegistrant, isSink } from "./ensv2Constants";
+import { isGovernedByEnsv2 } from "./legacyGovernance";
 
 // Import entity types generated from the GraphQL schema
 import {
@@ -66,39 +67,35 @@ const GRACE_PERIOD_SECONDS = BigInt.fromI32(7776000); // 90 days
 
 let rootNode: Bytes = ETH_NODE;
 
-// The ENSv2 Graveyard retires expired ENSv1 .eth names (Graveyard.clear() in
-// ensdomains/contracts-v2, run on mainnet by ENS Labs' Morticia daemon):
-// BaseRegistrar.register(labelhash, graveyard, type(uint64).max - now -
-// GRACE_PERIOD), after which the resolver is cleared and any subnames are
-// moved to the Graveyard. On chain the BaseRegistrar token is burned and
-// re-minted to the Graveyard with a practically infinite expiry, so taken
-// literally the name would read as a live registration owned by the
-// Graveyard forever. It is nothing of the sort: the name lapsed, nobody holds
-// it, and it can be registered again (on ENSv2). Mainnet's first sweep
-// covered ~946,000 names, about a fifth of all .eth registrations.
+// Retirement. The ENSv2 Graveyard retires expired ENSv1 .eth names
+// (Graveyard.clear() in ensdomains/contracts-v2, run on mainnet by ENS Labs'
+// Morticia daemon): BaseRegistrar.register(labelhash, graveyard,
+// type(uint64).max - now - GRACE_PERIOD), after which the resolver is
+// cleared and any subnames are moved to the Graveyard. GraveyardRepairer
+// does the same for lapsed names whose record a holder had handed to the
+// Graveyard, registering to itself first. Taken literally the name would read
+// as a live registration owned by a sink forever. It is nothing of the sort:
+// the name lapsed, nobody holds it, and it can be registered again on ENSv2.
+// Mainnet's first sweep covered ~946,000 names.
 //
-// So a registration to the Graveyard is treated as the retirement it is: the
-// Registration and Domain keep the lapsed registrant and expiry (exactly the
-// state an expired name had before the sweep, which every consumer already
-// renders as expired/available), while the NameRegistered / NameTransferred
-// history rows record what happened on chain. Domain.owner still follows the
-// registry's NewOwner to the Graveyard, as it does for migrated names.
+// So a registration to the Graveyard or the repairer leaves the Registration,
+// the Domain and any WrappedDomain exactly as the expired name had them
+// (lapsed registrant, dates, expiry, last wrapped holder), and only the
+// NameRegistered / NameTransferred history rows record what happened. A
+// migration never registers: the migration controllers move a live token
+// with a plain transfer, which handleNameTransferred also keeps out of the
+// holder fields (legacyGovernance.ts).
 //
-// A Graveyard registration is distinguishable from a migration: the
-// migration controllers move a *live* token with a plain transfer (from the
-// holder, no burn, no NameRegistered) and renew it afterwards, whereas
-// clear() only registers, and BaseRegistrar.register of an expired name
-// always burns the old token (Transfer to 0x0) and mints a new one (Transfer
-// from 0x0) before emitting NameRegistered, all in the same transaction.
-// isGraveyard() (ensv2Constants.ts) is the test used in both handlers.
-
+// A name live in ENSv2 is the ENSv2 projection's: BaseRegistrar events for it
+// (a later Graveyard.clear() of its retired v1 record) only write history.
 export function handleNameRegistered(event: NameRegisteredEvent): void {
   let account = new Account(event.params.owner.toHexString());
   account.save();
 
   let label = uint256ToByteArray(event.params.id);
   let labelHex = Bytes.fromByteArray(label).toHexString();
-  let domainId = Bytes.fromByteArray(crypto.keccak256(concat(rootNode, label))).toHexString();
+  let node = Bytes.fromByteArray(crypto.keccak256(concat(rootNode, label)));
+  let domainId = node.toHexString();
   let domain = Domain.load(domainId);
   if (domain == null) {
     // Expected to always exist by the time BaseRegistrar's own
@@ -111,22 +108,21 @@ export function handleNameRegistered(event: NameRegisteredEvent): void {
   }
 
   let registration: Registration;
-  if (isGraveyard(event.params.owner)) {
-    let lapsed = Registration.load(labelHex);
-    if (lapsed == null) {
+  if (isRetirementRegistrant(event.params.owner) || isGovernedByEnsv2(node, event.block.number)) {
+    let existing = Registration.load(labelHex);
+    if (existing == null) {
       // clear() requires BaseRegistrar.nameExpires(label) != 0, so the name
       // was registered on chain before; only a gap in the indexed history
       // gets here. Nothing sensible can be recorded without the lapsed
       // state (the event row needs a Registration too), so leave the name
-      // as it is rather than inventing a Graveyard-owned registration.
+      // as it is rather than inventing a sink-owned registration.
       log.warning(
-        "handleNameRegistered: Graveyard retirement of {} without a prior Registration, skipping",
+        "handleNameRegistered: retirement of {} without a prior Registration, skipping",
         [domainId]
       );
       return;
     }
-    // Lapsed registrant, registrationDate and expiryDate stay as they were.
-    registration = lapsed;
+    registration = existing;
   } else {
     registration = new Registration(labelHex);
     registration.domain = domain.id;
@@ -138,20 +134,18 @@ export function handleNameRegistered(event: NameRegisteredEvent): void {
     domain.expiryDate = clampLegacyExpiry(
       event.params.expires.plus(GRACE_PERIOD_SECONDS)
     );
-  }
 
-  // A fresh .eth registration means any previous wrapped registration has lapsed
-  // (a name leaving the NameWrapper by expiry emits no NameUnwrapped event, so the
-  // wrapped state would otherwise go stale). Clear it here. If this is a
-  // register-and-wrap in the same tx, the BaseRegistrar NameRegistered event fires
-  // before the NameWrapper NameWrapped/TransferSingle events, which recreate the
-  // WrappedDomain with the correct new owner. A Graveyard retirement of an
-  // expired wrapped name clears it for the same reason: the wrapped
-  // registration lapsed (the stale ERC-1155 token stays with its last holder
-  // but NameWrapper.getData reports it expired and ownerless).
-  domain.wrappedOwner = null;
-  if (WrappedDomain.load(domain.id) != null) {
-    store.remove("WrappedDomain", domain.id);
+    // A fresh .eth registration means any previous wrapped registration has
+    // lapsed (a name leaving the NameWrapper by expiry emits no NameUnwrapped
+    // event, so the wrapped state would otherwise go stale). Clear it here.
+    // If this is a register-and-wrap in the same tx, the BaseRegistrar
+    // NameRegistered event fires before the NameWrapper NameWrapped /
+    // TransferSingle events, which recreate the WrappedDomain with the
+    // correct new owner.
+    domain.wrappedOwner = null;
+    if (WrappedDomain.load(domain.id) != null) {
+      store.remove("WrappedDomain", domain.id);
+    }
   }
 
   let labelName = ens.nameByHash(label.toHexString());
@@ -259,24 +253,28 @@ export function handleNameRenewed(event: NameRenewedEvent): void {
     return;
   }
 
-  // Graveyard-parked migrated names are renewed up to uint64 max minus the
-  // grace period; clamp both legacy fields (event rows keep the raw value).
-  registration.expiryDate = clampLegacyExpiry(event.params.expires);
-  domain.expiryDate = clampLegacyExpiry(
-    event.params.expires.plus(GRACE_PERIOD_SECONDS)
-  );
+  // A name live in ENSv2 takes its expiry from ENSv2 (legacyGovernance.ts):
+  // the v1 token of a migrated name sits in the Graveyard and its renewals
+  // say nothing about the name.
+  if (!isGovernedByEnsv2(Bytes.fromHexString(domainId), event.block.number)) {
+    // Clamp both legacy fields (event rows keep the raw value).
+    registration.expiryDate = clampLegacyExpiry(event.params.expires);
+    domain.expiryDate = clampLegacyExpiry(
+      event.params.expires.plus(GRACE_PERIOD_SECONDS)
+    );
 
-  registration.save();
-  domain.save();
+    registration.save();
+    domain.save();
 
-  // A wrapped .eth 2LD renewed through the BaseRegistrar emits no
-  // NameWrapper ExpiryExtended event: the wrapper normalises its expiry on
-  // read (registrar expiry + GRACE_PERIOD, see NameWrapper.getData). Mirror
-  // that here so WrappedDomain.expiryDate does not go stale (#89).
-  let wrappedDomain = WrappedDomain.load(domainId);
-  if (wrappedDomain != null) {
-    wrappedDomain.expiryDate = domain.expiryDate!;
-    wrappedDomain.save();
+    // A wrapped .eth 2LD renewed through the BaseRegistrar emits no
+    // NameWrapper ExpiryExtended event: the wrapper normalises its expiry on
+    // read (registrar expiry + GRACE_PERIOD, see NameWrapper.getData).
+    // Mirror that here so WrappedDomain.expiryDate does not go stale (#89).
+    let wrappedDomain = WrappedDomain.load(domainId);
+    if (wrappedDomain != null) {
+      wrappedDomain.expiryDate = domain.expiryDate!;
+      wrappedDomain.save();
+    }
   }
 
   let registrationEvent = new NameRenewed(createLegacyEventID(event));
@@ -306,15 +304,15 @@ export function handleNameTransferred(event: TransferEvent): void {
   // BaseRegistrar burns (Transfer to 0x0) only inside _register, immediately
   // before minting the token again to the new registrant, so the burn never
   // needs to touch the registrant: the mint, or the NameRegistered that
-  // follows it in the same transaction, sets the real one. Leaving it alone
-  // is what lets a Graveyard retirement (see the note above
-  // handleNameRegistered) keep the
-  // lapsed registrant, since the mint to the Graveyard is skipped as well.
+  // follows it in the same transaction, sets the real one. A transfer to a
+  // sink (a migration's or retirement's voiding step) and any transfer of a
+  // name live in ENSv2 only write history (legacyGovernance.ts).
   let isBurn = event.params.to.equals(Address.zero());
-  let isMintToGraveyard =
-    event.params.from.equals(Address.zero()) &&
-    isGraveyard(event.params.to);
-  if (!isBurn && !isMintToGraveyard) {
+  if (
+    !isBurn &&
+    !isSink(event.params.to) &&
+    !isGovernedByEnsv2(Bytes.fromHexString(domainId), event.block.number)
+  ) {
     registration.registrant = account.id;
     domain.registrant = account.id;
 

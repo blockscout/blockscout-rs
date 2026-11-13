@@ -60,8 +60,8 @@ export function getGraveyardAddresses(): Address[] {
 }
 
 // True for the Graveyard itself. Besides receiving migrated names, the
-// Graveyard retires expired ENSv1 .eth names through Graveyard.clear(), which
-// re-registers them to itself for ~uint64 max (see ethRegistrar.ts).
+// Graveyard retires expired ENSv1 .eth names and their subnames through
+// Graveyard.clear() (see legacyGovernance.ts).
 export function isGraveyard(address: Address): boolean {
   let graveyards = getGraveyardAddresses();
   for (let i = 0; i < graveyards.length; i++) {
@@ -72,11 +72,58 @@ export function isGraveyard(address: Address): boolean {
   return false;
 }
 
-// True for the Graveyard and the migration controllers: ENSv1 ownership
-// moving to one of these is part of a migration, whose legacy wrapped state
-// is kept and corrected by correctMigratedLegacyOwner.
-export function isMigrationDestination(address: Address): boolean {
-  return isGraveyard(address) || isMigrationController(address);
+// GraveyardRepairer (contracts-v2 src/migration/GraveyardRepairer.sol) re-registers
+// lapsed names whose v1 registry record a holder handed to the Graveyard with
+// their own resolver: BaseRegistrar.register(id, repairer, ~uint64 max),
+// resolver cleared, record and token handed to the Graveyard. Not deployed
+// on any network yet (contracts-v2 docs/addresses, 2026-11-11); add the
+// address here once it is.
+export function getGraveyardRepairerAddresses(): Address[] {
+  return [];
+}
+
+export function isGraveyardRepairer(address: Address): boolean {
+  let repairers = getGraveyardRepairerAddresses();
+  for (let i = 0; i < repairers.length; i++) {
+    if (repairers[i].equals(address)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// A registration of an expired ENSv1 .eth name to one of these is a
+// retirement, not a new registration: the name is lapsed and available.
+export function isRetirementRegistrant(address: Address): boolean {
+  return isGraveyard(address) || isGraveyardRepairer(address);
+}
+
+// Sinks: the contracts ENSv1 state is handed to when it is retired or
+// migrated. None of them ever controls a name, so the legacy holder fields
+// (Domain.owner/registrant/wrappedOwner, Registration.registrant,
+// WrappedDomain.owner) never hold one; ENSv1 events that hand a name to a
+// sink only write their history rows (see legacyGovernance.ts).
+export function isSink(address: Address): boolean {
+  return (
+    isGraveyard(address) ||
+    isGraveyardRepairer(address) ||
+    isMigrationController(address)
+  );
+}
+
+// First block of any ENSv2 registry data source (min of the RootRegistry,
+// ETHRegistry and VerifiableFactory start blocks in networks.json). No
+// ENSv2NamePath can exist before it, so legacyGovernance skips its store
+// lookup for the ENSv1 history before it. 0 (never skip) for other networks.
+export function getEnsv2FirstBlock(): BigInt {
+  let network = dataSource.network();
+  if (network == "mainnet") {
+    return BigInt.fromI32(26105299);
+  }
+  if (network == "sepolia") {
+    return BigInt.fromI32(11820291);
+  }
+  return BigInt.zero();
 }
 
 export function getV2GracePeriod(): BigInt {

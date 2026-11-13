@@ -3,6 +3,68 @@
 Version labels match the Subgraph Studio deployments of the mainnet subgraph
 `5XqPmWe6gjyrJtFn9cLy237i4cWw2j9HcUJEXsP5qGtH`.
 
+## v2.2.0 (2026-11-11)
+
+The legacy `Domain` / `Registration` / `WrappedDomain` entities are now
+correct on their own: no consumer needs to know about the ENSv2 Graveyard or
+migration contracts. Three rules (`src/legacyGovernance.ts`):
+
+1. **A sink never becomes a holder.** ENSv1 events that hand a registry
+   record, BaseRegistrar token or NameWrapper token to the Graveyard, the
+   GraveyardRepairer or a migration controller only write their history rows.
+   A `.eth` name keeps its owner (a migration's ENSv2 registration follows in
+   the same transaction), a retired `.eth` name keeps its whole lapsed state
+   including its last wrapped holder, and a subname moved to the Graveyard is
+   deleted with the ENSv1 convention.
+2. **ENSv2 governs a live ENSv2 name.** While a node has an active ENSv2 path
+   with a `REGISTERED` slot, ENSv1 registry, BaseRegistrar and NameWrapper
+   events for it only write history. Later `Graveyard.clear()` calls over the
+   retired v1 record of a migrated or natively registered name no longer
+   overwrite its owner, resolver or expiry.
+3. **The ENSv2 projection is complete.** Every registration, native or
+   migration, in any registry writes the ENSv2 holder into `owner` and
+   `registrant`, removes v1 NameWrapper state, resets the resolver to the
+   ENSv2 one, and sets `registrationDate` for native registrations.
+   Transfers and renewals sync in every registry, not only the ETH registry.
+   Unregistration and namespace unlinks delete the projected row. A path a
+   new subregistry takes over is rebound to its new slot.
+
+### Changed
+
+- `Domain.owner` of a migrated name is its ENSv2 holder, no longer the
+  Graveyard (28,322 names on mainnet at block 26,389,002), and the 25 locked
+  migrations lose their v1 `WrappedDomain`.
+- `Domain.owner` of a swept expired `.eth` name is its last ENSv1 owner, no
+  longer the Graveyard (about 950,000 names).
+
+### Fixed (mainnet counts at block 26,389,002)
+
+- 3,361 swept wrapped `.eth` names lost their last wrapped holder.
+- 848 retired subnames: 702 read as live under their old wrapped holder, 146
+  as Graveyard-owned. They now read as deleted.
+- 680 live ENSv2 names had their owner overwritten with the Graveyard and 625
+  their resolver wiped by a later v1 clear (for example visigoth.eth,
+  bmw-000.tpa.eth).
+- 190 native ENSv2 `.eth` names kept a stale ENSv1 resolver, and 583 native
+  ENSv2 names kept stale v1 wrapped state (6 with the Graveyard as
+  `wrappedOwner`).
+- 1,500 of 2,678 native ENSv2 `.eth` registrations showed the old v1
+  `registrationDate`.
+- 6 transfers and 8 renewals in user registries never reached the legacy row.
+- 35 unregistered ENSv2 subnames still read as live, 8 of them with a path
+  left active after their parent switched subregistry.
+- GraveyardRepairer (contracts-v2, not yet deployed) is recognised as a
+  retirement registrant once its address is configured.
+
+### Corrected
+
+- The v2.1.3 entry below says none of its fixes had produced wrong data on
+  mainnet. That was wrong: v2.1.3 restored `resolvedAddress` on 451 ENSv2
+  names that point at a v1 PublicResolver, and reclassified 2 registries from
+  `UNKNOWN` to `USER`.
+
+Requires a full re-index.
+
 ## v2.1.3 (2026-11-09)
 
 Hardening of three edge cases raised in review of the ENSv2 mappings. None of
