@@ -104,6 +104,16 @@ impl ProtocolSpecific {
         }
     }
 
+    /// Whether the protocol's subgraph is ensdomains/ens-subgraph 2.3+ (see
+    /// `EnsLikeProtocol::ensv2`).
+    pub fn ensv2(&self) -> bool {
+        match self {
+            ProtocolSpecific::EnsLike(ens) => ens.ensv2,
+            ProtocolSpecific::D3Connect(_) => false,
+            ProtocolSpecific::InfinityName(_) => false,
+        }
+    }
+
     pub fn native_token_contract(&self) -> Option<Address> {
         match self {
             ProtocolSpecific::EnsLike(ens) => ens.native_token_contract,
@@ -121,6 +131,13 @@ pub struct EnsLikeProtocol {
     pub native_token_contract: Option<Address>,
     #[serde(default)]
     pub try_offchain_resolve: bool,
+    /// The subgraph is ensdomains/ens-subgraph 2.3+ (ENSv2-aware): BENS reads
+    /// `Domain.registryToken` for an ENSv2 name's token and the ENSIP-19
+    /// default primary names (`ENSv2PrimaryName`). Since 2.2.0 the
+    /// subgraph's legacy `Domain` rows never name the ENSv2 Graveyard or a
+    /// migration contract as a holder, so no other ENSv2 handling is needed.
+    #[serde(default)]
+    pub ensv2: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

@@ -1,76 +1,92 @@
-specVersion: 0.0.4
-description: A secure & decentralized way to address resources on and off the
-  blockchain using simple, human-readable names. Access domains and transfer
-  history.
-repository: https://github.com/ensdomains/ens-subgraph
+specVersion: 1.2.0
+description: >-
+  A secure & decentralized way to address resources on and off the blockchain
+  using simple, human-readable names. Access domains and transfer history.
+repository: "https://github.com/ensdomains/ens-subgraph"
 schema:
   file: ./schema.graphql
+# indexerHints is manifest-wide, not per-data-source, in this graph-cli
+# version's manifest schema (DataSource has no such field — confirmed
+# against node_modules/@graphprotocol/graph-cli's own manifest.graphql,
+# after a per-data-source placement was rejected at `graph build` time).
+# Applies to every data source below, v1 and v2 alike — safe uniformly,
+# since pruning only discards superseded historical entity *versions*,
+# never current-state data.
+indexerHints:
+  prune: auto
 dataSources:
   - kind: ethereum/contract
     name: ENSRegistry
     network: mainnet
     source:
-      abi: EnsRegistry
       address: "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
+      abi: EnsRegistry
       startBlock: 9380380
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.6
+      apiVersion: 0.0.9
       language: wasm/assemblyscript
       file: ./src/ensRegistry.ts
       entities:
         - Domain
         - Account
         - Resolver
+        - OperatorApproval
       abis:
         - name: EnsRegistry
-          file: ./abis/Registry.json
+          file: ./abis/v1/Registry.json
       eventHandlers:
-        - event: Transfer(indexed bytes32,address)
+        - event: "Transfer(indexed bytes32,address)"
           handler: handleTransfer
-        - event: NewOwner(indexed bytes32,indexed bytes32,address)
+        - event: "NewOwner(indexed bytes32,indexed bytes32,address)"
           handler: handleNewOwner
-        - event: NewResolver(indexed bytes32,address)
+        - event: "NewResolver(indexed bytes32,address)"
           handler: handleNewResolver
-        - event: NewTTL(indexed bytes32,uint64)
+        - event: "NewTTL(indexed bytes32,uint64)"
           handler: handleNewTTL
+        - event: "ApprovalForAll(indexed address,indexed address,bool)"
+          handler: handleApprovalForAll
+
   - kind: ethereum/contract
     name: ENSRegistryOld
     network: mainnet
     source:
-      abi: EnsRegistry
       address: "0x314159265dd8dbb310642f98f50c066173c1259b"
+      abi: EnsRegistry
       startBlock: 3327417
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.6
+      apiVersion: 0.0.9
       language: wasm/assemblyscript
       file: ./src/ensRegistry.ts
       entities:
         - Domain
         - Account
         - Resolver
+        - OperatorApproval
       abis:
         - name: EnsRegistry
-          file: ./abis/Registry.json
+          file: ./abis/v1/Registry.json
       eventHandlers:
-        - event: Transfer(indexed bytes32,address)
+        - event: "Transfer(indexed bytes32,address)"
           handler: handleTransferOldRegistry
-        - event: NewOwner(indexed bytes32,indexed bytes32,address)
+        - event: "NewOwner(indexed bytes32,indexed bytes32,address)"
           handler: handleNewOwnerOldRegistry
-        - event: NewResolver(indexed bytes32,address)
+        - event: "NewResolver(indexed bytes32,address)"
           handler: handleNewResolverOldRegistry
-        - event: NewTTL(indexed bytes32,uint64)
+        - event: "NewTTL(indexed bytes32,uint64)"
           handler: handleNewTTLOldRegistry
+        - event: "ApprovalForAll(indexed address,indexed address,bool)"
+          handler: handleApprovalForAllOldRegistry
+
   - kind: ethereum/contract
     name: Resolver
     network: mainnet
     source:
       abi: Resolver
-      startBlock: 3327417
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.6
+      apiVersion: 0.0.9
       language: wasm/assemblyscript
       file: ./src/resolver.ts
       entities:
@@ -83,43 +99,49 @@ dataSources:
         - ContenthashChanged
         - InterfaceChanged
         - AuthorisationChanged
+        - ENSv2Resolver
+        - ENSv2ResolverData
       abis:
         - name: Resolver
-          file: ./abis/PublicResolver.json
+          file: ./abis/v1/PublicResolver.json
       eventHandlers:
-        - event: ABIChanged(indexed bytes32,indexed uint256)
+        - event: "ABIChanged(indexed bytes32,indexed uint256)"
           handler: handleABIChanged
-        - event: AddrChanged(indexed bytes32,address)
+        - event: "AddrChanged(indexed bytes32,address)"
           handler: handleAddrChanged
-        - event: AddressChanged(indexed bytes32,uint256,bytes)
+        - event: "AddressChanged(indexed bytes32,uint256,bytes)"
           handler: handleMulticoinAddrChanged
-        - event: AuthorisationChanged(indexed bytes32,indexed address,indexed
+        - event: >-
+            AuthorisationChanged(indexed bytes32,indexed address,indexed
             address,bool)
           handler: handleAuthorisationChanged
-        - event: ContenthashChanged(indexed bytes32,bytes)
+        - event: "ContenthashChanged(indexed bytes32,bytes)"
           handler: handleContentHashChanged
-        - event: InterfaceChanged(indexed bytes32,indexed bytes4,address)
+        - event: "DataChanged(indexed bytes32,indexed string,string,indexed bytes)"
+          handler: handleDataChanged
+        - event: "InterfaceChanged(indexed bytes32,indexed bytes4,address)"
           handler: handleInterfaceChanged
-        - event: NameChanged(indexed bytes32,string)
+        - event: "NameChanged(indexed bytes32,string)"
           handler: handleNameChanged
-        - event: PubkeyChanged(indexed bytes32,bytes32,bytes32)
+        - event: "PubkeyChanged(indexed bytes32,bytes32,bytes32)"
           handler: handlePubkeyChanged
-        - event: TextChanged(indexed bytes32,indexed string,string)
+        - event: "TextChanged(indexed bytes32,indexed string,string)"
           handler: handleTextChanged
-        - event: TextChanged(indexed bytes32,indexed string,string,string)
+        - event: "TextChanged(indexed bytes32,indexed string,string,string)"
           handler: handleTextChangedWithValue
-        - event: VersionChanged(indexed bytes32,uint64)
+        - event: "VersionChanged(indexed bytes32,uint64)"
           handler: handleVersionChanged
+
   - kind: ethereum/contract
     name: BaseRegistrar
     network: mainnet
     source:
-      abi: BaseRegistrar
       address: "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85"
+      abi: BaseRegistrar
       startBlock: 9380410
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.6
+      apiVersion: 0.0.9
       language: wasm/assemblyscript
       file: ./src/ethRegistrar.ts
       entities:
@@ -127,90 +149,390 @@ dataSources:
         - NameRegistered
         - NameRenewed
         - NameTransferred
+        - OperatorApproval
+        - ContractOwnership
+        - RegistrarController
       abis:
         - name: BaseRegistrar
-          file: ./abis/BaseRegistrar.json
+          file: ./abis/v1/BaseRegistrar.json
       eventHandlers:
-        - event: NameRegistered(indexed uint256,indexed address,uint256)
+        - event: "NameRegistered(indexed uint256,indexed address,uint256)"
           handler: handleNameRegistered
-        - event: NameRenewed(indexed uint256,uint256)
+        - event: "NameRenewed(indexed uint256,uint256)"
           handler: handleNameRenewed
-        - event: Transfer(indexed address,indexed address,indexed uint256)
+        - event: "Transfer(indexed address,indexed address,indexed uint256)"
           handler: handleNameTransferred
+        - event: "ApprovalForAll(indexed address,indexed address,bool)"
+          handler: handleBaseRegistrarApprovalForAll
+        - event: "OwnershipTransferred(indexed address,indexed address)"
+          handler: handleBaseRegistrarOwnershipTransferred
+        - event: "ControllerAdded(indexed address)"
+          handler: handleControllerAdded
+        - event: "ControllerRemoved(indexed address)"
+          handler: handleControllerRemoved
+
   - kind: ethereum/contract
-    name: EthRegistrarControllerOld
+    name: LegacyEthRegistrarController
     network: mainnet
     source:
-      abi: EthRegistrarControllerOld
       address: "0x283Af0B28c62C092C9727F1Ee09c02CA627EB7F5"
+      abi: LegacyEthRegistrarController
       startBlock: 9380471
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.6
+      apiVersion: 0.0.9
       language: wasm/assemblyscript
       file: ./src/ethRegistrar.ts
       entities:
         - Registration
+        - ContractOwnership
       abis:
-        - name: EthRegistrarControllerOld
-          file: ./abis/EthRegistrarControllerOld.json
+        - name: LegacyEthRegistrarController
+          file: ./abis/v1/LegacyEthRegistrarController.json
       eventHandlers:
-        - event: NameRegistered(string,indexed bytes32,indexed address,uint256,uint256)
-          handler: handleNameRegisteredByControllerOld
-        - event: NameRenewed(string,indexed bytes32,uint256,uint256)
-          handler: handleNameRenewedByController
+        - event: >-
+            NameRegistered(string,indexed bytes32,indexed
+            address,uint256,uint256)
+          handler: handleNameRegisteredByLegacyController
+        - event: "NameRenewed(string,indexed bytes32,uint256,uint256)"
+          handler: handleNameRenewedByLegacyController
+        - event: "OwnershipTransferred(indexed address,indexed address)"
+          handler: handleLegacyControllerOwnershipTransferred
+
   - kind: ethereum/contract
-    name: EthRegistrarController
+    name: WrappedEthRegistrarController
     network: mainnet
     source:
-      abi: EthRegistrarController
       address: "0x253553366Da8546fC250F225fe3d25d0C782303b"
+      abi: WrappedEthRegistrarController
       startBlock: 16925618
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.6
+      apiVersion: 0.0.9
       language: wasm/assemblyscript
       file: ./src/ethRegistrar.ts
       entities:
         - Registration
+        - ContractOwnership
       abis:
-        - name: EthRegistrarController
-          file: ./abis/EthRegistrarController.json
+        - name: WrappedEthRegistrarController
+          file: ./abis/v1/WrappedEthRegistrarController.json
       eventHandlers:
-        - event: NameRegistered(string,indexed bytes32,indexed
+        - event: >-
+            NameRegistered(string,indexed bytes32,indexed
             address,uint256,uint256,uint256)
-          handler: handleNameRegisteredByController
-        - event: NameRenewed(string,indexed bytes32,uint256,uint256)
-          handler: handleNameRenewedByController
+          handler: handleNameRegisteredByWrappedController
+        - event: "NameRenewed(string,indexed bytes32,uint256,uint256)"
+          handler: handleNameRenewedByLegacyController
+        - event: "OwnershipTransferred(indexed address,indexed address)"
+          handler: handleWrappedControllerOwnershipTransferred
+
   - kind: ethereum/contract
     name: NameWrapper
     network: mainnet
     source:
-      abi: NameWrapper
       address: "0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401"
+      abi: NameWrapper
       startBlock: 16925608
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.6
+      apiVersion: 0.0.9
       language: wasm/assemblyscript
       file: ./src/nameWrapper.ts
       entities:
         - NameWrapper
+        - OperatorApproval
+        - ContractOwnership
+        - RegistrarController
       abis:
         - name: NameWrapper
-          file: ./abis/NameWrapper.json
+          file: ./abis/v1/NameWrapper.json
       eventHandlers:
-        - event: NameWrapped(indexed bytes32,bytes,address,uint32,uint64)
+        - event: "NameWrapped(indexed bytes32,bytes,address,uint32,uint64)"
           handler: handleNameWrapped
-        - event: NameUnwrapped(indexed bytes32,address)
+        - event: "NameUnwrapped(indexed bytes32,address)"
           handler: handleNameUnwrapped
-        - event: FusesSet(indexed bytes32,uint32)
+        - event: "FusesSet(indexed bytes32,uint32)"
           handler: handleFusesSet
-        - event: ExpiryExtended(indexed bytes32,uint64)
+        - event: "ExpiryExtended(indexed bytes32,uint64)"
           handler: handleExpiryExtended
-        - event: TransferSingle(indexed address,indexed address,indexed
-            address,uint256,uint256)
+        - event: TransferSingle(indexed address,indexed address,indexed address,uint256,uint256)
           handler: handleTransferSingle
-        - event: TransferBatch(indexed address,indexed address,indexed
-            address,uint256[],uint256[])
+        - event: TransferBatch(indexed address,indexed address,indexed address,uint256[],uint256[])
           handler: handleTransferBatch
+        - event: "ApprovalForAll(indexed address,indexed address,bool)"
+          handler: handleNameWrapperApprovalForAll
+        - event: "OwnershipTransferred(indexed address,indexed address)"
+          handler: handleNameWrapperOwnershipTransferred
+        - event: "ControllerChanged(indexed address,bool)"
+          handler: handleControllerChanged
+
+  - kind: ethereum/contract
+    name: UnwrappedEthRegistrarController
+    network: mainnet
+    source:
+      address: "0x59E16fcCd424Cc24e280Be16E11Bcd56fb0CE547"
+      abi: UnwrappedEthRegistrarController
+      startBlock: 22764821
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/ethRegistrar.ts
+      entities:
+        - Registration
+        - ContractOwnership
+      abis:
+        - name: UnwrappedEthRegistrarController
+          file: ./abis/v1/UnwrappedEthRegistrarController.json
+      eventHandlers:
+        - event: >-
+            NameRegistered(string,indexed bytes32,indexed
+            address,uint256,uint256,uint256,bytes32)
+          handler: handleNameRegisteredByUnwrappedController
+        - event: "NameRenewed(string,indexed bytes32,uint256,uint256,bytes32)"
+          handler: handleNameRenewedByUnwrappedController
+        - event: "OwnershipTransferred(indexed address,indexed address)"
+          handler: handleUnwrappedControllerOwnershipTransferred
+
+  # ---------------------------------------------------------------------
+  # ENSv2 — additive data sources.
+  # The values below are the committed mainnet production defaults. The
+  # network-specific build wrapper validates them against networks.json and
+  # substitutes the selected network's addresses and start blocks.
+  # Use `--network mainnet` for production or `--network sepolia` for Sepolia.
+  # Keep subgraph.yaml and networks.json synchronized.
+  # ---------------------------------------------------------------------
+
+  - kind: ethereum/contract
+    name: RootRegistry
+    network: mainnet
+    source:
+      address: "0x2553c09be6447beffdb86fa622ad41fb8f77a91e"
+      abi: PermissionedRegistry
+      startBlock: 26183742
+    # RootRegistry, ETHRegistry, and the dynamic registry template share the
+    # same PermissionedRegistry mapping.
+    mapping: &ensv2RegistryMapping
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/ensv2Registry.ts
+      entities:
+        - ENSv2Registry
+        - ENSv2NameSlot
+        - ENSv2Registration
+        - ENSv2Namespace
+        - ENSv2NamespaceLink
+        - ENSv2Resource
+        - ENSv2Token
+        - ENSv2NamePath
+        - ENSv2RoleAssignment
+        - ENSv2RoleChange
+        - ENSv2LabelRegistered
+        - ENSv2LabelRenewed
+        - ENSv2LabelUnregistered
+        - ENSv2TokenTransferred
+        - ENSv2TokenRegenerated
+        - ENSv2ResolverUpdate
+        - ENSv2SubregistryUpdate
+        - OperatorApproval
+        # Written by helpers called from this mapping.
+        - Domain
+        - Resolver
+        - Registration
+        - Account
+        - ENSv2RegistryNamespaceIndex
+        - ENSv2SlotPathIndex
+        - ENSv2PathNamespaceIndex
+        - ENSv2NamespacePathIndex
+        - ENSv2Resolver
+        - ENSv2ResolverLink
+        - ENSv2ResolverRecord
+        - ENSv2ResolverAddress
+        - ENSv2ResolverText
+        - ENSv2ResolverAddressIndex
+        - ENSv2ResolverTextIndex
+        - ENSv2ResolverResourceArgument
+      abis:
+        - name: PermissionedRegistry
+          file: ./abis/v2/PermissionedRegistry.json
+      eventHandlers:
+        - event: "LabelRegistered(indexed uint256,indexed bytes32,string,address,uint64,indexed address)"
+          handler: handleLabelRegistered
+        - event: "LabelReserved(indexed uint256,indexed bytes32,string,uint64,indexed address)"
+          handler: handleLabelReserved
+        - event: "LabelUnregistered(indexed uint256,indexed address)"
+          handler: handleLabelUnregistered
+        - event: "ExpiryUpdated(indexed uint256,indexed uint64,indexed address)"
+          handler: handleExpiryUpdated
+        - event: "SubregistryUpdated(indexed uint256,indexed address,indexed address)"
+          handler: handleSubregistryUpdated
+        - event: "ResolverUpdated(indexed uint256,indexed address,indexed address)"
+          handler: handleResolverUpdated
+        - event: "TokenResource(indexed uint256,indexed uint256)"
+          handler: handleTokenResource
+        - event: "TokenRegenerated(indexed uint256,indexed uint256)"
+          handler: handleTokenRegenerated
+        - event: "TransferSingle(indexed address,indexed address,indexed address,uint256,uint256)"
+          handler: handleTransferSingle
+        - event: "TransferBatch(indexed address,indexed address,indexed address,uint256[],uint256[])"
+          handler: handleTransferBatch
+        - event: "ParentUpdated(indexed address,string,indexed address)"
+          handler: handleParentUpdated
+        - event: "EACRolesChanged(indexed uint256,indexed address,uint256,uint256)"
+          handler: handleEACRolesChanged
+        - event: "ApprovalForAll(indexed address,indexed address,bool)"
+          handler: handleENSv2ApprovalForAll
+        - event: "URIUpdated(string,address,indexed address)"
+          handler: handleURIUpdated
+
+  - kind: ethereum/contract
+    name: ETHRegistry
+    network: mainnet
+    source:
+      address: "0xf60aba43e1f7f3dab1186ff03b561401c9df85e2"
+      abi: PermissionedRegistry
+      startBlock: 26105621
+    mapping: *ensv2RegistryMapping
+
+  - kind: ethereum/contract
+    name: ETHRegistrar
+    network: mainnet
+    source:
+      address: "0xd6d8369e55c94ae8afa714e6cf7ab5be54d5cc81"
+      abi: ETHRegistrar
+      startBlock: 26183999
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/ensv2Registrar.ts
+      entities:
+        - ENSv2Registration
+        - ContractOwnership
+        - Account
+      abis:
+        - name: ETHRegistrar
+          file: ./abis/v2/ETHRegistrar.json
+      eventHandlers:
+        - event: "NameRegistered(indexed uint256,string,address,address,address,uint64,address,indexed bytes32,uint256,uint256)"
+          handler: handleNameRegistered
+        - event: "NameRenewed(indexed uint256,string,uint64,uint64,address,indexed bytes32,uint256)"
+          handler: handleNameRenewed
+        - event: "OwnershipTransferred(indexed address,indexed address)"
+          handler: handleETHRegistrarOwnershipTransferred
+
+  - kind: ethereum/contract
+    name: VerifiableFactory
+    network: mainnet
+    source:
+      address: "0x77510ba162dfea3d8989e3f0928a691b345730d2"
+      abi: VerifiableFactory
+      startBlock: 26105299
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/ensv2Discovery.ts
+      entities:
+        - ENSv2Registry
+        - ENSv2HCA
+      abis:
+        - name: VerifiableFactory
+          file: ./abis/v2/VerifiableFactory.json
+      eventHandlers:
+        - event: "ProxyDeployed(indexed address,indexed address,uint256,address)"
+          handler: handleProxyDeployed
+
+  - kind: ethereum/contract
+    name: PermissionedResolver
+    network: mainnet
+    source:
+      abi: PermissionedResolver
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/ensv2Resolver.ts
+      entities:
+        - ENSv2ResolverRecord
+        - ENSv2ResolverLink
+        - ENSv2ResolverAddress
+        - ENSv2ResolverText
+        - ENSv2ResolverRecordData
+        - ENSv2ResolverABI
+        - ENSv2ResolverInterface
+        - ENSv2ResolverRecordLinkMembership
+        - ENSv2ResolverRecordLinkIndex
+        - ENSv2ResolverAddressIndex
+        - ENSv2ResolverTextIndex
+        - ENSv2ResolverResourceArgument
+        - ENSv2RoleAssignment
+        - ENSv2RoleChange
+        # Written by helpers called from this mapping.
+        - ENSv2Resolver
+        - ENSv2Resource
+        - Account
+        - Domain
+        - Resolver
+      abis:
+        - name: PermissionedResolver
+          file: ./abis/v2/PermissionedResolver.json
+      eventHandlers:
+        - event: "EACRolesChanged(indexed uint256,indexed address,uint256,uint256)"
+          handler: handleEACRolesChanged
+        - event: "Linked(indexed uint256,indexed bytes32,bytes)"
+          handler: handleLinked
+        - event: "ResolverCreated()"
+          handler: handleResolverCreated
+        - event: "ResourceArgument(indexed uint256,bytes)"
+          handler: handleResourceArgument
+        - event: "ContenthashUpdated(indexed uint256,bytes)"
+          handler: handleContenthashUpdated
+        - event: "AddressUpdated(indexed uint256,uint256,bytes)"
+          handler: handleAddressUpdated
+        - event: "TextUpdated(indexed uint256,indexed string,string,string)"
+          handler: handleTextUpdated
+        - event: "DataUpdated(indexed uint256,indexed string,string,bytes)"
+          handler: handleRecordDataUpdated
+        - event: "ABIUpdated(indexed uint256,indexed uint256)"
+          handler: handleABIUpdated
+        - event: "InterfaceUpdated(indexed uint256,indexed bytes4,address)"
+          handler: handleInterfaceUpdated
+        - event: "NameUpdated(indexed uint256,string)"
+          handler: handleNameUpdated
+
+  # DefaultReverseRegistrar is a single, pre-existing upstream ens-contracts
+  # deployment (not redeployed per contracts-v2 release, unlike the sources
+  # above) — see ensv2Reverse.ts and schema.graphql's ENSv2PrimaryName
+  # comment for what this does and does not cover.
+  - kind: ethereum/contract
+    name: DefaultReverseRegistrar
+    network: mainnet
+    source:
+      address: "0x283F227c4Bd38ecE252C4Ae7ECE650B0e913f1f9"
+      abi: DefaultReverseRegistrar
+      startBlock: 22764819
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/ensv2Reverse.ts
+      entities:
+        - ENSv2PrimaryName
+        - Account
+      abis:
+        - name: DefaultReverseRegistrar
+          file: ./abis/v2/DefaultReverseRegistrar.json
+      eventHandlers:
+        - event: "NameForAddrChanged(indexed address,string)"
+          handler: handleNameForAddrChanged
+
+templates:
+  - kind: ethereum/contract
+    name: ENSv2Registry
+    network: mainnet
+    source:
+      abi: PermissionedRegistry
+    mapping: *ensv2RegistryMapping

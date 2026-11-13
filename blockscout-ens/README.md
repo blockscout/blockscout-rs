@@ -12,7 +12,7 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 
 | Subgraph Name       | Network   | TLD   | Note |
 |---------------------|-----------|-------|------|
-| ens-subgraph        | Ethereum  | .eth  |      |
+| ens-subgraph        | Ethereum  | .eth  | ENSv1 + ENSv2, see [ENSv2](#ensv2) |
 | rns-subgraph        | Rootstock | .rsk  |      |
 | genome-subgraph     | Gnosis    | .gno  | SpaceID contracts |
 | bns-subgraph        | Base      | .base |      |
@@ -23,6 +23,64 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 | story-subgraph      | Story     | .ip   | SpaceID contracts |
 | gravity-subgraph    | Gravity   | .g    | SpaceID contracts |
 | zeta-subgraph       | Zeta      | .zeta | SpaceID contracts |
+
+## ENSv2
+
+`ens-subgraph` is [ensdomains/ens-subgraph](https://github.com/ensdomains/ens-subgraph)
+`v2.3.1` with Blockscout's extension fields (see its
+[README](./graph-node/subgraphs/ens-subgraph/README.md)). It indexes ENSv1 and
+ENSv2 on mainnet and Sepolia and projects ENSv2 names into the legacy `Domain`
+tables, so BENS keeps working on the same schema. Since v2.2.0 those rows are
+correct on their own: the ENSv1 -> ENSv2 migration and the Graveyard's
+retirement of expired names hand ENSv1 state to the Graveyard or a migration
+controller, but the subgraph never stores one of those contracts as `owner`,
+`registrant` or `wrappedOwner`. A migrated or natively registered ENSv2 name
+carries its ENSv2 holder, a retired `.eth` name keeps its lapsed holder and
+expiry (it reads as expired), and a retired subname is deleted with the ENSv1
+convention (owner = zero address, reported as no owner). BENS needs no
+ownership rules of its own. Specific to this subgraph:
+
+- **Graph Node `v0.45.0`+** is required (`graph-node/docker-compose.yml`): the
+  manifest uses `indexerHints` and `apiVersion 0.0.9`, which `v0.34.x` rejects.
+  The bundled manifest is `specVersion 1.2.0`, not upstream's `1.3.0`, so that
+  `vid` keeps its sequence default and BENS's offchain `domain` inserts work
+  (see `graph-node/subgraphs/ens-subgraph/README.md`).
+- **`specific.ensv2`.** `"ensv2": true` on an ENS-like protocol (default
+  `false`) marks its subgraph as ens-subgraph 2.3+ and enables the ENSv2
+  columns and tables below. Protocols without it never touch them.
+- **Deploy order.** At startup BENS reads the schema of the *newest* deployment
+  of each subgraph name (`subgraph_version` ordered by
+  `deployment_schemas.created_at`), not graph-node's `current_version`, and
+  whether or not it has synced. Deploy the new subgraph version, wait until it
+  is fully synced, then start BENS with `"ensv2": true`. Any BENS restart while
+  the new deployment is still syncing serves its partial data.
+- **ENSIP-19 default primary names.** The ENSv2 app sets a primary name on the
+  `DefaultReverseRegistrar` instead of the v1 `addr.reverse` resolver. The
+  subgraph indexes them as `ENSv2PrimaryName`, with a Blockscout extension
+  field `reverse_node = namehash(<addr>.addr.reverse)`. BENS's
+  `addr_reverse_names` view UNIONs that table with the v1 `name_changed`
+  source and follows ENSIP-19: the `addr.reverse` name wins, the default
+  primary name is the fallback when it is empty or absent.
+- **ENSv2 tokens.** For a name live in ENSv2 the subgraph sets
+  `Domain.registryToken` (ens-subgraph 2.3+) to its current ENSv2 token,
+  whose id is the registry address followed by the uint256 token id. BENS
+  links that token instead of the ENSv1 BaseRegistrar or NameWrapper token,
+  which is retired (held by the Graveyard after a migration) or unrelated (a
+  native registration of a label whose ENSv1 registration had lapsed).
+- **Never-expiring names.** The subgraph writes `253402300799`
+  (9999-12-31T23:59:59Z) to `expiry_date` for ENSv2 names that never expire.
+  BENS reports that value, or anything beyond it, as no expiry
+  (`expiry_date: null`, "never expires").
+
+```json
+"specific": {
+  "type": "ens_like",
+  "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
+  "registry_contract": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
+  "try_offchain_resolve": true,
+  "ensv2": true
+}
+```
 
 ## Envs
 

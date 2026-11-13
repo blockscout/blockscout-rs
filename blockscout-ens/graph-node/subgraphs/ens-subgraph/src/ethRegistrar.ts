@@ -1,28 +1,56 @@
 // Import types and APIs from graph-ts
-import { BigInt, ByteArray, Bytes, crypto, ens } from "@graphprotocol/graph-ts";
+import {
+  Address,
+  BigInt,
+  Bytes,
+  crypto,
+  ens,
+  log,
+  store,
+} from "@graphprotocol/graph-ts";
 
 import {
-  byteArrayFromHex,
   checkValidLabel,
+  clampLegacyExpiry,
   concat,
-  createEventID,
+  createLegacyEventID,
   ETH_NODE,
   uint256ToByteArray,
 } from "./utils";
 
 // Import event types from the registry contract ABI
 import {
+  ApprovalForAll as BaseRegistrarApprovalForAllEvent,
+  ControllerAdded as ControllerAddedEvent,
+  ControllerRemoved as ControllerRemovedEvent,
   NameRegistered as NameRegisteredEvent,
   NameRenewed as NameRenewedEvent,
+  OwnershipTransferred as BaseRegistrarOwnershipTransferredEvent,
   Transfer as TransferEvent,
 } from "./types/BaseRegistrar/BaseRegistrar";
 
-import { NameRegistered as ControllerNameRegisteredEventOld } from "./types/EthRegistrarControllerOld/EthRegistrarControllerOld";
+import {
+  NameRegistered as LegacyEthRegistrarController_NameRegistered,
+  NameRenewed as LegacyEthRegistrarController_NameRenewed,
+  OwnershipTransferred as LegacyEthRegistrarController_OwnershipTransferred,
+} from "./types/LegacyEthRegistrarController/LegacyEthRegistrarController";
+import {
+  NameRegistered as UnwrappedEthRegistrarController_NameRegistered,
+  NameRenewed as UnwrappedEthRegistrarController_NameRenewed,
+  OwnershipTransferred as UnwrappedEthRegistrarController_OwnershipTransferred,
+} from "./types/UnwrappedEthRegistrarController/UnwrappedEthRegistrarController";
+import {
+  NameRegistered as WrappedEthRegistrarController_NameRegistered,
+  OwnershipTransferred as WrappedEthRegistrarController_OwnershipTransferred,
+} from "./types/WrappedEthRegistrarController/WrappedEthRegistrarController";
 
 import {
-  NameRegistered as ControllerNameRegisteredEvent,
-  NameRenewed as ControllerNameRenewedEvent,
-} from "./types/EthRegistrarController/EthRegistrarController";
+  processApprovalForAll,
+  processControllerStatus,
+  processOwnershipTransferred,
+} from "./accessControl";
+import { isRetirementRegistrant, isSink } from "./ensv2Constants";
+import { isGovernedByEnsv2 } from "./legacyGovernance";
 
 // Import entity types generated from the GraphQL schema
 import {
@@ -32,36 +60,96 @@ import {
   NameRenewed,
   NameTransferred,
   Registration,
+  WrappedDomain,
 } from "./types/schema";
 
 const GRACE_PERIOD_SECONDS = BigInt.fromI32(7776000); // 90 days
 
-var rootNode: ByteArray = byteArrayFromHex(ETH_NODE);
+let rootNode: Bytes = ETH_NODE;
 
+// Retirement. The ENSv2 Graveyard retires expired ENSv1 .eth names
+// (Graveyard.clear() in ensdomains/contracts-v2, run on mainnet by ENS Labs'
+// Morticia daemon): BaseRegistrar.register(labelhash, graveyard,
+// type(uint64).max - now - GRACE_PERIOD), after which the resolver is
+// cleared and any subnames are moved to the Graveyard. GraveyardRepairer
+// does the same for lapsed names whose record a holder had handed to the
+// Graveyard, registering to itself first. Taken literally the name would read
+// as a live registration owned by a sink forever. It is nothing of the sort:
+// the name lapsed, nobody holds it, and it can be registered again on ENSv2.
+// Mainnet's first sweep covered ~946,000 names.
+//
+// So a registration to the Graveyard or the repairer leaves the Registration,
+// the Domain and any WrappedDomain exactly as the expired name had them
+// (lapsed registrant, dates, expiry, last wrapped holder), and only the
+// NameRegistered / NameTransferred history rows record what happened. A
+// migration never registers: the migration controllers move a live token
+// with a plain transfer, which handleNameTransferred also keeps out of the
+// holder fields (legacyGovernance.ts).
+//
+// A name live in ENSv2 is the ENSv2 projection's: BaseRegistrar events for it
+// (a later Graveyard.clear() of its retired v1 record) only write history.
 export function handleNameRegistered(event: NameRegisteredEvent): void {
-  let account = new Account(event.params.owner.toHex());
+  let account = new Account(event.params.owner.toHexString());
   account.save();
 
   let label = uint256ToByteArray(event.params.id);
-  let registration = new Registration(label.toHex());
-  
-  let domainId = crypto.keccak256(concat(rootNode, label)).toHex();
+  let labelHex = Bytes.fromByteArray(label).toHexString();
+  let node = Bytes.fromByteArray(crypto.keccak256(concat(rootNode, label)));
+  let domainId = node.toHexString();
   let domain = Domain.load(domainId);
-  
   if (domain == null) {
+    // Expected to always exist by the time BaseRegistrar's own
+    // NameRegistered fires (ENSRegistry's NewOwner, which creates it, is
+    // emitted earlier in the same tx) — but testnets can be reset/redeployed
+    // without every historical NewOwner being indexed, so guard rather than
+    // crash the whole subgraph on a single irregular name.
+    log.warning("handleNameRegistered: no Domain for {}, skipping", [domainId]);
     return;
   }
 
-  registration.domain = domain.id;
-  registration.registrationDate = event.block.timestamp;
-  registration.expiryDate = event.params.expires;
-  registration.registrant = account.id;
+  let registration: Registration;
+  if (isRetirementRegistrant(event.params.owner) || isGovernedByEnsv2(node, event.block.number)) {
+    let existing = Registration.load(labelHex);
+    if (existing == null) {
+      // clear() requires BaseRegistrar.nameExpires(label) != 0, so the name
+      // was registered on chain before; only a gap in the indexed history
+      // gets here. Nothing sensible can be recorded without the lapsed
+      // state (the event row needs a Registration too), so leave the name
+      // as it is rather than inventing a sink-owned registration.
+      log.warning(
+        "handleNameRegistered: retirement of {} without a prior Registration, skipping",
+        [domainId]
+      );
+      return;
+    }
+    registration = existing;
+  } else {
+    registration = new Registration(labelHex);
+    registration.domain = domain.id;
+    registration.registrationDate = event.block.timestamp;
+    registration.expiryDate = clampLegacyExpiry(event.params.expires);
+    registration.registrant = account.id;
 
-  domain.registrant = account.id;
-  domain.expiryDate = event.params.expires.plus(GRACE_PERIOD_SECONDS);
+    domain.registrant = account.id;
+    domain.expiryDate = clampLegacyExpiry(
+      event.params.expires.plus(GRACE_PERIOD_SECONDS)
+    );
+
+    // A fresh .eth registration means any previous wrapped registration has
+    // lapsed (a name leaving the NameWrapper by expiry emits no NameUnwrapped
+    // event, so the wrapped state would otherwise go stale). Clear it here.
+    // If this is a register-and-wrap in the same tx, the BaseRegistrar
+    // NameRegistered event fires before the NameWrapper NameWrapped /
+    // TransferSingle events, which recreate the WrappedDomain with the
+    // correct new owner.
+    domain.wrappedOwner = null;
+    if (WrappedDomain.load(domain.id) != null) {
+      store.remove("WrappedDomain", domain.id);
+    }
+  }
 
   let labelName = ens.nameByHash(label.toHexString());
-  if (labelName != null) {
+  if (checkValidLabel(labelName)) {
     domain.labelName = labelName;
     domain.name = labelName! + ".eth";
     registration.labelName = labelName;
@@ -69,7 +157,7 @@ export function handleNameRegistered(event: NameRegisteredEvent): void {
   domain.save();
   registration.save();
 
-  let registrationEvent = new NameRegistered(createEventID(event));
+  let registrationEvent = new NameRegistered(createLegacyEventID(event));
   registrationEvent.registration = registration.id;
   registrationEvent.blockNumber = event.block.number.toI32();
   registrationEvent.transactionID = event.transaction.hash;
@@ -78,14 +166,24 @@ export function handleNameRegistered(event: NameRegisteredEvent): void {
   registrationEvent.save();
 }
 
-export function handleNameRegisteredByControllerOld(
-  event: ControllerNameRegisteredEventOld
+// Legacy controller
+
+export function handleNameRegisteredByLegacyController(
+  event: LegacyEthRegistrarController_NameRegistered
 ): void {
   setNamePreimage(event.params.name, event.params.label, event.params.cost);
 }
 
-export function handleNameRegisteredByController(
-  event: ControllerNameRegisteredEvent
+export function handleNameRenewedByLegacyController(
+  event: LegacyEthRegistrarController_NameRenewed
+): void {
+  setNamePreimage(event.params.name, event.params.label, event.params.cost);
+}
+
+// Wrapped controller (reuses same renew event as legacy controller)
+
+export function handleNameRegisteredByWrappedController(
+  event: WrappedEthRegistrarController_NameRegistered
 ): void {
   setNamePreimage(
     event.params.name,
@@ -94,10 +192,26 @@ export function handleNameRegisteredByController(
   );
 }
 
-export function handleNameRenewedByController(
-  event: ControllerNameRenewedEvent
+// Unwrapped controller
+
+export function handleNameRegisteredByUnwrappedController(
+  event: UnwrappedEthRegistrarController_NameRegistered
 ): void {
-  setNamePreimage(event.params.name, event.params.label, event.params.cost);
+  setNamePreimage(
+    event.params.label,
+    event.params.labelhash,
+    event.params.baseCost.plus(event.params.premium)
+  );
+}
+
+export function handleNameRenewedByUnwrappedController(
+  event: UnwrappedEthRegistrarController_NameRenewed
+): void {
+  setNamePreimage(
+    event.params.label,
+    event.params.labelhash,
+    event.params.cost
+  );
 }
 
 function setNamePreimage(name: string, label: Bytes, cost: BigInt): void {
@@ -105,18 +219,19 @@ function setNamePreimage(name: string, label: Bytes, cost: BigInt): void {
     return;
   }
 
-  let domainId = crypto.keccak256(concat(rootNode, label)).toHex();
+  let domainId = Bytes.fromByteArray(crypto.keccak256(concat(rootNode, label))).toHexString();
   let domain = Domain.load(domainId);
   if (domain == null) {
+    log.warning("setNamePreimage: no Domain for {}, skipping", [domainId]);
     return;
   }
-  if (domain.labelName !== name) {
+  if (domain.labelName != name) {
     domain.labelName = name;
     domain.name = name + ".eth";
     domain.save();
   }
 
-  let registration = Registration.load(label.toHex());
+  let registration = Registration.load(Bytes.fromByteArray(label).toHexString());
   if (registration == null) return;
   registration.labelName = name;
   registration.cost = cost;
@@ -125,24 +240,44 @@ function setNamePreimage(name: string, label: Bytes, cost: BigInt): void {
 
 export function handleNameRenewed(event: NameRenewedEvent): void {
   let label = uint256ToByteArray(event.params.id);
-  let registration = Registration.load(label.toHex());
+  let labelHex = Bytes.fromByteArray(label).toHexString();
+  let domainId = Bytes.fromByteArray(crypto.keccak256(concat(rootNode, label))).toHexString();
+  let registration = Registration.load(labelHex);
   if (registration == null) {
+    log.warning("handleNameRenewed: no Registration for {}, skipping", [labelHex]);
     return;
   }
-  
-  let domainId = crypto.keccak256(concat(rootNode, label)).toHex();
   let domain = Domain.load(domainId);
   if (domain == null) {
+    log.warning("handleNameRenewed: no Domain for {}, skipping", [domainId]);
     return;
   }
 
-  registration.expiryDate = event.params.expires;
-  domain.expiryDate = event.params.expires.plus(GRACE_PERIOD_SECONDS);
+  // A name live in ENSv2 takes its expiry from ENSv2 (legacyGovernance.ts):
+  // the v1 token of a migrated name sits in the Graveyard and its renewals
+  // say nothing about the name.
+  if (!isGovernedByEnsv2(Bytes.fromHexString(domainId), event.block.number)) {
+    // Clamp both legacy fields (event rows keep the raw value).
+    registration.expiryDate = clampLegacyExpiry(event.params.expires);
+    domain.expiryDate = clampLegacyExpiry(
+      event.params.expires.plus(GRACE_PERIOD_SECONDS)
+    );
 
-  registration.save();
-  domain.save();
+    registration.save();
+    domain.save();
 
-  let registrationEvent = new NameRenewed(createEventID(event));
+    // A wrapped .eth 2LD renewed through the BaseRegistrar emits no
+    // NameWrapper ExpiryExtended event: the wrapper normalises its expiry on
+    // read (registrar expiry + GRACE_PERIOD, see NameWrapper.getData).
+    // Mirror that here so WrappedDomain.expiryDate does not go stale (#89).
+    let wrappedDomain = WrappedDomain.load(domainId);
+    if (wrappedDomain != null) {
+      wrappedDomain.expiryDate = domain.expiryDate!;
+      wrappedDomain.save();
+    }
+  }
+
+  let registrationEvent = new NameRenewed(createLegacyEventID(event));
   registrationEvent.registration = registration.id;
   registrationEvent.blockNumber = event.block.number.toI32();
   registrationEvent.transactionID = event.transaction.hash;
@@ -151,29 +286,98 @@ export function handleNameRenewed(event: NameRenewedEvent): void {
 }
 
 export function handleNameTransferred(event: TransferEvent): void {
-  let account = new Account(event.params.to.toHex());
+  let account = new Account(event.params.to.toHexString());
   account.save();
 
   let label = uint256ToByteArray(event.params.tokenId);
-  let registration = Registration.load(label.toHex());
+  let labelHex = Bytes.fromByteArray(label).toHexString();
+  let registration = Registration.load(labelHex);
   if (registration == null) return;
 
-  let domainId = crypto.keccak256(concat(rootNode, label)).toHex();
+  let domainId = Bytes.fromByteArray(crypto.keccak256(concat(rootNode, label))).toHexString();
   let domain = Domain.load(domainId);
   if (domain == null) {
+    log.warning("handleNameTransferred: no Domain for {}, skipping", [domainId]);
     return;
   }
 
-  registration.registrant = account.id;
-  domain.registrant = account.id;
+  // BaseRegistrar burns (Transfer to 0x0) only inside _register, immediately
+  // before minting the token again to the new registrant, so the burn never
+  // needs to touch the registrant: the mint, or the NameRegistered that
+  // follows it in the same transaction, sets the real one. A transfer to a
+  // sink (a migration's or retirement's voiding step) and any transfer of a
+  // name live in ENSv2 only write history (legacyGovernance.ts).
+  let isBurn = event.params.to.equals(Address.zero());
+  if (
+    !isBurn &&
+    !isSink(event.params.to) &&
+    !isGovernedByEnsv2(Bytes.fromHexString(domainId), event.block.number)
+  ) {
+    registration.registrant = account.id;
+    domain.registrant = account.id;
 
-  domain.save();
-  registration.save();
+    domain.save();
+    registration.save();
+  }
 
-  let transferEvent = new NameTransferred(createEventID(event));
-  transferEvent.registration = label.toHex();
+  let transferEvent = new NameTransferred(createLegacyEventID(event));
+  transferEvent.registration = labelHex;
   transferEvent.blockNumber = event.block.number.toI32();
   transferEvent.transactionID = event.transaction.hash;
   transferEvent.newOwner = account.id;
   transferEvent.save();
+}
+
+export function handleBaseRegistrarApprovalForAll(
+  event: BaseRegistrarApprovalForAllEvent
+): void {
+  processApprovalForAll(
+    event.address,
+    event.params.owner,
+    event.params.operator,
+    event.params.approved,
+    event.block
+  );
+}
+
+export function handleBaseRegistrarOwnershipTransferred(
+  event: BaseRegistrarOwnershipTransferredEvent
+): void {
+  processOwnershipTransferred(event.address, event.params.newOwner, event.block);
+}
+
+export function handleControllerAdded(event: ControllerAddedEvent): void {
+  processControllerStatus(
+    event.address,
+    event.params.controller,
+    true,
+    event.block
+  );
+}
+
+export function handleControllerRemoved(event: ControllerRemovedEvent): void {
+  processControllerStatus(
+    event.address,
+    event.params.controller,
+    false,
+    event.block
+  );
+}
+
+export function handleLegacyControllerOwnershipTransferred(
+  event: LegacyEthRegistrarController_OwnershipTransferred
+): void {
+  processOwnershipTransferred(event.address, event.params.newOwner, event.block);
+}
+
+export function handleWrappedControllerOwnershipTransferred(
+  event: WrappedEthRegistrarController_OwnershipTransferred
+): void {
+  processOwnershipTransferred(event.address, event.params.newOwner, event.block);
+}
+
+export function handleUnwrappedControllerOwnershipTransferred(
+  event: UnwrappedEthRegistrarController_OwnershipTransferred
+): void {
+  processOwnershipTransferred(event.address, event.params.newOwner, event.block);
 }

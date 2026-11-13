@@ -3,7 +3,7 @@ services:
   graph-node:
     container_name: graph-node-dev
     platform: linux/amd64
-    image: graphprotocol/graph-node:v0.34.1
+    image: graphprotocol/graph-node:v0.45.0
     ports:
       - '8000:8000'
       - '8001:8001'

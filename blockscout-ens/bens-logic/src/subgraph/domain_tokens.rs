@@ -42,6 +42,14 @@ fn extract_tokens_for_ens_like(
     name: &DomainNameOnProtocol<'_>,
     ens_like: &EnsLikeProtocol,
 ) -> Result<Vec<DomainToken>, anyhow::Error> {
+    // A name live in ENSv2 is represented by its ENSv2 registry token. Its
+    // ENSv1 BaseRegistrar / NameWrapper tokens are retired (held by the
+    // Graveyard after a migration) or unrelated (a native ENSv2 registration
+    // of a label whose ENSv1 registration had lapsed).
+    if let Some(registry_token) = &domain.ensv2_registry_token {
+        return Ok(vec![ensv2_token(registry_token)?]);
+    }
+
     let mut tokens = vec![];
     if let Some(contract) = ens_like.native_token_contract {
         let is_second_level_domain = name.inner.level() == 2;
@@ -75,6 +83,20 @@ fn extract_tokens_for_ens_like(
     };
 
     Ok(tokens)
+}
+
+// `Domain.registryToken` is the ENSv2Token id: 20-byte registry address
+// followed by the 32-byte token id, hex-encoded without `0x`.
+fn ensv2_token(registry_token: &str) -> Result<DomainToken, anyhow::Error> {
+    if registry_token.len() != 104 {
+        anyhow::bail!("unexpected ENSv2 registry token id length: {registry_token}");
+    }
+    let (contract, id) = registry_token.split_at(40);
+    Ok(DomainToken {
+        id: token_id(id)?,
+        contract: Address::from_str(contract).context("parse ENSv2 registry address")?,
+        _type: DomainTokenType::Native,
+    })
 }
 
 fn extract_tokens_for_d3_connect(
@@ -251,5 +273,50 @@ mod tests {
 
             assert_eq!(tokens, expected_tokens, "failed for domain: {}", name.inner.name());
         }
+    }
+
+    // A name live in ENSv2: only its ENSv2 registry token, never the retired
+    // or unrelated ENSv1 tokens.
+    #[test]
+    fn ensv2_name_links_only_its_ensv2_token() {
+        let native_contract = "0x1234567890123456789012345678901234567890";
+        let eth_registry = "0xf60aba43e1f7f3dab1186ff03b561401c9df85e2";
+        let holder = "0x1111111111111111111111111111111111111111";
+        let mut protocol = Protocol::default();
+        protocol.info.tld_list = nonempty![Tld::new("eth")];
+        protocol.info.protocol_specific = ProtocolSpecific::EnsLike(EnsLikeProtocol {
+            native_token_contract: addr(native_contract),
+            ..Default::default()
+        });
+        let mut d = domain("levvv.eth", "0x0200", "0x0100", holder, Some(holder));
+        // registry ++ uint256(123456789)
+        d.ensv2_registry_token = Some(format!(
+            "{}{:064x}",
+            eth_registry.trim_start_matches("0x"),
+            123456789u64
+        ));
+        let deployed_protocol = DeployedProtocol {
+            protocol: &protocol,
+            deployment_network: &Network {
+                network_id: 1,
+                blockscout_client: Arc::new(BlockscoutClient::new(
+                    "http://localhost:8545".parse().unwrap(),
+                    1,
+                    1,
+                )),
+                rpc_url: None,
+                use_protocols: vec![],
+            },
+        };
+        let name = DomainNameOnProtocol::from_str("levvv.eth", deployed_protocol).unwrap();
+        let tokens = extract_tokens_from_domain(&d, &name).expect("failed to extract tokens");
+        assert_eq!(
+            tokens,
+            vec![DomainToken {
+                id: "123456789".to_string(),
+                contract: Address::from_str(eth_registry).unwrap(),
+                _type: DomainTokenType::Native,
+            }]
+        );
     }
 }

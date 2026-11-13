@@ -1,0 +1,240 @@
+# Changelog
+
+Version labels match the Subgraph Studio deployments of the mainnet subgraph
+`5XqPmWe6gjyrJtFn9cLy237i4cWw2j9HcUJEXsP5qGtH`.
+
+## v2.3.1 (2026-11-13)
+
+### Fixed
+
+- An ENSv1 name whose registry resolver is set to a PermissionedResolver now
+  takes its records from the record linked to it. A PermissionedResolver has
+  no node-keyed events: its records arrive through `Linked` and the
+  `*Updated` events, which only project onto a name while the registry
+  already points at that resolver. Before, an ENSv1 `NewResolver` created an
+  empty legacy `Resolver` row, so a name linked and populated before the
+  registry switched kept `Resolver.addr` and `Domain.resolvedAddress` null.
+  A name that switched away and back kept the address from before the
+  switch. ENSv1 `NewResolver` now attaches the resolver the same way as
+  ENSv2's `ResolverUpdated` (`attachDomainResolver`). Classic resolvers
+  behave as before. ENSv2 names were not affected. On mainnet no ENSv1 name
+  pointed at a PermissionedResolver with a linked record as of block
+  26,405,541, so no existing row changes.
+
+## v2.3.0 (2026-11-13)
+
+### Added
+
+- `Domain.registryToken`: the name's current token in its ENSv2 registry
+  (an `ENSv2Token`, whose id is the registry address followed by the uint256
+  token id), so consumers can link a live ENSv2 name to its token without
+  joining the native entities. Set when the registration's `TokenResource`
+  arrives and on `TokenRegenerated`, cleared when the name is unregistered or
+  its namespace unlinked; null for names that are not live in ENSv2. Their
+  ENSv1 BaseRegistrar / NameWrapper tokens are retired or unrelated.
+
+Requires a full re-index.
+
+## v2.2.1 (2026-11-13)
+
+### Fixed
+
+- A `Linked` event with a malformed DNS-encoded name (empty, a length byte
+  that runs past the end, or no root terminator) aborted the mapping with an
+  out-of-range read. The PermissionedResolver data source has no address, so
+  any contract could emit such an event and halt the subgraph. `decodeName`
+  now returns null for malformed input; the link is indexed with
+  `nameDecoded = null`. No such event exists on mainnet so far.
+- `Resolver.addr` and `Domain.resolvedAddress` of a name on a
+  PermissionedResolver now follow `addr()` on chain: the coin type 60
+  address, or the ENSIP-19 default EVM address (coin type `2147483648`) when
+  coin type 60 is unset or empty. A non-empty coin type 60 value, including
+  the zero address, still overrides the default. On mainnet 25 records rely
+  on the default (block 26,404,320).
+
+Requires a full re-index (the second fix changes already indexed rows).
+
+## v2.2.0 (2026-11-11)
+
+The legacy `Domain` / `Registration` / `WrappedDomain` entities are now
+correct on their own: no consumer needs to know about the ENSv2 Graveyard or
+migration contracts. Three rules (`src/legacyGovernance.ts`):
+
+1. **A sink never becomes a holder.** ENSv1 events that hand a registry
+   record, BaseRegistrar token or NameWrapper token to the Graveyard, the
+   GraveyardRepairer or a migration controller only write their history rows.
+   A `.eth` name keeps its owner (a migration's ENSv2 registration follows in
+   the same transaction), a retired `.eth` name keeps its whole lapsed state
+   including its last wrapped holder, and a subname moved to the Graveyard is
+   deleted with the ENSv1 convention.
+2. **ENSv2 governs a live ENSv2 name.** While a node has an active ENSv2 path
+   with a `REGISTERED` slot, ENSv1 registry, BaseRegistrar and NameWrapper
+   events for it only write history. Later `Graveyard.clear()` calls over the
+   retired v1 record of a migrated or natively registered name no longer
+   overwrite its owner, resolver or expiry.
+3. **The ENSv2 projection is complete.** Every registration, native or
+   migration, in any registry writes the ENSv2 holder into `owner` and
+   `registrant`, removes v1 NameWrapper state, resets the resolver to the
+   ENSv2 one, and sets `registrationDate` for native registrations.
+   Transfers and renewals sync in every registry, not only the ETH registry.
+   Unregistration and namespace unlinks delete the projected row. A path a
+   new subregistry takes over is rebound to its new slot.
+
+### Changed
+
+- `Domain.owner` of a migrated name is its ENSv2 holder, no longer the
+  Graveyard (28,322 names on mainnet at block 26,389,002), and the 25 locked
+  migrations lose their v1 `WrappedDomain`.
+- `Domain.owner` of a swept expired `.eth` name is its last ENSv1 owner, no
+  longer the Graveyard (about 950,000 names).
+
+### Fixed (mainnet counts at block 26,389,002)
+
+- 3,361 swept wrapped `.eth` names lost their last wrapped holder.
+- 848 retired subnames: 702 read as live under their old wrapped holder, 146
+  as Graveyard-owned. They now read as deleted.
+- 680 live ENSv2 names had their owner overwritten with the Graveyard and 625
+  their resolver wiped by a later v1 clear (for example visigoth.eth,
+  bmw-000.tpa.eth).
+- 190 native ENSv2 `.eth` names kept a stale ENSv1 resolver, and 583 native
+  ENSv2 names kept stale v1 wrapped state (6 with the Graveyard as
+  `wrappedOwner`).
+- 1,500 of 2,678 native ENSv2 `.eth` registrations showed the old v1
+  `registrationDate`.
+- 6 transfers and 8 renewals in user registries never reached the legacy row.
+- 35 unregistered ENSv2 subnames still read as live, 8 of them with a path
+  left active after their parent switched subregistry.
+- GraveyardRepairer (contracts-v2, not yet deployed) is recognised as a
+  retirement registrant once its address is configured.
+
+### Corrected
+
+- The v2.1.3 entry below says none of its fixes had produced wrong data on
+  mainnet. That was wrong: v2.1.3 restored `resolvedAddress` on 451 ENSv2
+  names that point at a v1 PublicResolver, and reclassified 2 registries from
+  `UNKNOWN` to `USER`.
+
+Requires a full re-index.
+
+## v2.1.3 (2026-11-09)
+
+Hardening of three edge cases raised in review of the ENSv2 mappings. None of
+them has produced wrong data on mainnet (checked against a fully synced
+mainnet database on 2026-11-09), so no re-index is required.
+
+### Fixed
+
+- An ENSv2 registry `ResolverUpdated` pointing a name at a classic node-keyed
+  resolver (PublicResolverV2 and friends, which have no `ENSv2ResolverLink`)
+  no longer wipes the `addr`/`contentHash`/`texts`/`coinTypes` snapshot that
+  the ENSv1 resolver handlers keep on the legacy `Resolver` row, nor nulls
+  `Domain.resolvedAddress`. It now behaves like the ENSv1 `NewResolver`
+  handler: the snapshot is kept and its `addr` is copied to
+  `Domain.resolvedAddress`. The snapshot is still cleared when a link exists
+  and is explicitly inactive (`linkToRecord(name, 0)`), and an active link
+  still projects the native record.
+- `ProxyDeployed` now reclassifies an `ENSv2Registry` row that an earlier
+  `SubregistryUpdated`/`ParentUpdated` created as `UNKNOWN` (possible only
+  across data-source start blocks or on a redeployed testnet) once the
+  implementation is known, instead of leaving `kind` frozen at `UNKNOWN`.
+- The gated 2017-registry handlers (`handleNewResolverOldRegistry`,
+  `handleNewTTLOldRegistry`, `handleTransferOldRegistry`) log a warning and
+  skip an event for a node with no `Domain` instead of aborting indexing on a
+  non-null assertion. Both registries are indexed from their deployment
+  blocks, so this does not occur on mainnet or Sepolia.
+
+## v2.1.2 (2026-11-09)
+
+### Fixed
+
+- Expired ENSv1 `.eth` names retired by the ENSv2 Graveyard no longer read as
+  live registrations owned by the Graveyard. `Graveyard.clear()` re-registers
+  an expired name to the Graveyard with a near-`2^64` expiry (burn, mint,
+  registry `NewOwner`, `NameRegistered`, resolver cleared); on mainnet the
+  first sweep (blocks 26,297,075 to 26,372,896) covered 946,001 names, about a
+  fifth of all `.eth` registrations, which then showed `registrant` =
+  Graveyard and `expiryDate` = the year-9999 clamp. A `NameRegistered` to the
+  Graveyard now keeps the lapsed `registrant`, `registrationDate` and
+  `expiryDate` on `Registration` and `Domain` (the name is expired and
+  available, as it looked before the sweep), the burn and the mint to the
+  Graveyard leave `registrant` alone, stale `WrappedDomain` state is cleared,
+  and the `NameTransferred`/`NameRegistered` history rows are still written.
+  `Domain.owner` still follows the registry to the Graveyard, as for migrated
+  names. Migrations (a live token moved by a migration controller) are
+  unchanged. Requires a full re-index.
+
+## v2.1.1 (2026-10-31)
+
+### Fixed
+
+- The "never expires" clamp on `Domain`, `Registration` and `WrappedDomain`
+  `expiryDate` is now `253402300799` (9999-12-31T23:59:59Z) instead of
+  `8640000000000` (13 Sep 275760, the JavaScript `Date` maximum). The old
+  value fits PostgreSQL but not Rust's `chrono` (max year 262142), so Rust
+  consumers decoding it as a timestamp panicked (Blockscout's BENS). Year
+  9999 is representable by every mainstream date type. Native ENSv2 entities
+  and event entities still carry the raw on-chain value.
+
+## v2.1.0 (2026-10-31)
+
+### Fixed
+
+- `Domain.wrappedOwner` and the `WrappedDomain` entity are now cleared when a wrapped name leaves the NameWrapper without a `NameUnwrapped` event (replaces #78):
+  - a registry `NewOwner` / `Transfer` that moves the name away from the NameWrapper (parent `setSubnodeOwner` on a subname without `PARENT_CANNOT_CONTROL`, `BaseRegistrar.reclaim`);
+  - a native ENSv2 `.eth` registration of a name whose ENSv1 wrapped registration had expired (expiry emits no event on either contract).
+  Moves to the ENSv2 Graveyard or a migration controller are the migration's voiding step and keep their wrapped state for `correctMigratedLegacyOwner`. A NameWrapper `TransferSingle` / `TransferBatch` of a token whose name carries no wrapped state (a detached token) now writes only the `WrappedTransfer` history row instead of reviving `wrappedOwner`. On mainnet 509 names were affected at the time of the fix.
+
+## v2.0.3 (2026-10-30)
+
+- `Account.ensv2PrimaryNames`: derived link from an account to its ENSIP-19
+  default primary name (#25, #38).
+- README: self-hosting notes (graph-node version, `ens_names` rainbow table
+  for ENSv1 subname labels, duplicate log-index RPCs, pruning) (#62, #30,
+  #77, #68).
+- Refresh `WrappedDomain.expiryDate` when a wrapped `.eth` name is renewed
+  through the BaseRegistrar. The NameWrapper normalises its expiry on read
+  (registrar expiry + 90 days) without emitting `ExpiryExtended`, so the
+  subgraph value went stale after every such renewal: 75,043 wrapped names
+  were affected on mainnet at 2026-10-30 (#89).
+
+## v2.0.2 (2026-10-30)
+
+- Classify registries deployed against the ENS app's mainnet
+  `UserRegistryImpl` (`0xC927bCaA…`) as `USER`. On v2.0.1 those 286
+  registries read `kind: UNKNOWN`; their names were otherwise indexed and
+  projected correctly. `ENSv2Registry.kind` is the only field affected.
+
+## v2.0.1 (2026-10-30), published to production
+
+First ENSv2 release. Indexes ENSv2 registries, namespaces, slots, paths,
+resources, tokens, registrations, resolvers, roles and ENSIP-19 primary names
+alongside the unchanged ENSv1 entities, and projects ENSv2 state into the
+legacy `Domain` / `Registration` / `Resolver` / `WrappedDomain` entities.
+
+Behaviour changes for consumers of the legacy entities:
+
+- `Domain.owner` of a migrated name stays the retired ENSv1 registry owner
+  (the Graveyard for unwrapped names, the NameWrapper for wrapped ones).
+  `registrant`, `wrappedOwner` and the ENSv2 entities carry the real holder.
+  List an address's names by `registrant`/`wrappedOwner`/`resolvedAddress` as
+  well as `owner`.
+- `Domain.expiryDate` for migrated and ENSv2-native names includes the ENSv2
+  grace period (28 days), not ENSv1's 90 days. Read `Registration.expiryDate`
+  for the raw expiry.
+- Never-expiring names (`2^64-1` on chain) are written as `8640000000000` on
+  `Domain`, `Registration` and `WrappedDomain` `expiryDate`; native ENSv2
+  entities and event entities keep the raw value.
+- `indexerHints: prune: auto` is enabled: time-travel queries
+  (`block: { number }`) are only served for recent blocks.
+- Root paths (`eth`, `reverse`) are native ENSv2 entities only and never
+  overwrite the ENSv1 TLD `Domain` rows.
+- Legacy `Domain.subdomainCount` is maintained for projected names
+  (incremented on registration, decremented on unregister, restored on
+  re-registration).
+
+Deployment: specVersion 1.3.0 / apiVersion 0.0.9 (graph-node >= 0.38);
+CI pinned to `ubuntu-24.04` for the matchstick binary.
+
+## v1.1.0 and earlier
+
+ENSv1-only subgraph. See git history.
