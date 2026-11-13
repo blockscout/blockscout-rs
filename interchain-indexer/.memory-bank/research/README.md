@@ -195,3 +195,15 @@ Small topics may keep some sections brief.
   wait-then-give-up model; includes production evidence (Gnosis↔Ethereum,
   `home_chain_id = 100`) and the `stats`-service counter symptom this
   produces
+- `op-interop-protocol-and-indexing-fit.md` — OP Stack native interop (the
+  Lagoon hardfork) as an indexing target. Deployment status snapshot as of
+  2026-11-11: not live anywhere; first two-chain sets OP Sepolia + Unichain
+  Sepolia, then OP Mainnet + Unichain; ETH-only launch; Base not a member.
+  Covers the `CrossL2Inbox` / `L2ToL2CrossDomainMessenger` / ETH-bridge /
+  expiry event grammar with `topic0`s, `(source, nonce)` ≡ `messageHash`
+  identity versus the `ExecutingMessage` payload hash, failed relays that leave
+  no logs, late expiry and refund events, unsafe-block replacement, and fit
+  with the buffer pipeline. Pull-model reads are documented as phase 2.
+  ERC-7802 is documented as not part of the protocol (the token bridge was
+  deleted). Also reviews the stale Blockscout Elixir and `multichain-aggregator`
+  implementations. Pre-implementation: no OP indexer exists yet
