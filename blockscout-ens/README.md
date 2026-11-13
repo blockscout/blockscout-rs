@@ -27,7 +27,7 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 ## ENSv2
 
 `ens-subgraph` is [ensdomains/ens-subgraph](https://github.com/ensdomains/ens-subgraph)
-`v2.2.1` with Blockscout's extension fields (see its
+`v2.3.0` with Blockscout's extension fields (see its
 [README](./graph-node/subgraphs/ens-subgraph/README.md)). It indexes ENSv1 and
 ENSv2 on mainnet and Sepolia and projects ENSv2 names into the legacy `Domain`
 tables, so BENS keeps working on the same schema. Since v2.2.0 those rows are
@@ -51,11 +51,12 @@ ownership rules of its own. Specific to this subgraph:
   `addr_reverse_names` view UNIONs that table with the v1 `name_changed`
   source and follows ENSIP-19: the `addr.reverse` name wins, the default
   primary name is the fallback when it is empty or absent.
-- **ENSv2 tokens.** For a name live in ENSv2 (active ENSv2 path whose slot has
-  a current token) BENS links the token in its ENSv2 registry, not the ENSv1
-  BaseRegistrar or NameWrapper token, which is retired (held by the
-  Graveyard after a migration) or unrelated (a native registration of a label
-  whose ENSv1 registration had lapsed).
+- **ENSv2 tokens.** For a name live in ENSv2 the subgraph sets
+  `Domain.registryToken` (ens-subgraph 2.3+) to its current ENSv2 token,
+  whose id is the registry address followed by the uint256 token id. BENS
+  links that token instead of the ENSv1 BaseRegistrar or NameWrapper token,
+  which is retired (held by the Graveyard after a migration) or unrelated (a
+  native registration of a label whose ENSv1 registration had lapsed).
 - **Never-expiring names.** The subgraph writes `253402300799`
   (9999-12-31T23:59:59Z) to `expiry_date` for ENSv2 names that never expire.
   BENS reports that value, or anything beyond it, as no expiry

@@ -100,38 +100,18 @@ COALESCE(to_timestamp(LEAST(expiry_date, 253402300799)) < now(), false) AS is_ex
 token_id::text as token_id
 "#;
 
-// The detailed select of a protocol indexed by ensdomains/ens-subgraph 2.2+
-// adds the ENSv2 registry token of a name live in ENSv2 (active path whose
-// slot holds a current token), so the token links point at it rather than at
-// the retired ENSv1 BaseRegistrar / NameWrapper tokens. Only used for
-// single-name lookups.
+// The detailed select of a protocol indexed by ensdomains/ens-subgraph 2.3+
+// adds `Domain.registryToken`, the ENSv2 token of a name live in ENSv2, so
+// the token links point at it rather than at the retired ENSv1 BaseRegistrar
+// / NameWrapper tokens. The column exists only in that schema.
 fn detailed_domain_select_clause(protocol: &Protocol) -> String {
     match protocol.info.protocol_specific.ensv2() {
-        Some(_) => {
-            let token = ensv2_token_subquery(&protocol.subgraph_schema);
-            format!(
-                "{DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE},\n\
-                 (SELECT '0x' || encode(t.registry, 'hex') {token}) as ensv2_token_contract,\n\
-                 (SELECT t.token_id::text {token}) as ensv2_token_id"
-            )
-        }
+        Some(_) => format!(
+            "{DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE},\n\
+             encode(registry_token, 'hex') as ensv2_registry_token"
+        ),
         None => DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE.to_string(),
     }
-}
-
-// `ENSv2NamePath.id` is the namehash as bytes, `Domain.id` the same hash as a
-// 0x-prefixed text, hence the decode. A slot's `current_token` is cleared when
-// the name is unregistered or its token burned.
-fn ensv2_token_subquery(schema: &str) -> String {
-    format!(
-        "FROM {schema}.en_sv_2_name_path p \
-         JOIN {schema}.en_sv_2_name_slot s ON s.id = p.slot \
-         JOIN {schema}.en_sv_2_token t ON t.id = s.current_token \
-         WHERE p.id = decode(substr(domain.id, 3), 'hex') AND p.active \
-         AND p.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE} AND s.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE} \
-         AND t.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE} \
-         LIMIT 1"
-    )
 }
 
 const DOMAIN_DEFAULT_SELECT_CLAUSE: &str = r#"
@@ -428,26 +408,25 @@ mod tests {
     }
 
     #[test]
-    fn ensv2_token_columns_only_with_ensv2() {
+    fn ensv2_registry_token_only_with_ensv2() {
         let mut protocol = Protocol {
             subgraph_schema: "sgd1".to_string(),
             ..Default::default()
         };
         let plain = detailed_domain_select_clause(&protocol);
-        assert!(!plain.contains("en_sv_2"), "{plain}");
-        assert!(!plain.contains("ensv2_token"), "{plain}");
+        assert!(!plain.contains("registry_token"), "{plain}");
 
         protocol.info.protocol_specific = ProtocolSpecific::EnsLike(EnsLikeProtocol {
             ensv2: Some(EnsV2Settings {}),
             ..Default::default()
         });
         let v2 = detailed_domain_select_clause(&protocol);
-        assert!(v2.contains("as ensv2_token_contract"), "{v2}");
-        assert!(v2.contains("as ensv2_token_id"), "{v2}");
         assert!(
-            v2.contains("JOIN sgd1.en_sv_2_token t ON t.id = s.current_token"),
+            v2.contains("encode(registry_token, 'hex') as ensv2_registry_token"),
             "{v2}"
         );
+        // A plain column of the domain row: no join over the ENSv2 entities.
+        assert!(!v2.contains("en_sv_2"), "{v2}");
         // The owned-by filter and the list select stay upstream's.
         let list = sql_gen::domain_select(&protocol).to_string(PostgresQueryBuilder);
         assert!(!list.contains("en_sv_2"), "{list}");

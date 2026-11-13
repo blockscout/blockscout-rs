@@ -19,14 +19,13 @@ pub struct DetailedDomain {
     pub is_migrated: bool,
     pub registration_date: chrono::DateTime<Utc>,
     pub owner: String,
-    /// For a name live in ENSv2 (active ENSv2 path with a current token): the
-    /// ENSv2 registry holding its token, and the token id. Its ENSv1
-    /// BaseRegistrar / NameWrapper tokens are retired. `None` for protocols
-    /// without `ensv2` and for ENSv1 names.
+    /// `Domain.registryToken` (ens-subgraph 2.3+), hex without `0x`: the
+    /// name's current ENSv2 token id, i.e. the 20-byte registry address
+    /// followed by the 32-byte token id. Its ENSv1 BaseRegistrar / NameWrapper
+    /// tokens are retired. `None` for protocols without `ensv2` and for names
+    /// not live in ENSv2.
     #[sqlx(default)]
-    pub ensv2_token_contract: Option<String>,
-    #[sqlx(default)]
-    pub ensv2_token_id: Option<String>,
+    pub ensv2_registry_token: Option<String>,
     pub registrant: Option<String>,
     pub wrapped_owner: Option<String>,
     pub created_at: BigDecimal,

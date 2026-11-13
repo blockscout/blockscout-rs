@@ -917,7 +917,7 @@ mod tests {
             .await
             .expect("failed to get ensv2live.eth")
             .expect("ensv2live.eth not found");
-        assert_eq!(output.domain.ensv2_token_id.as_deref(), Some("123456789"));
+        assert!(output.domain.ensv2_registry_token.is_some());
         assert_eq!(
             output.tokens,
             vec![DomainToken {
@@ -938,7 +938,7 @@ mod tests {
             .await
             .expect("failed to get vitalik.eth")
             .expect("vitalik.eth not found");
-        assert_eq!(output.domain.ensv2_token_id, None);
+        assert_eq!(output.domain.ensv2_registry_token, None);
 
         // ENSIP-19: vitalik's addr.reverse name (vitalik.eth) wins over the
         // newer default primary name (sashaxyz.eth); 0x2222..2222 has only a

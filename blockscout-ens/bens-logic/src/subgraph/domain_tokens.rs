@@ -46,13 +46,8 @@ fn extract_tokens_for_ens_like(
     // ENSv1 BaseRegistrar / NameWrapper tokens are retired (held by the
     // Graveyard after a migration) or unrelated (a native ENSv2 registration
     // of a label whose ENSv1 registration had lapsed).
-    if let (Some(contract), Some(id)) = (&domain.ensv2_token_contract, &domain.ensv2_token_id) {
-        let contract = Address::from_str(contract).context("parse ENSv2 registry address")?;
-        return Ok(vec![DomainToken {
-            id: id.clone(),
-            contract,
-            _type: DomainTokenType::Native,
-        }]);
+    if let Some(registry_token) = &domain.ensv2_registry_token {
+        return Ok(vec![ensv2_token(registry_token)?]);
     }
 
     let mut tokens = vec![];
@@ -88,6 +83,20 @@ fn extract_tokens_for_ens_like(
     };
 
     Ok(tokens)
+}
+
+// `Domain.registryToken` is the ENSv2Token id: 20-byte registry address
+// followed by the 32-byte token id, hex-encoded without `0x`.
+fn ensv2_token(registry_token: &str) -> Result<DomainToken, anyhow::Error> {
+    if registry_token.len() != 104 {
+        anyhow::bail!("unexpected ENSv2 registry token id length: {registry_token}");
+    }
+    let (contract, id) = registry_token.split_at(40);
+    Ok(DomainToken {
+        id: token_id(id)?,
+        contract: Address::from_str(contract).context("parse ENSv2 registry address")?,
+        _type: DomainTokenType::Native,
+    })
 }
 
 fn extract_tokens_for_d3_connect(
@@ -280,8 +289,12 @@ mod tests {
             ..Default::default()
         });
         let mut d = domain("levvv.eth", "0x0200", "0x0100", holder, Some(holder));
-        d.ensv2_token_contract = Some(eth_registry.to_string());
-        d.ensv2_token_id = Some("123456789".to_string());
+        // registry ++ uint256(123456789)
+        d.ensv2_registry_token = Some(format!(
+            "{}{:064x}",
+            eth_registry.trim_start_matches("0x"),
+            123456789u64
+        ));
         let deployed_protocol = DeployedProtocol {
             protocol: &protocol,
             deployment_network: &Network {
