@@ -1,0 +1,42 @@
+restart_on_error = true
+restart_interval = 10000
+
+[tracing]
+enabled = true
+format = "default"
+
+[database.connect]
+url = "postgres://postgres:postgres@database:5433/blockscout"
+
+[database.connect_options]
+min_connections = 10
+max_connections = 20
+connect_timeout = 10
+acquire_timeout = 10
+
+[database]
+create_database = true
+run_migrations = true
+
+[indexer]
+zetachain_id = 7000
+enabled = true
+polling_interval = 2000
+concurrency = 10
+historical_batch_size = 100
+status_update_batch_size = 50
+realtime_fetch_batch_size = 100
+retry_threshold = 10
+failed_cctxs_polling_interval = 100000000
+realtime_threshold = 100000
+realtime_polling_interval = 1000
+token_polling_interval = 2000000
+token_batch_size = 100
+token_sync_enabled = true
+
+[rpc]
+url = "https://zetachain-athens.g.allthatnode.com/archive/rest/YOUR_API_KEY/"
+blockscout_instance_url = "https://zetachain.blockscout.com/"
+request_per_second = 20
+num_of_retries = 30
+retry_delay_ms = 500
