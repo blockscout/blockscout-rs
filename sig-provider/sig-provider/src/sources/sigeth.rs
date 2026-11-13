@@ -81,6 +81,41 @@ impl SignatureSource for Source {
         Ok(signatures)
     }
 
+    async fn batch_get_function_signatures(
+        &self,
+        hex: &[String],
+    ) -> Result<Vec<Vec<String>>, anyhow::Error> {
+        // The lookup accepts a comma separated list of selectors;
+        // chunks keep the request url reasonably short.
+        //
+        // Unlike the single lookups, signatures marked as spam are filtered out:
+        // there is no input data to decode here, so nothing else would tell
+        // them apart from the genuine signature.
+        const BATCH_LIMIT: usize = 50;
+
+        let hashes: Vec<String> = hex.iter().map(|hex| super::hash(hex)).collect();
+        let mut results = Vec::with_capacity(hashes.len());
+        for chunk in hashes.chunks(BATCH_LIMIT) {
+            let resp = self
+                .fetch(&format!(
+                    "/signature-database/v1/lookup?function={}&filter=true",
+                    chunk.join(",")
+                ))
+                .await?;
+            let mut functions = resp.result.function;
+            for hash in chunk {
+                // not `Self::convert`, as a chunk may contain the same selector twice
+                let signatures = functions
+                    .as_mut()
+                    .and_then(|sigs| sigs.get(hash).cloned().flatten())
+                    .map(|sigs| sigs.into_iter().map(|sig| sig.name).collect())
+                    .unwrap_or_default();
+                results.push(signatures);
+            }
+        }
+        Ok(results)
+    }
+
     fn source(&self) -> String {
         self.host.to_string()
     }
@@ -98,7 +133,7 @@ mod json {
         pub data: Vec<serde_json::Value>,
     }
 
-    #[derive(Debug, Deserialize)]
+    #[derive(Clone, Debug, Deserialize)]
     pub struct Signature {
         pub name: String,
     }
@@ -247,5 +282,55 @@ mod tests {
 
         mock.assert();
         assert!(result.is_empty(), "expected no signatures, got {result:?}");
+    }
+
+    #[rstest::rstest]
+    #[tokio::test]
+    async fn batch_get_function_signatures(server: MockServer) {
+        const OTHER_HEX: &str = "0xa9059cbb";
+        const UNKNOWN_HEX: &str = "0xdeadbeef";
+
+        let mock = server.mock(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/signature-database/v1/lookup")
+                .query_param(
+                    "function",
+                    format!("{FUNCTION_HEX},{UNKNOWN_HEX},{OTHER_HEX},{FUNCTION_HEX}"),
+                )
+                .query_param("filter", "true");
+            then.status(200)
+                .header("Content-type", "application/json")
+                .json_body(serde_json::json!({"ok":true,"result":{"function":{
+                    FUNCTION_HEX:[{"name":"f()","filtered":false}],
+                    UNKNOWN_HEX:null,
+                    OTHER_HEX:[{"name":"transfer(address,uint256)","filtered":false},{"name":"transfer(bytes4[9],bytes5[6],int48[11])","filtered":false}],
+                },"event":{}}}));
+        });
+
+        // selectors without the prefix have to be supported as well
+        let hex = [
+            FUNCTION_HEX.to_string(),
+            UNKNOWN_HEX.trim_start_matches("0x").to_string(),
+            OTHER_HEX.to_string(),
+            FUNCTION_HEX.to_string(),
+        ];
+        let result = source(&server)
+            .batch_get_function_signatures(&hex)
+            .await
+            .expect("error while getting function signatures");
+
+        mock.assert();
+        assert_eq!(
+            vec![
+                vec!["f()".to_string()],
+                vec![],
+                vec![
+                    "transfer(address,uint256)".to_string(),
+                    "transfer(bytes4[9],bytes5[6],int48[11])".to_string()
+                ],
+                vec!["f()".to_string()],
+            ],
+            result
+        );
     }
 }

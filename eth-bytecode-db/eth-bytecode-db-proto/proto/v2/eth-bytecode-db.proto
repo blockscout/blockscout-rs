@@ -17,6 +17,10 @@ service Database {
 
   rpc BatchSearchEventDescriptions(BatchSearchEventDescriptionsRequest) returns (BatchSearchEventDescriptionsResponse) {}
 
+  rpc SearchFunctionDescriptions(SearchFunctionDescriptionsRequest) returns (SearchFunctionDescriptionsResponse) {}
+
+  rpc BatchSearchFunctionDescriptions(BatchSearchFunctionDescriptionsRequest) returns (BatchSearchFunctionDescriptionsResponse) {}
+
   rpc GetAllianceStats(GetAllianceStatsRequest) returns (AllianceStats) {}
 }
 
@@ -287,6 +291,29 @@ message BatchSearchEventDescriptionsResponse {
   repeated SearchEventDescriptionsResponse responses = 1;
 }
 
+message SearchFunctionDescriptionsRequest {
+  /// The first 4 bytes of the keccak256 hash of the function signature,
+  /// as used at the beginning of the transaction input.
+  string selector = 1;
+}
+
+message SearchFunctionDescriptionsResponse {
+  /// All known functions with the given selector.
+  /// Contains more than one element only for functions with colliding selectors.
+  repeated FunctionDescription function_descriptions = 1;
+}
+
+message BatchSearchFunctionDescriptionsRequest {
+  // The selectors of the functions to look for.
+  // A maximum of 100 selectors can be retrieved in a batch.
+  repeated string selectors = 1;
+}
+
+message BatchSearchFunctionDescriptionsResponse {
+  // Contains one response per requested selector, in the order of the request.
+  repeated SearchFunctionDescriptionsResponse responses = 1;
+}
+
 message GetAllianceStatsRequest {}
 
 message AllianceStats {
@@ -415,4 +442,15 @@ message VerifierAllianceContract {
   optional string creation_code = 7;
   // The bytecode actually stored in the blockchain for the given contract
   string runtime_code = 8;
+}
+
+message FunctionDescription {
+  /// Will always be "function"
+  string type = 1;
+  /// The name of the function
+  string name = 2;
+  /// Json encoded array of objects each describing one of the function arguments
+  string inputs = 3;
+  /// Canonical signature of the function, e.g. `transfer(address,uint256)`
+  string signature = 4;
 }

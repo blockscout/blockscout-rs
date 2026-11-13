@@ -177,6 +177,20 @@ pub mod database_client {
         let path = "/api/v2/event-descriptions:batch-search";
         client.post_request(client.build_url(path), &request).await
     }
+    pub async fn search_function_descriptions(
+        client: &Client,
+        request: proto::SearchFunctionDescriptionsRequest,
+    ) -> Result<proto::SearchFunctionDescriptionsResponse> {
+        let path = "/api/v2/function-descriptions:search";
+        client.post_request(client.build_url(path), &request).await
+    }
+    pub async fn batch_search_function_descriptions(
+        client: &Client,
+        request: proto::BatchSearchFunctionDescriptionsRequest,
+    ) -> Result<proto::BatchSearchFunctionDescriptionsResponse> {
+        let path = "/api/v2/function-descriptions:batch-search";
+        client.post_request(client.build_url(path), &request).await
+    }
 }
 
 pub mod solidity_verifier_client {
