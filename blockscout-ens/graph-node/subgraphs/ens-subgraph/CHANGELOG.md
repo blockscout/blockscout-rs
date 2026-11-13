@@ -3,6 +3,24 @@
 Version labels match the Subgraph Studio deployments of the mainnet subgraph
 `5XqPmWe6gjyrJtFn9cLy237i4cWw2j9HcUJEXsP5qGtH`.
 
+## v2.3.1 (2026-11-13)
+
+### Fixed
+
+- An ENSv1 name whose registry resolver is set to a PermissionedResolver now
+  takes its records from the record linked to it. A PermissionedResolver has
+  no node-keyed events: its records arrive through `Linked` and the
+  `*Updated` events, which only project onto a name while the registry
+  already points at that resolver. Before, an ENSv1 `NewResolver` created an
+  empty legacy `Resolver` row, so a name linked and populated before the
+  registry switched kept `Resolver.addr` and `Domain.resolvedAddress` null.
+  A name that switched away and back kept the address from before the
+  switch. ENSv1 `NewResolver` now attaches the resolver the same way as
+  ENSv2's `ResolverUpdated` (`attachDomainResolver`). Classic resolvers
+  behave as before. ENSv2 names were not affected. On mainnet no ENSv1 name
+  pointed at a PermissionedResolver with a linked record as of block
+  26,405,541, so no existing row changes.
+
 ## v2.3.0 (2026-11-13)
 
 ### Added

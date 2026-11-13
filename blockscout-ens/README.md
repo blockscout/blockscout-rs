@@ -27,7 +27,7 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 ## ENSv2
 
 `ens-subgraph` is [ensdomains/ens-subgraph](https://github.com/ensdomains/ens-subgraph)
-`v2.3.0` with Blockscout's extension fields (see its
+`v2.3.1` with Blockscout's extension fields (see its
 [README](./graph-node/subgraphs/ens-subgraph/README.md)). It indexes ENSv1 and
 ENSv2 on mainnet and Sepolia and projects ENSv2 names into the legacy `Domain`
 tables, so BENS keeps working on the same schema. Since v2.2.0 those rows are

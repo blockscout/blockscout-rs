@@ -36,7 +36,6 @@ import {
   NewOwner,
   NewResolver,
   NewTTL,
-  Resolver,
   Transfer,
   WrappedDomain,
 } from "./types/schema";
@@ -44,6 +43,7 @@ import {
 import { processApprovalForAll } from "./accessControl";
 import { isSink } from "./ensv2Constants";
 import { isGovernedByEnsv2 } from "./legacyGovernance";
+import { attachDomainResolver } from "./ensv2ResolverProjection";
 
 const BIG_INT_ZERO = BigInt.fromI32(0);
 
@@ -302,20 +302,17 @@ export function handleNewResolver(event: NewResolverEvent): void {
   domain.resolver = id;
 
   if (id) {
-    let resolver = Resolver.load(id);
-    if (resolver == null) {
-      resolver = new Resolver(id);
-      resolver.domain = event.params.node.toHexString();
-      resolver.address = event.params.resolver;
-      resolver.save();
-      // since this is a new resolver entity, there can't be a resolved address yet so set to null
-      domain.resolvedAddress = null;
-    } else {
-      domain.resolvedAddress = resolver.addr;
-    }
-  } else {
-    domain.resolvedAddress = null;
+    saveDomain(domain);
+    // Same attach as an ENSv2 ResolverUpdated. A classic resolver keeps its
+    // legacy Resolver row and carries its addr over (a new row has none). A
+    // PermissionedResolver has no node-keyed events: its records were set
+    // through Linked / *Updated, which only project onto the node while the
+    // registry points at that resolver, so the snapshot is rebuilt here from
+    // the linked record.
+    attachDomainResolver(event.params.resolver, node);
+    return;
   }
+  domain.resolvedAddress = null;
   saveDomain(domain);
 }
 

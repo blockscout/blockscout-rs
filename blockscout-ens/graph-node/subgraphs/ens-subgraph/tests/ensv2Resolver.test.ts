@@ -19,6 +19,8 @@ import {
   handleTextUpdated,
 } from "../src/ensv2Resolver";
 import { createResolverID, handleAddrChanged } from "../src/resolver";
+import { handleNewResolver } from "../src/ensRegistry";
+import { NewResolver } from "../src/types/ENSRegistry/EnsRegistry";
 import { decodeName } from "../src/nameWrapper";
 import { resolverLinkId } from "../src/ensv2Utils";
 import {
@@ -1003,5 +1005,108 @@ test("the ENSIP-19 default EVM address is the fallback for addr()", () => {
     createAddressUpdatedEvent(recordId, DEFAULT_EVM, Bytes.fromUint8Array(new Uint8Array(0)))
   );
   assert.assertTrue(!Resolver.load(legacyId)!.addr);
+  assert.assertTrue(!Domain.load(node.toHexString())!.resolvedAddress);
+});
+
+// --- ENSv1 names that select a PermissionedResolver (v2.3.1) ---
+
+function createV1NewResolverEvent(node: Bytes, resolver: string): NewResolver {
+  let mockEvent = newMockEvent();
+  let event = new NewResolver(
+    mockEvent.address,
+    mockEvent.logIndex,
+    mockEvent.transactionLogIndex,
+    mockEvent.logType,
+    mockEvent.block,
+    mockEvent.transaction,
+    mockEvent.parameters,
+    mockEvent.receipt
+  );
+  event.parameters = new Array();
+  event.parameters.push(
+    new ethereum.EventParam("node", ethereum.Value.fromFixedBytes(node))
+  );
+  event.parameters.push(
+    new ethereum.EventParam(
+      "resolver",
+      ethereum.Value.fromAddress(Address.fromString(resolver))
+    )
+  );
+  return event;
+}
+
+// An ENSv1 Domain (no ENSv2 path, no resolver yet).
+function seedV1Domain(node: Bytes): void {
+  let owner = new Account(DOMAIN_OWNER);
+  owner.save();
+  let domain = new Domain(node.toHexString());
+  domain.subdomainCount = 0;
+  domain.isMigrated = true;
+  domain.createdAt = BigInt.zero();
+  domain.owner = owner.id;
+  domain.storedOffchain = false; // Blockscout/BENS extension
+  domain.resolvedWithWildcard = false; // Blockscout/BENS extension
+  domain.save();
+}
+
+test("an ENSv1 name that selects a PermissionedResolver after its record was linked and set is hydrated from that record", () => {
+  let node = Bytes.fromHexString(
+    "0xaaaa000000000000000000000000000000000000000000000000000000000001"
+  );
+  seedV1Domain(node);
+  let recordId = BigInt.fromI32(77);
+  let eth = Address.fromString("0x33333333333333333333333333333333333333cc");
+  let contenthash = Bytes.fromUTF8("ipfs://v1-name");
+  handleLinked(createLinkedEvent(recordId, node, encodeLabel("v1name")));
+  handleAddressUpdated(
+    createAddressUpdatedEvent(recordId, BigInt.fromI32(60), eth)
+  );
+  handleContenthashUpdated(createContenthashUpdatedEvent(recordId, contenthash));
+
+  handleNewResolver(createV1NewResolverEvent(node, PERMISSIONED_RESOLVER));
+
+  let legacyId = createResolverID(node, Address.fromString(PERMISSIONED_RESOLVER));
+  assert.fieldEquals("Domain", node.toHexString(), "resolver", legacyId);
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", eth.toHexString());
+  let legacy = Resolver.load(legacyId)!;
+  assert.stringEquals(eth.toHexString(), legacy.addr!);
+  assert.bytesEquals(contenthash, legacy.contentHash!);
+});
+
+test("an ENSv1 name re-selecting a PermissionedResolver picks up records changed while it pointed elsewhere", () => {
+  let node = Bytes.fromHexString(
+    "0xaaaa000000000000000000000000000000000000000000000000000000000002"
+  );
+  seedV1Domain(node);
+  let recordId = BigInt.fromI32(78);
+  let a1 = Address.fromString("0x33333333333333333333333333333333333333c1");
+  let a2 = Address.fromString("0x33333333333333333333333333333333333333c2");
+  handleNewResolver(createV1NewResolverEvent(node, PERMISSIONED_RESOLVER));
+  handleLinked(createLinkedEvent(recordId, node, encodeLabel("v1name")));
+  handleAddressUpdated(createAddressUpdatedEvent(recordId, BigInt.fromI32(60), a1));
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", a1.toHexString());
+
+  handleNewResolver(
+    createV1NewResolverEvent(node, "0x0000000000000000000000000000000000000000")
+  );
+  assert.assertTrue(!Domain.load(node.toHexString())!.resolvedAddress);
+  handleAddressUpdated(createAddressUpdatedEvent(recordId, BigInt.fromI32(60), a2));
+
+  handleNewResolver(createV1NewResolverEvent(node, PERMISSIONED_RESOLVER));
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", a2.toHexString());
+});
+
+test("an ENSv1 name selecting a PermissionedResolver whose link was removed gets no address", () => {
+  let node = Bytes.fromHexString(
+    "0xaaaa000000000000000000000000000000000000000000000000000000000003"
+  );
+  seedV1Domain(node);
+  let recordId = BigInt.fromI32(79);
+  let eth = Address.fromString("0x33333333333333333333333333333333333333c3");
+  handleLinked(createLinkedEvent(recordId, node, encodeLabel("v1name")));
+  handleAddressUpdated(createAddressUpdatedEvent(recordId, BigInt.fromI32(60), eth));
+  handleLinked(createLinkedEvent(BigInt.zero(), node, encodeLabel("v1name")));
+
+  handleNewResolver(createV1NewResolverEvent(node, PERMISSIONED_RESOLVER));
   assert.assertTrue(!Domain.load(node.toHexString())!.resolvedAddress);
 });
