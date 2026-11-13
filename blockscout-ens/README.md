@@ -41,12 +41,19 @@ convention (owner = zero address, reported as no owner). BENS needs no
 ownership rules of its own. Specific to this subgraph:
 
 - **Graph Node `v0.45.0`+** is required (`graph-node/docker-compose.yml`): the
-  manifest is `specVersion 1.3.0` with `indexerHints`, which `v0.34.x` rejects.
+  manifest uses `indexerHints` and `apiVersion 0.0.9`, which `v0.34.x` rejects.
+  The bundled manifest is `specVersion 1.2.0`, not upstream's `1.3.0`, so that
+  `vid` keeps its sequence default and BENS's offchain `domain` inserts work
+  (see `graph-node/subgraphs/ens-subgraph/README.md`).
 - **`specific.ensv2`.** `"ensv2": true` on an ENS-like protocol (default
   `false`) marks its subgraph as ens-subgraph 2.3+ and enables the ENSv2
-  columns and tables below. Protocols without it never touch them. BENS
-  resolves the subgraph schema at startup, so deploy and switch to the new
-  subgraph before starting BENS with this flag.
+  columns and tables below. Protocols without it never touch them.
+- **Deploy order.** At startup BENS reads the schema of the *newest* deployment
+  of each subgraph name (`subgraph_version` ordered by
+  `deployment_schemas.created_at`), not graph-node's `current_version`, and
+  whether or not it has synced. Deploy the new subgraph version, wait until it
+  is fully synced, then start BENS with `"ensv2": true`. Any BENS restart while
+  the new deployment is still syncing serves its partial data.
 - **ENSIP-19 default primary names.** The ENSv2 app sets a primary name on the
   `DefaultReverseRegistrar` instead of the v1 `addr.reverse` resolver. The
   subgraph indexes them as `ENSv2PrimaryName`, with a Blockscout extension
