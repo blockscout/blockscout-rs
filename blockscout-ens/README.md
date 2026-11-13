@@ -42,8 +42,11 @@ ownership rules of its own. Specific to this subgraph:
 
 - **Graph Node `v0.45.0`+** is required (`graph-node/docker-compose.yml`): the
   manifest is `specVersion 1.3.0` with `indexerHints`, which `v0.34.x` rejects.
-- **`specific.ensv2`.** An empty `"ensv2": {}` section on an ENS-like protocol
-  enables the ENSv2 tables below. Protocols without it never touch them.
+- **`specific.ensv2`.** `"ensv2": true` on an ENS-like protocol (default
+  `false`) marks its subgraph as ens-subgraph 2.3+ and enables the ENSv2
+  columns and tables below. Protocols without it never touch them. BENS
+  resolves the subgraph schema at startup, so deploy and switch to the new
+  subgraph before starting BENS with this flag.
 - **ENSIP-19 default primary names.** The ENSv2 app sets a primary name on the
   `DefaultReverseRegistrar` instead of the v1 `addr.reverse` resolver. The
   subgraph indexes them as `ENSv2PrimaryName`, with a Blockscout extension
@@ -68,7 +71,7 @@ ownership rules of its own. Specific to this subgraph:
   "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
   "registry_contract": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
   "try_offchain_resolve": true,
-  "ensv2": {}
+  "ensv2": true
 }
 ```
 

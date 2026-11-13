@@ -326,7 +326,7 @@
           "registry_contract": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
           "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
           "try_offchain_resolve": true,
-          "ensv2": {}
+          "ensv2": true
         },
         "meta": {
           "short_name": "ENS",
@@ -345,7 +345,7 @@
         "specific": {
           "type": "ens_like",
           "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
-          "ensv2": {}
+          "ensv2": true
         },
         "meta": {
           "short_name": "ENS (Testnet)",

@@ -104,11 +104,13 @@ impl ProtocolSpecific {
         }
     }
 
-    pub fn ensv2(&self) -> Option<&EnsV2Settings> {
+    /// Whether the protocol's subgraph is ensdomains/ens-subgraph 2.3+ (see
+    /// `EnsLikeProtocol::ensv2`).
+    pub fn ensv2(&self) -> bool {
         match self {
-            ProtocolSpecific::EnsLike(ens) => ens.ensv2.as_ref(),
-            ProtocolSpecific::D3Connect(_) => None,
-            ProtocolSpecific::InfinityName(_) => None,
+            ProtocolSpecific::EnsLike(ens) => ens.ensv2,
+            ProtocolSpecific::D3Connect(_) => false,
+            ProtocolSpecific::InfinityName(_) => false,
         }
     }
 
@@ -129,21 +131,14 @@ pub struct EnsLikeProtocol {
     pub native_token_contract: Option<Address>,
     #[serde(default)]
     pub try_offchain_resolve: bool,
-    /// Set when the subgraph is ensdomains/ens-subgraph 2.2+ (ENSv2-aware): it
-    /// switches on the ENSv2 tables, for ENSIP-19 default primary names and
-    /// for linking an ENSv2 name's registry token (see `EnsV2Settings`).
+    /// The subgraph is ensdomains/ens-subgraph 2.3+ (ENSv2-aware): BENS reads
+    /// `Domain.registryToken` for an ENSv2 name's token and the ENSIP-19
+    /// default primary names (`ENSv2PrimaryName`). Since 2.2.0 the
+    /// subgraph's legacy `Domain` rows never name the ENSv2 Graveyard or a
+    /// migration contract as a holder, so no other ENSv2 handling is needed.
     #[serde(default)]
-    pub ensv2: Option<EnsV2Settings>,
+    pub ensv2: bool,
 }
-
-/// ENSv2 specifics of an ENS-like protocol indexed by ensdomains/ens-subgraph
-/// 2.2+. Since 2.2.0 the subgraph's legacy `Domain` rows never name the ENSv2
-/// Graveyard or a migration contract as a holder, so BENS needs no ENSv2
-/// ownership rules of its own; the presence of this (currently empty) section
-/// is what enables the ENSv2 tables.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(deny_unknown_fields)]
-pub struct EnsV2Settings {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(deny_unknown_fields)]

@@ -420,7 +420,7 @@ mod tests {
     use crate::{
         protocols::DomainNameOnProtocol,
         subgraph::{sql, DomainPaginationInput},
-        test_utils::mocked_reader,
+        test_utils::{mocked_reader, mocked_reader_with_ensv2},
     };
     use alloy::primitives::Address;
     use pretty_assertions::assert_eq;
@@ -961,6 +961,70 @@ mod tests {
         let expected = serde_json::from_value(serde_json::json!({
             "0xd8da6bf26964af9d7eed9e03e53415d37aa96045": "vitalik.eth",
             "0x2222222222222222222222222222222222222222": "ensv2live.eth",
+        }))
+        .unwrap();
+        assert_eq!(domains, expected);
+
+        // ENSIP-19: a non-empty addr.reverse name wins even when it names an
+        // expired domain; it then fails verification and the address gets no
+        // label, instead of falling back to its default primary name.
+        let domains = reader
+            .batch_resolve_address_names(BatchResolveAddressNamesInput {
+                addresses: vec![addr("0x4444444444444444444444444444444444444444")],
+                network_id: Some(DEFAULT_CHAIN_ID),
+                protocols: None,
+                all_protocols: false,
+            })
+            .await
+            .expect("failed to resolve addresses");
+        assert!(domains.is_empty(), "{domains:?}");
+    }
+
+    // A deployment still on a pre-2.3 ENS subgraph: no `registry_token`
+    // column, no ENSv2 primary names, `ensv2` off. Lookups and reverse names
+    // must work exactly as before.
+    #[sqlx::test(migrations = "tests/migrations")]
+    async fn ens_without_ensv2_works_on_a_pre_ensv2_schema(pool: PgPool) {
+        sqlx::query("ALTER TABLE sgd1.domain DROP COLUMN registry_token")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DROP TABLE sgd1.en_sv_2_primary_name")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let reader = mocked_reader_with_ensv2(pool, false).await;
+
+        let output = reader
+            .get_domain(GetDomainInput {
+                network_id: Some(DEFAULT_CHAIN_ID),
+                name: "vitalik.eth".to_string(),
+                only_active: false,
+                protocol_id: None,
+            })
+            .await
+            .expect("failed to get vitalik.eth")
+            .expect("vitalik.eth not found");
+        assert_eq!(output.domain.ensv2_registry_token, None);
+
+        let domains = reader
+            .batch_resolve_address_names(BatchResolveAddressNamesInput {
+                addresses: [
+                    "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+                    "0x2222222222222222222222222222222222222222",
+                ]
+                .into_iter()
+                .map(addr)
+                .collect(),
+                network_id: Some(DEFAULT_CHAIN_ID),
+                protocols: None,
+                all_protocols: false,
+            })
+            .await
+            .expect("failed to resolve addresses");
+        // Only the v1 addr.reverse name; the default-only address has none.
+        let expected = serde_json::from_value(serde_json::json!({
+            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045": "vitalik.eth",
         }))
         .unwrap();
         assert_eq!(domains, expected);

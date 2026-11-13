@@ -105,12 +105,13 @@ token_id::text as token_id
 // the token links point at it rather than at the retired ENSv1 BaseRegistrar
 // / NameWrapper tokens. The column exists only in that schema.
 fn detailed_domain_select_clause(protocol: &Protocol) -> String {
-    match protocol.info.protocol_specific.ensv2() {
-        Some(_) => format!(
+    if protocol.info.protocol_specific.ensv2() {
+        format!(
             "{DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE},\n\
              encode(registry_token, 'hex') as ensv2_registry_token"
-        ),
-        None => DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE.to_string(),
+        )
+    } else {
+        DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE.to_string()
     }
 }
 
@@ -390,7 +391,7 @@ fn gen_sql_select_domains_by_address(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocols::{EnsLikeProtocol, EnsV2Settings, ProtocolSpecific};
+    use crate::protocols::{EnsLikeProtocol, ProtocolSpecific};
 
     #[test]
     fn expiry_sentinel_is_reported_as_never() {
@@ -417,7 +418,7 @@ mod tests {
         assert!(!plain.contains("registry_token"), "{plain}");
 
         protocol.info.protocol_specific = ProtocolSpecific::EnsLike(EnsLikeProtocol {
-            ensv2: Some(EnsV2Settings {}),
+            ensv2: true,
             ..Default::default()
         });
         let v2 = detailed_domain_select_clause(&protocol);

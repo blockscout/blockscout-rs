@@ -2,7 +2,7 @@
 
 use crate::{
     blockscout::BlockscoutClient,
-    protocols::{EnsLikeProtocol, EnsV2Settings, Network, ProtocolInfo, ProtocolSpecific, Tld},
+    protocols::{EnsLikeProtocol, Network, ProtocolInfo, ProtocolSpecific, Tld},
     subgraph::SubgraphReader,
 };
 use alloy::{
@@ -146,7 +146,7 @@ pub async fn mocked_networks_and_protocols(
                 // The mock sgd1 schema carries the ENSv2 tables of
                 // ensdomains/ens-subgraph 2.2+ (tests/migrations).
                 protocol_specific: ProtocolSpecific::EnsLike(EnsLikeProtocol {
-                    ensv2: Some(EnsV2Settings {}),
+                    ensv2: true,
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -175,6 +175,12 @@ pub async fn mocked_networks_and_protocols(
 }
 
 pub async fn mocked_reader(pool: PgPool) -> SubgraphReader {
+    mocked_reader_with_ensv2(pool, true).await
+}
+
+/// `mocked_reader` with the `ens` protocol's `ensv2` flag set as given, e.g.
+/// `false` for a deployment still on a pre-2.3 ENS subgraph.
+pub async fn mocked_reader_with_ensv2(pool: PgPool, ensv2: bool) -> SubgraphReader {
     let options = pool.connect_options();
     let database = options
         .get_database()
@@ -193,7 +199,13 @@ pub async fn mocked_reader(pool: PgPool) -> SubgraphReader {
             .await
             .expect("ReadWriteRepo for tests"),
     );
-    let (networks, protocols) = mocked_networks_and_protocols().await;
+    let (networks, mut protocols) = mocked_networks_and_protocols().await;
+    if let Some(ProtocolSpecific::EnsLike(ens)) = protocols
+        .get_mut("ens")
+        .map(|info| &mut info.protocol_specific)
+    {
+        ens.ensv2 = ensv2;
+    }
     SubgraphReader::initialize(db, networks, protocols, Some(5))
         .await
         .expect("failed to init reader")

@@ -35,7 +35,7 @@ impl CachedView for AddrReverseNamesView {
     fn table_sql_for_protocol(protocol: &Protocol) -> String {
         Self::sql(
             &protocol.subgraph_schema,
-            protocol.info.protocol_specific.ensv2().is_some(),
+            protocol.info.protocol_specific.ensv2(),
         )
     }
 }
@@ -74,15 +74,20 @@ impl AddrReverseNamesView {
         ORDER BY resolver, block_number DESC, vid DESC
     ) nc
     JOIN {schema}.domain addr_reversed_domain ON nc.resolver = addr_reversed_domain.resolver
-    JOIN {schema}.domain domain ON domain.name = nc.name
-    WHERE true
+    -- LEFT JOIN: a non-empty addr.reverse name keeps its row even when it
+    -- names no live domain (unknown label, expired, deleted). Its domain
+    -- columns are then NULL, the lookup drops it (no resolved address), and
+    -- ENSIP-19's default fallback does not apply: that fallback is only for
+    -- an empty addr.reverse name.
+    LEFT JOIN {schema}.domain domain ON domain.name = nc.name
+        AND domain.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
+        AND (
+            domain.expiry_date is null
+            OR to_timestamp(LEAST(domain.expiry_date, 253402300799)) > now()
+        )
+    WHERE nc.name <> ''
     AND addr_reversed_domain.parent = '0x91d1777781884d03a6757a803996e38de2a42967fb37eeaca72729271025a9e2'
     AND addr_reversed_domain.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
-    AND domain.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}
-    AND (
-        domain.expiry_date is null
-        OR to_timestamp(LEAST(domain.expiry_date, 253402300799)) > now()
-    )
 "#
         );
         let v2 = if ensv2 {
@@ -119,11 +124,11 @@ SELECT DISTINCT ON (reversed_domain_id)
     domain_id, reversed_domain_id, resolved_address, name
 FROM (
 {v1}{v2}) all_sources
--- ENSIP-19 reverse resolution for an Ethereum address: the name set on its
--- addr.reverse resolver (scheme 0) wins, and the default primary name
+-- ENSIP-19 reverse resolution for an Ethereum address: a non-empty name on
+-- its addr.reverse resolver (scheme 0) wins, and the default primary name
 -- (scheme 1) is only the fallback when the addr.reverse name is empty or
--- absent. An empty or dangling v1 name has no row here (it joins no domain),
--- so the default takes over exactly then.
+-- absent. An empty v1 name has no row here, so the default takes over
+-- exactly then.
 ORDER BY reversed_domain_id, scheme ASC, block_number DESC
         "#
         )
