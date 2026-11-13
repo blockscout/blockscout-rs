@@ -17,8 +17,9 @@ mod verify;
 pub mod zksync;
 
 pub use consts::{
-    DEFAULT_ERA_SOLIDITY_COMPILER_LIST, DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST,
-    DEFAULT_VYPER_COMPILER_LIST, DEFAULT_ZKSOLC_COMPILER_LIST,
+    DEFAULT_ERA_SOLIDITY_COMPILER_LIST, DEFAULT_SOLAR_COMPILER_LIST,
+    DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST, DEFAULT_VYPER_COMPILER_LIST,
+    DEFAULT_ZKSOLC_COMPILER_LIST,
 };
 
 pub use common_types::{
@@ -26,8 +27,8 @@ pub use common_types::{
     RequestParseError,
 };
 pub use compiler::{
-    set_compiler_runner_metrics_namespace, CommandArgument, CompactVersion, CompilerExecutor,
-    CompilerInvocation, ConcurrencyLimitedCompilerExecutor, DetailedVersion,
+    set_compiler_runner_metrics_namespace, CombinedFetcher, CommandArgument, CompactVersion,
+    CompilerExecutor, CompilerInvocation, ConcurrencyLimitedCompilerExecutor, DetailedVersion,
     DockerCompilerExecutor, DockerCompilerExecutorSettings, ExecutionError, ExecutionOutput,
     Fetcher, FileValidator, JobFile, ListFetcher, NativeCompilerExecutor, S3Fetcher, Version,
     DEFAULT_COMPILER_EXECUTION_TIMEOUT_SECS, DEFAULT_COMPILER_MAX_OUTPUT_BYTES,

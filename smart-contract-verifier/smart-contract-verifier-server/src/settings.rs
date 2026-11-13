@@ -11,8 +11,9 @@ use serde_with::{serde_as, DisplayFromStr, PickFirst};
 use smart_contract_verifier::{
     DockerCompilerExecutorSettings, NativeCompilerExecutor,
     DEFAULT_COMPILER_EXECUTION_TIMEOUT_SECS, DEFAULT_COMPILER_MAX_OUTPUT_BYTES,
-    DEFAULT_ERA_SOLIDITY_COMPILER_LIST, DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST,
-    DEFAULT_VYPER_COMPILER_LIST, DEFAULT_ZKSOLC_COMPILER_LIST,
+    DEFAULT_ERA_SOLIDITY_COMPILER_LIST, DEFAULT_SOLAR_COMPILER_LIST,
+    DEFAULT_SOLIDITY_COMPILER_LIST, DEFAULT_SOURCIFY_HOST, DEFAULT_VYPER_COMPILER_LIST,
+    DEFAULT_ZKSOLC_COMPILER_LIST,
 };
 use std::{
     num::{NonZeroU32, NonZeroUsize},
@@ -45,6 +46,7 @@ pub struct SoliditySettings {
     #[serde_as(as = "DisplayFromStr")]
     pub refresh_versions_schedule: Schedule,
     pub fetcher: FetcherSettings,
+    pub solar: SolarSettings,
 }
 
 impl Default for SoliditySettings {
@@ -54,6 +56,7 @@ impl Default for SoliditySettings {
             compilers_dir: default_compilers_dir("solidity-compilers"),
             refresh_versions_schedule: schedule_every_hour(),
             fetcher: default_list_fetcher(DEFAULT_SOLIDITY_COMPILER_LIST),
+            solar: Default::default(),
         }
     }
 }
@@ -76,6 +79,25 @@ impl Default for VyperSettings {
             compilers_dir: default_compilers_dir("vyper-compilers"),
             refresh_versions_schedule: schedule_every_hour(),
             fetcher: default_list_fetcher(DEFAULT_VYPER_COMPILER_LIST),
+        }
+    }
+}
+
+/// Offers [Solar](https://github.com/paradigmxyz/solar) compilers among the Solidity ones.
+/// They are kept in the Solidity compilers directory and refreshed on the Solidity schedule.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct SolarSettings {
+    pub enabled: bool,
+    pub fetcher: FetcherSettings,
+}
+
+impl Default for SolarSettings {
+    fn default() -> Self {
+        Self {
+            // Solar code generation is still experimental upstream, so it is opt-in.
+            enabled: false,
+            fetcher: default_list_fetcher(DEFAULT_SOLAR_COMPILER_LIST),
         }
     }
 }

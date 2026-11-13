@@ -516,6 +516,35 @@ mod tests {
         );
     }
 
+    // An entry of `solar.linux-amd64.list.json`, as blockscout/solc-bin builds it.
+    const SOLAR_LIST_JSON: &str = r#"{
+        "builds": [
+            {
+                "path": "https://github.com/blockscout/solc-bin/releases/download/solar-v0.3.0/solar-linux-amd64",
+                "version": "0.8.38",
+                "build": "commit.e7a91fc7.solar.0.3.0",
+                "longVersion": "0.8.38+commit.e7a91fc7.solar.0.3.0",
+                "sha256": "fb4a0aaa5a765ae045ef003c68982420f78f7629c40b1497d2bd0fcae4945fc2",
+                "md5": "a67523108dfa4ab2a67901d37899ccf7"
+            }
+        ]
+    }"#;
+
+    #[test]
+    fn parse_solar_versions() {
+        let list_json_file: json::List<DetailedVersion> =
+            serde_json::from_str(SOLAR_LIST_JSON).unwrap();
+        let fetcher = ListVersionFetcher::new(Url::from_str(DEFAULT_DOWNLOAD_PREFIX).unwrap());
+        let versions = fetcher.parse_json_versions(list_json_file).unwrap();
+        assert_has_version(
+            &versions,
+            "v0.8.38+commit.e7a91fc7.solar.0.3.0",
+            "https://github.com/blockscout/solc-bin/releases/download/solar-v0.3.0/solar-linux-amd64",
+        );
+        let version = versions.keys().next().unwrap();
+        assert!(version.is_solar(), "{version:?}");
+    }
+
     #[test]
     fn invalid_list_entries_are_skipped() {
         let list = r#"{

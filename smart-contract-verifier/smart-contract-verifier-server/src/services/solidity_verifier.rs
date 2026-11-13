@@ -15,7 +15,8 @@ use crate::{
 };
 use anyhow::Context;
 use smart_contract_verifier::{
-    find_methods, solidity, CompilerExecutor, EvmCompilersPool, SolcCompiler, SolcValidator,
+    find_methods, solidity, CombinedFetcher, CompilerExecutor, EvmCompilersPool, SolcCompiler,
+    SolcValidator,
 };
 use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
     LookupMethodsRequest, LookupMethodsResponse,
@@ -35,14 +36,28 @@ impl SolidityVerifierService {
         executor: Arc<dyn CompilerExecutor>,
     ) -> anyhow::Result<Self> {
         let solc_validator = Arc::new(SolcValidator::new(executor.clone()));
-        let fetcher = common::initialize_fetcher(
+        let mut fetcher = common::initialize_fetcher(
             settings.fetcher,
             settings.compilers_dir.clone(),
-            settings.refresh_versions_schedule,
+            settings.refresh_versions_schedule.clone(),
             Some(solc_validator),
         )
         .await
         .context("solidity fetcher initialization")?;
+
+        if settings.solar.enabled {
+            // Solar compilers share the compilers directory with solc ones: their versions
+            // (`v0.8.38+commit.e7a91fc7.solar.0.3.0`) never collide with solc versions.
+            let solar_fetcher = common::initialize_fetcher(
+                settings.solar.fetcher,
+                settings.compilers_dir.clone(),
+                settings.refresh_versions_schedule,
+                None,
+            )
+            .await
+            .context("solar fetcher initialization")?;
+            fetcher = Arc::new(CombinedFetcher::new(vec![fetcher, solar_fetcher]));
+        }
 
         let compilers: EvmCompilersPool<SolcCompiler> =
             EvmCompilersPool::new_with_admitted_executor(fetcher, executor);
