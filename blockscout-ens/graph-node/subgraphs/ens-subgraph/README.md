@@ -2,7 +2,7 @@
 
 > forked from [https://github.com/ensdomains/ens-subgraph](https://github.com/ensdomains/ens-subgraph)
 
-This directory is the upstream subgraph at tag `v2.2.0` (commit `16846b1`)
+This directory is the upstream subgraph at tag `v2.2.1` (commit `ec87286`)
 plus the Blockscout/BENS extension fields listed below. It indexes ENSv1
 (registry, BaseRegistrar, controllers, NameWrapper, resolvers) and ENSv2
 (RootRegistry, ETHRegistry, ETHRegistrar, user registries created through
@@ -59,16 +59,15 @@ just deploy-subgraph ens          # mainnet,  subgraph name ens-subgraph
 just deploy-subgraph ens-sepolia  # sepolia,  subgraph name ens-sepolia-subgraph
 ```
 
-Or directly: `just network=sepolia name=ens-sepolia-subgraph deploy v2.2.0`.
+Or directly: `just network=sepolia name=ens-sepolia-subgraph deploy v2.2.1`.
 
 ## BENS configuration
 
-The `ens` and `ens-sepolia` protocols in `bens-server/config/*.json` carry
-`specific.ensv2.migration_contracts` (the ENSv2 Graveyard and migration
-controllers). With it set, BENS reads the ENSv2 tables: the reverse-name view
-includes ENSIP-19 default primary names, and a migrated name's `owner` is
-reported as its holder instead of the migration contract. See
-`../../../README.md`, section "ENSv2".
+The `ens` and `ens-sepolia` protocols in `bens-server/config/*.json` carry an
+empty `specific.ensv2` section. It makes BENS read the ENSv2 tables: the
+reverse-name view includes ENSIP-19 default primary names, and a name live in
+ENSv2 links its ENSv2 registry token. See `../../../README.md`, section
+"ENSv2".
 
 ## Tests
 

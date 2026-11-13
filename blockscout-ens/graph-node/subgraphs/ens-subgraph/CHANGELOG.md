@@ -3,6 +3,25 @@
 Version labels match the Subgraph Studio deployments of the mainnet subgraph
 `5XqPmWe6gjyrJtFn9cLy237i4cWw2j9HcUJEXsP5qGtH`.
 
+## v2.2.1 (2026-11-13)
+
+### Fixed
+
+- A `Linked` event with a malformed DNS-encoded name (empty, a length byte
+  that runs past the end, or no root terminator) aborted the mapping with an
+  out-of-range read. The PermissionedResolver data source has no address, so
+  any contract could emit such an event and halt the subgraph. `decodeName`
+  now returns null for malformed input; the link is indexed with
+  `nameDecoded = null`. No such event exists on mainnet so far.
+- `Resolver.addr` and `Domain.resolvedAddress` of a name on a
+  PermissionedResolver now follow `addr()` on chain: the coin type 60
+  address, or the ENSIP-19 default EVM address (coin type `2147483648`) when
+  coin type 60 is unset or empty. A non-empty coin type 60 value, including
+  the zero address, still overrides the default. On mainnet 25 records rely
+  on the default (block 26,404,320).
+
+Requires a full re-index (the second fix changes already indexed rows).
+
 ## v2.2.0 (2026-11-11)
 
 The legacy `Domain` / `Registration` / `WrappedDomain` entities are now

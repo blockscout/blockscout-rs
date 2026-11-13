@@ -46,7 +46,15 @@ import { isGovernedByEnsv2 } from "./legacyGovernance";
 // ExpiryExtended need no guard: they only act on an existing WrappedDomain,
 // which a governed name no longer has.
 
+// Decodes a DNS-encoded name. Returns null for an invalid label and for a
+// malformed buffer (empty, or a length byte that runs past the end, or no
+// root terminator): the PermissionedResolver data source has no address, so
+// any contract can emit a Linked event with arbitrary name bytes, and an
+// out-of-range read here would abort the mapping and halt the subgraph.
 export function decodeName(buf: Bytes): Array<string> | null {
+  if (buf.length == 0) {
+    return null;
+  }
   let offset = 0;
   let list = new ByteArray(0);
   let dot = Bytes.fromHexString("2e");
@@ -58,6 +66,11 @@ export function decodeName(buf: Bytes): Array<string> | null {
   }
 
   while (len) {
+    // The label and the next length byte (or the root terminator) must both
+    // fit in the buffer.
+    if (offset + len >= buf.length) {
+      return null;
+    }
     let label = hex.slice((offset + 1) * 2, (offset + 1 + len) * 2);
     let labelBytes = Bytes.fromHexString(label);
 

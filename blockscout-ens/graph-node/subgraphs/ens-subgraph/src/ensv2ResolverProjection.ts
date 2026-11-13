@@ -27,6 +27,8 @@ import {
 } from "./types/schema";
 
 const ETH_COIN_TYPE = BigInt.fromI32(60);
+// ENSIP-19 default EVM coin type (1 << 31).
+const DEFAULT_EVM_COIN_TYPE = BigInt.fromString("2147483648");
 
 export function activateRecordMembership(
   record: ENSv2ResolverRecord,
@@ -268,6 +270,10 @@ export function replaceLegacyResolverSnapshot(
   legacy.addr = null;
 
   let coinTypes = new Array<BigInt>();
+  // Empty means unset, as on chain. (Non-null locals: comparing nullable
+  // Bytes against null crashes the AssemblyScript compiler.)
+  let ethBytes = new Bytes(0);
+  let defaultBytes = new Bytes(0);
   for (let i = 0; i < record.addressIndexCount; i++) {
     let index = ENSv2ResolverAddressIndex.load(
       resolverAddressIndexId(record.id, i),
@@ -281,12 +287,18 @@ export function replaceLegacyResolverSnapshot(
     }
     coinTypes.push(address.coinType);
     if (address.coinType.equals(ETH_COIN_TYPE)) {
-      if (address.addressBytes.length == 20) {
-        legacy.addr = createOrLoadAccount(address.addressBytes).id;
-      } else {
-        legacy.addr = null;
-      }
+      ethBytes = address.addressBytes;
+    } else if (address.coinType.equals(DEFAULT_EVM_COIN_TYPE)) {
+      defaultBytes = address.addressBytes;
     }
+  }
+  // addr() as PermissionedResolver answers it (AbstractRecordResolver
+  // _getAddress): the coin type 60 address, or the ENSIP-19 default EVM
+  // address when coin type 60 is unset or empty. A non-empty coin type 60
+  // value, even the zero address, overrides the default.
+  let effective = ethBytes.length > 0 ? ethBytes : defaultBytes;
+  if (effective.length == 20) {
+    legacy.addr = createOrLoadAccount(effective).id;
   }
   if (coinTypes.length == 0) {
     legacy.coinTypes = null;

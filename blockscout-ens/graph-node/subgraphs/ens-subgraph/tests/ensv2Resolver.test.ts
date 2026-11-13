@@ -19,6 +19,8 @@ import {
   handleTextUpdated,
 } from "../src/ensv2Resolver";
 import { createResolverID, handleAddrChanged } from "../src/resolver";
+import { decodeName } from "../src/nameWrapper";
+import { resolverLinkId } from "../src/ensv2Utils";
 import {
   ABIUpdated,
   AddressUpdated,
@@ -38,6 +40,7 @@ import {
   ENSv2Resolver,
   ENSv2ResolverRecord,
   Resolver,
+  ENSv2ResolverLink,
 } from "../src/types/schema";
 
 const PERMISSIONED_RESOLVER = "0x11111111111111111111111111111111111111aa";
@@ -923,4 +926,82 @@ test("ResourceArgument stores resolver-scoped role metadata and repeated emissio
     "arg",
     secondArg.toHexString()
   );
+});
+
+// --- v2.2.1 -----------------------------------------------------------------
+
+// The PermissionedResolver source has no address: any contract can emit a
+// Linked event with arbitrary name bytes. Malformed names must decode to
+// null, never abort the mapping (which would halt the whole subgraph).
+test("decodeName rejects malformed DNS names instead of aborting", () => {
+  assert.assertNull(decodeName(Bytes.fromHexString("0x")));
+  assert.assertNull(decodeName(Bytes.fromHexString("0x09666f6f"))); // length past the end
+  assert.assertNull(decodeName(Bytes.fromHexString("0x03666f6f03657468"))); // no root terminator
+  assert.assertNull(decodeName(Bytes.fromHexString("0x03666f6f")));
+  let root = decodeName(Bytes.fromHexString("0x00"))!;
+  assert.stringEquals(".", root[1]);
+  let fooEth = decodeName(Bytes.fromHexString("0x03666f6f0365746800"))!;
+  assert.stringEquals("foo", fooEth[0]);
+  assert.stringEquals("foo.eth", fooEth[1]);
+});
+
+test("a Linked event with a malformed name is indexed with no decoded name", () => {
+  let node = Bytes.fromI32(301);
+  let recordId = BigInt.fromI32(31);
+  handleLinked(createLinkedEvent(recordId, node, Bytes.fromHexString("0x")));
+  handleLinked(createLinkedEvent(recordId, Bytes.fromI32(302), Bytes.fromHexString("0x09666f6f")));
+  let link = ENSv2ResolverLink.load(
+    resolverLinkId(Address.fromString(PERMISSIONED_RESOLVER), node)
+  )!;
+  assert.assertTrue(!link.nameDecoded);
+  assert.assertTrue(link.active);
+  assert.entityCount("ENSv2ResolverLink", 2);
+});
+
+// PermissionedResolver.addr(): coin type 60, or the ENSIP-19 default EVM
+// address (coin type 1 << 31) when coin type 60 is unset or empty.
+test("the ENSIP-19 default EVM address is the fallback for addr()", () => {
+  const DEFAULT_EVM = BigInt.fromString("2147483648");
+  let node = Bytes.fromI32(303);
+  let legacyId = seedProjectedDomain(node);
+  let recordId = BigInt.fromI32(33);
+  let defaultAddress = Address.fromString("0x66666666666666666666666666666666666666ff");
+  let ethAddress = Address.fromString("0x77777777777777777777777777777777777777aa");
+  handleLinked(createLinkedEvent(recordId, node, encodeLabel("fallback")));
+
+  // Only the default is set: it is the address.
+  handleAddressUpdated(createAddressUpdatedEvent(recordId, DEFAULT_EVM, defaultAddress));
+  assert.stringEquals(defaultAddress.toHexString(), Resolver.load(legacyId)!.addr!);
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", defaultAddress.toHexString());
+
+  // Coin type 60 overrides it.
+  handleAddressUpdated(createAddressUpdatedEvent(recordId, BigInt.fromI32(60), ethAddress));
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", ethAddress.toHexString());
+
+  // Clearing coin type 60 falls back to the default again.
+  handleAddressUpdated(
+    createAddressUpdatedEvent(recordId, BigInt.fromI32(60), Bytes.fromUint8Array(new Uint8Array(0)))
+  );
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", defaultAddress.toHexString());
+
+  // An explicit zero address on coin type 60 is a value, not unset.
+  handleAddressUpdated(
+    createAddressUpdatedEvent(recordId, BigInt.fromI32(60), Bytes.fromUint8Array(new Uint8Array(20)))
+  );
+  assert.fieldEquals(
+    "Domain",
+    node.toHexString(),
+    "resolvedAddress",
+    "0x0000000000000000000000000000000000000000"
+  );
+
+  // Clearing the default with coin type 60 back to unset leaves no address.
+  handleAddressUpdated(
+    createAddressUpdatedEvent(recordId, BigInt.fromI32(60), Bytes.fromUint8Array(new Uint8Array(0)))
+  );
+  handleAddressUpdated(
+    createAddressUpdatedEvent(recordId, DEFAULT_EVM, Bytes.fromUint8Array(new Uint8Array(0)))
+  );
+  assert.assertTrue(!Resolver.load(legacyId)!.addr);
+  assert.assertTrue(!Domain.load(node.toHexString())!.resolvedAddress);
 });
