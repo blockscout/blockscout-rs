@@ -42,10 +42,26 @@ pub struct VerificationRequest {
     pub content: Content,
 }
 
+/// Multi-part verification guesses the settings solc users compile with, which says nothing
+/// about how Solar was run. Solar contracts are verified from their standard JSON input.
+fn ensure_not_solar(
+    compilers: &EvmCompilersPool<SolcCompiler>,
+    compiler_version: &DetailedVersion,
+) -> Result<(), Error> {
+    // An unknown version is reported by the compilation itself.
+    match compilers.normalize_compiler_version(compiler_version) {
+        Ok(version) if version.is_solar() => Err(Error::Compilation(vec![
+            "Solar compilers support only standard-json verification".to_string(),
+        ])),
+        _ => Ok(()),
+    }
+}
+
 pub async fn verify(
     compilers: &EvmCompilersPool<SolcCompiler>,
     request: VerificationRequest,
 ) -> Result<VerificationResult, Error> {
+    ensure_not_solar(compilers, &request.compiler_version)?;
     let to_verify = vec![request.contract];
 
     let solc_inputs: Vec<SolcInput> = request.content.into();
@@ -88,6 +104,7 @@ pub async fn batch_verify(
     compilers: &EvmCompilersPool<SolcCompiler>,
     request: BatchVerificationRequest,
 ) -> Result<Vec<VerificationResult>, Error> {
+    ensure_not_solar(compilers, &request.compiler_version)?;
     let to_verify = request.contracts;
 
     let solc_inputs: Vec<SolcInput> = request.content.into();

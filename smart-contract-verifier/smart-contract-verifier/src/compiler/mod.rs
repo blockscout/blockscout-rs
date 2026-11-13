@@ -2,6 +2,7 @@
 
 mod download_cache;
 mod fetcher;
+mod fetcher_combined;
 mod fetcher_list;
 mod fetcher_s3;
 mod fetcher_versions;
@@ -21,6 +22,7 @@ pub use compiler_runner::{
 };
 pub use download_cache::DownloadCache;
 pub use fetcher::{Fetcher, FileValidator, Version};
+pub use fetcher_combined::CombinedFetcher;
 pub use fetcher_list::ListFetcher;
 pub use fetcher_s3::S3Fetcher;
 pub use version_compact::CompactVersion;

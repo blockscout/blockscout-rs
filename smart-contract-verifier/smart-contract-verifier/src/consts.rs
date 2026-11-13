@@ -14,6 +14,14 @@ pub const DEFAULT_VYPER_COMPILER_LIST: &str =
 pub const DEFAULT_VYPER_COMPILER_LIST: &str =
     "https://raw.githubusercontent.com/blockscout/solc-bin/main/vyper.macos.list.json";
 
+/// [Solar](https://github.com/paradigmxyz/solar) compilers, offered among the Solidity ones.
+#[cfg(target_os = "linux")]
+pub const DEFAULT_SOLAR_COMPILER_LIST: &str =
+    "https://raw.githubusercontent.com/blockscout/solc-bin/main/solar.linux-amd64.list.json";
+#[cfg(target_os = "macos")]
+pub const DEFAULT_SOLAR_COMPILER_LIST: &str =
+    "https://raw.githubusercontent.com/blockscout/solc-bin/main/solar.macosx-arm64.list.json";
+
 pub const DEFAULT_SOURCIFY_HOST: &str = "https://sourcify.dev/server/";
 
 #[cfg(target_os = "linux")]

@@ -1,0 +1,30 @@
+{
+ "input": {
+  "language": "Solidity",
+  "sources": {
+   "contracts/A.sol": {
+    "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\nlibrary L { function add(uint a, uint b) public pure returns (uint) { return a + b; } }\ncontract Child { uint public x; constructor(uint _x) { x = _x; } }\ncontract A { uint public immutable imm; Child public c; constructor(uint v) { imm = v; c = new Child(v); } function f(uint a) external view returns (uint) { return L.add(a, imm); } }\n"
+   }
+  },
+  "settings": {
+   "optimizer": {
+    "enabled": true,
+    "runs": 200
+   },
+   "evmVersion": "cancun",
+   "outputSelection": {
+    "*": {
+     "*": [
+      "*"
+     ],
+     "": [
+      "*"
+     ]
+    }
+   }
+  }
+ },
+ "child_creation": "0x6091380380609160c03960c001601f01601f191660405260c08060913803019060200111341760375760c0515f55605680603b5f395ff35b5f5ffd34601b575f3560e01c80630c55699c03601b575f545f5260205ff35b5f5ffdfea264697066735822122034394bc99d77051429e3561ac1829ee821fba6c2c192224b8638c7049fcc6c1765736f6c6172430003000034000000000000000000000000000000000000000000000000000000000000002a",
+ "a_runtime": "0x346027575f3560e01c8063424e072c14602b578063b3de648b146062578063c3da42b8146053575b5f5ffd5b7f000000000000000000000000000000000000000000000000000000000000002a5f5260205ff35b5f5460601b60601c5f5260205ff35b608060405260243610602757731234567890abcdef1234567890abcdef123456787f000000000000000000000000000000000000000000000000000000000000002a608063771602f760e01b81526004810160043581526020019190915260445f916020935af41560dd573d6020116027575f515f5260205ff35b3d5f5f3e3d5ffdfea2646970667358221220bce74b902c236f043fadfcef6386f1b5cc24de6ffeb86a1693eccf8ad5d2cb7465736f6c6172430003000034",
+ "library": "0x1234567890abcdef1234567890abcdef12345678"
+}

@@ -114,28 +114,89 @@ impl Display for NightlyVersion {
     }
 }
 
+/// A [Solar](https://github.com/paradigmxyz/solar) release, named by the solc-compatible
+/// version Solar writes into contract metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SolarVersion {
+    /// The Solidity (solc) version Solar emulates.
+    pub version: semver::Version,
+    pub commit: String,
+    /// Solar's own version.
+    pub solar_version: semver::Version,
+}
+
+impl FromStr for SolarVersion {
+    type Err = ParseError;
+
+    /// Parses Solar version from string formated as
+    /// `(v)*SOLC_VERSION*+commit.*COMMITHASH*.solar.*SOLAR_VERSION*`, example:
+    /// `0.8.38+commit.e7a91fc7.solar.0.3.0`
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (_prefix, major, minor, patch, commit, solar_version) = sscanf::scanf!(
+            s,
+            "{:/v?/}{}.{}.{}+commit.{:/[A-Fa-f0-9]+/}.solar.{}",
+            String,
+            u64,
+            u64,
+            u64,
+            String,
+            String,
+        )
+        .map_err(|e| ParseError::Parse(format!("{e:?}")))?;
+        let solar_version = semver::Version::parse(&solar_version)?;
+        if !solar_version.build.is_empty() {
+            return Err(ParseError::Parse(
+                "solar version must not have build metadata".to_string(),
+            ));
+        }
+        Ok(Self {
+            version: semver::Version::new(major, minor, patch),
+            commit,
+            solar_version,
+        })
+    }
+}
+
+impl Display for SolarVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "v{}+commit.{}.solar.{}",
+            self.version, self.commit, self.solar_version
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DetailedVersion {
     Release(ReleaseVersion),
     Nightly(NightlyVersion),
+    Solar(SolarVersion),
 }
 
 impl DetailedVersion {
+    /// The Solidity or Vyper version. For Solar, the solc version it emulates,
+    /// so version-dependent compiler behaviour follows solc's.
     pub fn version(&self) -> &semver::Version {
         match self {
             DetailedVersion::Nightly(v) => &v.version,
             DetailedVersion::Release(v) => &v.version,
+            DetailedVersion::Solar(v) => &v.version,
         }
     }
 
     pub fn is_release(&self) -> bool {
-        matches!(self, DetailedVersion::Release(_))
+        !matches!(self, DetailedVersion::Nightly(_))
+    }
+
+    pub fn is_solar(&self) -> bool {
+        matches!(self, DetailedVersion::Solar(_))
     }
 
     pub fn date(&self) -> Option<&NaiveDate> {
         match self {
             DetailedVersion::Nightly(v) => Some(&v.date),
-            DetailedVersion::Release(_) => None,
+            DetailedVersion::Release(_) | DetailedVersion::Solar(_) => None,
         }
     }
 
@@ -143,6 +204,15 @@ impl DetailedVersion {
         match self {
             DetailedVersion::Nightly(v) => &v.commit,
             DetailedVersion::Release(v) => &v.commit,
+            DetailedVersion::Solar(v) => &v.commit,
+        }
+    }
+
+    /// Solar's own version, if this is a Solar compiler.
+    pub fn solar_version(&self) -> Option<&semver::Version> {
+        match self {
+            DetailedVersion::Solar(v) => Some(&v.solar_version),
+            DetailedVersion::Release(_) | DetailedVersion::Nightly(_) => None,
         }
     }
 }
@@ -157,10 +227,13 @@ impl FromStr for DetailedVersion {
     type Err = ParseError;
 
     /// Parses compiler version
+    /// If version contains ".solar.", tries to parse it as a Solar version
     /// If version contains "nightly", tries to parse it as a nightly version
     /// Else tries to parse it as a release version
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.contains("nightly") {
+        if s.contains(".solar.") {
+            Ok(Self::Solar(SolarVersion::from_str(s)?))
+        } else if s.contains("nightly") {
             Ok(Self::Nightly(NightlyVersion::from_str(s)?))
         } else {
             Ok(Self::Release(ReleaseVersion::from_str(s)?))
@@ -173,6 +246,7 @@ impl Display for DetailedVersion {
         match self {
             DetailedVersion::Release(v) => v.fmt(f),
             DetailedVersion::Nightly(v) => v.fmt(f),
+            DetailedVersion::Solar(v) => v.fmt(f),
         }
     }
 }
@@ -183,12 +257,14 @@ impl Ord for DetailedVersion {
             self.version(),
             self.is_release(),
             self.date(),
+            self.solar_version(),
             self.commit(),
         )
             .cmp(&(
                 other.version(),
                 other.is_release(),
                 other.date(),
+                other.solar_version(),
                 other.commit(),
             ))
     }
@@ -326,6 +402,63 @@ mod tests {
     }
 
     #[test]
+    fn parse_solar() {
+        let ver = check_parsing::<SolarVersion>("0.8.38+commit.e7a91fc7.solar.0.3.0");
+        assert_eq!(ver.version, semver::Version::new(0, 8, 38));
+        assert_eq!(ver.commit, "e7a91fc7");
+        assert_eq!(ver.solar_version, semver::Version::new(0, 3, 0));
+        let prerelease = check_parsing::<SolarVersion>("v0.8.38+commit.e7a91fc7.solar.0.4.0-rc.1");
+        assert_eq!(
+            prerelease.solar_version,
+            semver::Version::parse("0.4.0-rc.1").unwrap()
+        );
+
+        assert_eq!(
+            check_parsing::<DetailedVersion>("v0.8.38+commit.e7a91fc7.solar.0.3.0"),
+            DetailedVersion::Solar(ver.clone())
+        );
+        let detailed = DetailedVersion::Solar(ver);
+        assert!(detailed.is_solar());
+        assert_eq!(detailed.version(), &semver::Version::new(0, 8, 38));
+        assert_eq!(
+            detailed.solar_version(),
+            Some(&semver::Version::new(0, 3, 0))
+        );
+    }
+
+    #[test]
+    fn parse_invalid_solar() {
+        SolarVersion::from_str("0.8.38+commit.e7a91fc7").unwrap_err();
+        SolarVersion::from_str("0.8.38+commit.e7a91fc7.solar.").unwrap_err();
+        SolarVersion::from_str("0.8.38+commit.e7a91fc7.solar.0.3").unwrap_err();
+        SolarVersion::from_str("0.8.38+commit.e7a91fc7.solar.0.3.0+build").unwrap_err();
+        SolarVersion::from_str("0.8.38+commit.zz.solar.0.3.0").unwrap_err();
+        SolarVersion::from_str("0.8.38.solar.0.3.0").unwrap_err();
+        SolarVersion::from_str("0.8+commit.e7a91fc7.solar.0.3.0").unwrap_err();
+        // A Solar-looking version never falls back to a solc release.
+        DetailedVersion::from_str("0.8.38+commit.e7a91fc7.solar.x").unwrap_err();
+    }
+
+    #[test]
+    fn order_solar_versions() {
+        let ver = check_parsing::<DetailedVersion>;
+
+        assert!(
+            ver("v0.8.38+commit.e7a91fc7.solar.0.3.1") > ver("v0.8.38+commit.ffffffff.solar.0.3.0")
+        );
+        assert!(
+            ver("v0.8.39+commit.00000000.solar.0.3.0") > ver("v0.8.38+commit.e7a91fc7.solar.0.4.0")
+        );
+        // Solar sorts next to the solc release it emulates, and never equals it.
+        assert!(ver("v0.8.38+commit.e7a91fc7.solar.0.3.0") > ver("v0.8.38+commit.ffffffff"));
+        assert!(ver("v0.8.38+commit.e7a91fc7.solar.0.3.0") < ver("v0.8.39+commit.00000000"));
+        assert!(
+            ver("v0.8.38+commit.e7a91fc7.solar.0.3.0")
+                > ver("v0.8.38-nightly.2026.1.1+commit.e7a91fc7")
+        );
+    }
+
+    #[test]
     fn display_version() {
         for (initial, expected) in [
             ("v0.8.9+commit.e5eed63a", "v0.8.9+commit.e5eed63a"),
@@ -338,6 +471,10 @@ mod tests {
                 "v0.1.0-beta.16+commit.5e4a94a",
             ),
             ("0.5.0b1+commit.577d2534", "v0.5.0-b1+commit.577d2534"),
+            (
+                "0.8.38+commit.e7a91fc7.solar.0.3.0",
+                "v0.8.38+commit.e7a91fc7.solar.0.3.0",
+            ),
         ] {
             let version = check_parsing::<DetailedVersion>(initial);
             assert_eq!(version.to_string(), expected,);

@@ -92,6 +92,12 @@ impl evm_compilers::EvmCompiler for SolcCompiler {
                 serde_json::to_value(output).context("serializing compiler output into value")?
             );
         }
+        // Solar (https://github.com/paradigmxyz/solar) accepts and produces solc's standard
+        // JSON, so it runs the same way; only the name in error messages differs.
+        let compiler_name = match compiler_version.is_solar() {
+            true => "solar",
+            false => "solc",
+        };
         let input = serde_json::to_vec(input).context("serializing compiler input")?;
         let invocation = CompilerInvocation::new(
             JobFile::executable("compiler", "bin/solc", compiler_path)?,
@@ -99,7 +105,7 @@ impl evm_compilers::EvmCompiler for SolcCompiler {
             input,
         );
         let output = executor.execute(invocation).await?;
-        output.ensure_success("solc")?;
+        output.ensure_success(compiler_name)?;
         let output_value = serde_json::from_slice(&output.stdout)
             .context("deserializing compiler output into value")?;
 

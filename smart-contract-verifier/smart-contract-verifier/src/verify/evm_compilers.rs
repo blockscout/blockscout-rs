@@ -93,15 +93,29 @@ impl<C: EvmCompiler> EvmCompilersPool<C> {
         &self,
         to_normalize: &DetailedVersion,
     ) -> Result<DetailedVersion, Error> {
+        let is_matching_commit = |version: &DetailedVersion| {
+            version.commit().starts_with(to_normalize.commit())
+                || to_normalize.commit().starts_with(version.commit())
+        };
         let is_matching_version = |version: &&DetailedVersion| {
             version.version() == to_normalize.version()
                 && version.date() == to_normalize.date()
-                && (version.commit().starts_with(to_normalize.commit())
-                    || to_normalize.commit().starts_with(version.commit()))
+                && version.solar_version() == to_normalize.solar_version()
+                && is_matching_commit(version)
+        };
+        // Solar reports itself as `0.3.0+commit.e7a91fc7`, which reads as a solc release.
+        // No solc release has a Solar commit, so such a version names the Solar compiler.
+        let is_solar_own_version = |version: &&DetailedVersion| {
+            matches!(to_normalize, DetailedVersion::Release(_))
+                && version.solar_version() == Some(to_normalize.version())
+                && is_matching_commit(version)
         };
 
         let all_versions = self.fetcher.all_versions();
-        let normalized = all_versions.iter().find(is_matching_version);
+        let normalized = all_versions
+            .iter()
+            .find(is_matching_version)
+            .or_else(|| all_versions.iter().find(is_solar_own_version));
 
         if let Some(normalized) = normalized {
             Ok(normalized.clone())
