@@ -1,0 +1,59 @@
+-- ENSv2 tables of ensdomains/ens-subgraph 2.2+ (graph-node column layout,
+-- only the columns BENS reads) and rows for the ENSv2 test cases:
+--  * ensv2live.eth: a name live in ENSv2, whose token BENS links;
+--  * a default (ENSIP-19) primary name for vitalik's address pointing at
+--    sashaxyz.eth, which must lose to vitalik.eth on addr.reverse;
+--  * a default primary name for 0x2222..2222 -> ensv2live.eth, its only one.
+
+CREATE TABLE sgd1.en_sv_2_name_path (
+    vid bigserial PRIMARY KEY,
+    block_range int4range NOT NULL,
+    id bytea NOT NULL,
+    slot bytea NOT NULL,
+    active boolean NOT NULL,
+    domain text,
+    name text
+);
+CREATE TABLE sgd1.en_sv_2_name_slot (
+    vid bigserial PRIMARY KEY,
+    block_range int4range NOT NULL,
+    id bytea NOT NULL,
+    owner text,
+    status text NOT NULL,
+    current_token bytea
+);
+CREATE TABLE sgd1.en_sv_2_token (
+    vid bigserial PRIMARY KEY,
+    block_range int4range NOT NULL,
+    id bytea NOT NULL,
+    registry bytea NOT NULL,
+    token_id numeric NOT NULL,
+    owner text,
+    active boolean NOT NULL
+);
+CREATE TABLE sgd1.en_sv_2_primary_name (
+    vid bigserial PRIMARY KEY,
+    block_range int4range NOT NULL,
+    id bytea NOT NULL,
+    account text NOT NULL,
+    name text,
+    block_number numeric NOT NULL,
+    log_index numeric NOT NULL,
+    reverse_node bytea
+);
+
+INSERT INTO sgd1.domain (vid, block_range, id, name, label_name, labelhash, parent, subdomain_count, resolved_address, resolver, ttl, is_migrated, created_at, owner, registrant, wrapped_owner, expiry_date) VALUES
+(900001, '[26300000,)', '0xd65adc62b2686960c04d8624f14b8c3030126b3be26ac6d980f12a27c1c110e3', 'ensv2live.eth', 'ensv2live', '\x881e26e6c45a3de6a8cff5083c12381e6c2e9a17a5a3b5dcb6970f16861f099c', '0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae', 0, '0x2222222222222222222222222222222222222222', NULL, NULL, true, 1793213027, '0x2222222222222222222222222222222222222222', '0x2222222222222222222222222222222222222222', NULL, 1826749027);
+
+INSERT INTO sgd1.en_sv_2_token (block_range, id, registry, token_id, owner, active) VALUES
+('[26300000,)', '\xf60aba43e1f7f3dab1186ff03b561401c9df85e2881e26e6c45a3de6a8cff5083c12381e6c2e9a17a5a3b5dcb6970f16861f099c', '\xf60aba43e1f7f3dab1186ff03b561401c9df85e2', 123456789, '0x2222222222222222222222222222222222222222', true),
+-- an older, burned token of the same slot: never linked
+('[26200000,26300000)', '\xf60aba43e1f7f3dab1186ff03b561401c9df85e200', '\xf60aba43e1f7f3dab1186ff03b561401c9df85e2', 42, NULL, false);
+INSERT INTO sgd1.en_sv_2_name_slot (block_range, id, owner, status, current_token) VALUES
+('[26300000,)', '\xf60aba43e1f7f3dab1186ff03b561401c9df85e2881e26e6c45a3de6a8cff5083c12381e6c2e9a17a5a3b5dcb6970f16861f099c00000000', '0x2222222222222222222222222222222222222222', 'REGISTERED', '\xf60aba43e1f7f3dab1186ff03b561401c9df85e2881e26e6c45a3de6a8cff5083c12381e6c2e9a17a5a3b5dcb6970f16861f099c');
+INSERT INTO sgd1.en_sv_2_name_path (block_range, id, slot, active, domain, name) VALUES
+('[26300000,)', '\xd65adc62b2686960c04d8624f14b8c3030126b3be26ac6d980f12a27c1c110e3', '\xf60aba43e1f7f3dab1186ff03b561401c9df85e2881e26e6c45a3de6a8cff5083c12381e6c2e9a17a5a3b5dcb6970f16861f099c00000000', true, '0xd65adc62b2686960c04d8624f14b8c3030126b3be26ac6d980f12a27c1c110e3', 'ensv2live.eth');
+
+INSERT INTO sgd1.en_sv_2_primary_name (block_range, id, account, name, block_number, log_index, reverse_node) VALUES
+('[26300001,)', '\xd8da6bf26964af9d7eed9e03e53415d37aa96045', '0xd8da6bf26964af9d7eed9e03e53415d37aa96045', 'sashaxyz.eth', 26300001, 1, '\x7aef81fbd30c83431369026d62ee533af8b69f246b63d75b40fe223346e6fa9a'),
+('[26300002,)', '\x2222222222222222222222222222222222222222', '0x2222222222222222222222222222222222222222', 'ensv2live.eth', 26300002, 1, '\x22ed692c052e5dfd9529c08ac2bb48bd230f6133289d272dd3a0961697ef3f26');

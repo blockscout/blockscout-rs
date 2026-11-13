@@ -903,6 +903,70 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "tests/migrations")]
+    async fn ensv2_names_link_their_ensv2_token_and_default_primary_names_fall_back(pool: PgPool) {
+        let reader = mocked_reader(pool).await;
+
+        // A name live in ENSv2: only its ENSv2 registry token is linked.
+        let output = reader
+            .get_domain(GetDomainInput {
+                network_id: Some(DEFAULT_CHAIN_ID),
+                name: "ensv2live.eth".to_string(),
+                only_active: false,
+                protocol_id: None,
+            })
+            .await
+            .expect("failed to get ensv2live.eth")
+            .expect("ensv2live.eth not found");
+        assert_eq!(output.domain.ensv2_token_id.as_deref(), Some("123456789"));
+        assert_eq!(
+            output.tokens,
+            vec![DomainToken {
+                id: "123456789".to_string(),
+                contract: addr("0xf60aba43e1f7f3dab1186ff03b561401c9df85e2"),
+                _type: DomainTokenType::Native,
+            }]
+        );
+
+        // An ENSv1 name has no ENSv2 token.
+        let output = reader
+            .get_domain(GetDomainInput {
+                network_id: Some(DEFAULT_CHAIN_ID),
+                name: "vitalik.eth".to_string(),
+                only_active: false,
+                protocol_id: None,
+            })
+            .await
+            .expect("failed to get vitalik.eth")
+            .expect("vitalik.eth not found");
+        assert_eq!(output.domain.ensv2_token_id, None);
+
+        // ENSIP-19: vitalik's addr.reverse name (vitalik.eth) wins over the
+        // newer default primary name (sashaxyz.eth); 0x2222..2222 has only a
+        // default primary name, which applies.
+        let domains = reader
+            .batch_resolve_address_names(BatchResolveAddressNamesInput {
+                addresses: [
+                    "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+                    "0x2222222222222222222222222222222222222222",
+                ]
+                .into_iter()
+                .map(addr)
+                .collect(),
+                network_id: Some(DEFAULT_CHAIN_ID),
+                protocols: None,
+                all_protocols: false,
+            })
+            .await
+            .expect("failed to resolve addresses");
+        let expected = serde_json::from_value(serde_json::json!({
+            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045": "vitalik.eth",
+            "0x2222222222222222222222222222222222222222": "ensv2live.eth",
+        }))
+        .unwrap();
+        assert_eq!(domains, expected);
+    }
+
+    #[sqlx::test(migrations = "tests/migrations")]
     async fn batch_search_works(pool: PgPool) {
         let reader = mocked_reader(pool).await;
 

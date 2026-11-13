@@ -52,7 +52,8 @@ impl AddrReverseNamesView {
     //    indexed as ENSv2PrimaryName keyed by address with `reverse_node` =
     //    namehash(<addr>.addr.reverse), which is what this view and
     //    resolve_addr_reverse_cached key on.
-    // Newest record per reverse node wins.
+    // Per reverse node the addr.reverse name wins over the default one
+    // (ENSIP-19), see the ORDER BY below.
     // parent = hashname('addr.reverse') = 0x91d1777781884d03a6757a803996e38de2a42967fb37eeaca72729271025a9e2
     fn sql(schema: &str, ensv2: bool) -> String {
         let v1 = format!(
@@ -118,9 +119,12 @@ SELECT DISTINCT ON (reversed_domain_id)
     domain_id, reversed_domain_id, resolved_address, name
 FROM (
 {v1}{v2}) all_sources
--- newest record wins; when both schemes change in the same block the
--- ENSIP-19 record (scheme 1) is preferred
-ORDER BY reversed_domain_id, block_number DESC, scheme DESC
+-- ENSIP-19 reverse resolution for an Ethereum address: the name set on its
+-- addr.reverse resolver (scheme 0) wins, and the default primary name
+-- (scheme 1) is only the fallback when the addr.reverse name is empty or
+-- absent. An empty or dangling v1 name has no row here (it joins no domain),
+-- so the default takes over exactly then.
+ORDER BY reversed_domain_id, scheme ASC, block_number DESC
         "#
         )
     }

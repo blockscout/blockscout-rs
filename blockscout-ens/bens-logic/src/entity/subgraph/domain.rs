@@ -18,18 +18,15 @@ pub struct DetailedDomain {
     pub ttl: Option<chrono::DateTime<Utc>>,
     pub is_migrated: bool,
     pub registration_date: chrono::DateTime<Utc>,
-    /// The holder as reported by the API. Equals `registry_owner` except for
-    /// ENSv2-migrated names, where the registry owner is a migration contract
-    /// and this is the wrapped owner, registrant or ENSv2 slot owner.
     pub owner: String,
-    /// Raw `Domain.owner` from the subgraph (the v1 registry owner).
+    /// For a name live in ENSv2 (active ENSv2 path with a current token): the
+    /// ENSv2 registry holding its token, and the token id. Its ENSv1
+    /// BaseRegistrar / NameWrapper tokens are retired. `None` for protocols
+    /// without `ensv2` and for ENSv1 names.
     #[sqlx(default)]
-    pub registry_owner: String,
-    /// The name was migrated from ENSv1 to ENSv2 (`ENSv2NameSlot.migratedFromV1`
-    /// of its active slot). Its v1 tokens are retired. `false` for protocols
-    /// without `ensv2`.
+    pub ensv2_token_contract: Option<String>,
     #[sqlx(default)]
-    pub ensv2_migrated: bool,
+    pub ensv2_token_id: Option<String>,
     pub registrant: Option<String>,
     pub wrapped_owner: Option<String>,
     pub created_at: BigDecimal,

@@ -2,7 +2,7 @@
 
 use crate::{
     blockscout::BlockscoutClient,
-    protocols::{EnsLikeProtocol, Network, ProtocolInfo, ProtocolSpecific, Tld},
+    protocols::{EnsLikeProtocol, EnsV2Settings, Network, ProtocolInfo, ProtocolSpecific, Tld},
     subgraph::SubgraphReader,
 };
 use alloy::{
@@ -143,6 +143,12 @@ pub async fn mocked_networks_and_protocols(
                 network_id: 1,
                 tld_list: nonempty![Tld::new("eth")],
                 subgraph_name: "ens-subgraph".to_string(),
+                // The mock sgd1 schema carries the ENSv2 tables of
+                // ensdomains/ens-subgraph 2.2+ (tests/migrations).
+                protocol_specific: ProtocolSpecific::EnsLike(EnsLikeProtocol {
+                    ensv2: Some(EnsV2Settings {}),
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
         ),

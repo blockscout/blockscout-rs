@@ -27,41 +27,39 @@ Service is **multi-chain**, meaning that only one instance of `graph-node`, `pos
 ## ENSv2
 
 `ens-subgraph` is [ensdomains/ens-subgraph](https://github.com/ensdomains/ens-subgraph)
-`v2.2.0` with Blockscout's extension fields (see its
+`v2.2.1` with Blockscout's extension fields (see its
 [README](./graph-node/subgraphs/ens-subgraph/README.md)). It indexes ENSv1 and
 ENSv2 on mainnet and Sepolia and projects ENSv2 names into the legacy `Domain`
-tables, so BENS keeps working on the same schema. Specific to it:
+tables, so BENS keeps working on the same schema. Since v2.2.0 those rows are
+correct on their own: the ENSv1 -> ENSv2 migration and the Graveyard's
+retirement of expired names hand ENSv1 state to the Graveyard or a migration
+controller, but the subgraph never stores one of those contracts as `owner`,
+`registrant` or `wrappedOwner`. A migrated or natively registered ENSv2 name
+carries its ENSv2 holder, a retired `.eth` name keeps its lapsed holder and
+expiry (it reads as expired), and a retired subname is deleted with the ENSv1
+convention (owner = zero address, reported as no owner). BENS needs no
+ownership rules of its own. Specific to this subgraph:
 
 - **Graph Node `v0.45.0`+** is required (`graph-node/docker-compose.yml`): the
   manifest is `specVersion 1.3.0` with `indexerHints`, which `v0.34.x` rejects.
+- **`specific.ensv2`.** An empty `"ensv2": {}` section on an ENS-like protocol
+  enables the ENSv2 tables below. Protocols without it never touch them.
 - **ENSIP-19 default primary names.** The ENSv2 app sets a primary name on the
   `DefaultReverseRegistrar` instead of the v1 `addr.reverse` resolver. The
   subgraph indexes them as `ENSv2PrimaryName`, with a Blockscout extension
-  field `reverse_node = namehash(<addr>.addr.reverse)`. When a protocol has
-  `specific.ensv2` configured, BENS's `addr_reverse_names` view UNIONs that
-  table with the v1 `name_changed` source, newest record per reverse node.
+  field `reverse_node = namehash(<addr>.addr.reverse)`. BENS's
+  `addr_reverse_names` view UNIONs that table with the v1 `name_changed`
+  source and follows ENSIP-19: the `addr.reverse` name wins, the default
+  primary name is the fallback when it is empty or absent.
+- **ENSv2 tokens.** For a name live in ENSv2 (active ENSv2 path whose slot has
+  a current token) BENS links the token in its ENSv2 registry, not the ENSv1
+  BaseRegistrar or NameWrapper token, which is retired (held by the
+  Graveyard after a migration) or unrelated (a native registration of a label
+  whose ENSv1 registration had lapsed).
 - **Never-expiring names.** The subgraph writes `253402300799`
   (9999-12-31T23:59:59Z) to `expiry_date` for ENSv2 names that never expire.
   BENS reports that value, or anything beyond it, as no expiry
-  (`expiry_date: null`, "never expires"). Earlier 2.x releases wrote
-  `8640000000000` (year 275760), which Rust's `chrono` cannot represent;
-  the same guard covers a schema indexed by them.
-- **Migrated and retired names.** The ENSv1 -> ENSv2 migration and the
-  Graveyard's retirement of expired names (`Graveyard.clear()`, about 950,000
-  names on mainnet) hand ENSv1 state to the Graveyard or a migration
-  controller. Since v2.2.0 the subgraph never stores one of those contracts
-  as `Domain.owner`, `registrant` or `wrappedOwner`: a migrated or natively
-  registered ENSv2 name carries its ENSv2 holder, a retired `.eth` name keeps
-  its lapsed holder and expiry (it reads as expired), and a retired subname
-  is deleted with the ENSv1 convention (owner = zero address). BENS needs no
-  rule of its own for this. With `specific.ensv2.migration_contracts`
-  configured, BENS still substitutes the holder when `owner` is a migration
-  contract or the name is a migrated wrapped name, lists names under their
-  holder rather than a migration contract, and does not link the retired
-  NameWrapper token; this guards schemas indexed by subgraph versions
-  before v2.2.0 and is a no-op on v2.2.0. The raw registry owner stays
-  available to the code as `registry_owner`. Protocols without `ensv2` are
-  unaffected and never touch the ENSv2 tables.
+  (`expiry_date: null`, "never expires").
 
 ```json
 "specific": {
@@ -69,19 +67,9 @@ tables, so BENS keeps working on the same schema. Specific to it:
   "native_token_contract": "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",
   "registry_contract": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
   "try_offchain_resolve": true,
-  "ensv2": {
-    "migration_contracts": [
-      "0xda021a2c1c2f99574d861ef8c6fa745851beb7f6",
-      "0x3cea18620883a69ed349b23328a3b6302598e51a",
-      "0xab821ca676cf2e0790fa273526a165cfa86aeb64"
-    ]
-  }
+  "ensv2": {}
 }
 ```
-
-Mainnet: Graveyard `0xda02…b7f6`, LockedMigrationController `0x3cea…e51a`,
-UnlockedMigrationController `0xab82…eb64`. Sepolia: `0xb58a…b04d`,
-`0x6029…c3A8`, `0x2a35…64A2` (see `bens-server/config/dev.json`).
 
 ## Envs
 

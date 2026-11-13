@@ -49,11 +49,11 @@ mod sql_gen {
 
     #[allow(dead_code)]
     pub fn detailed_domain_select(protocol: &Protocol) -> SelectStatement {
-        domain_select_custom(protocol, &detailed_domain_select_clause(protocol))
+        domain_select_custom(protocol, DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE)
     }
 
     pub fn domain_select(protocol: &Protocol) -> SelectStatement {
-        domain_select_custom(protocol, &domain_select_clause(protocol))
+        domain_select_custom(protocol, DOMAIN_DEFAULT_SELECT_CLAUSE)
     }
 
     pub fn domain_select_custom(protocol: &Protocol, select: &str) -> SelectStatement {
@@ -75,12 +75,7 @@ mod sql_gen {
 // therefore clamped in filters and returned as NULL ("no expiry").
 // ensdomains/ens-subgraph 2.1.1+ clamps never-expiring names to exactly
 // 253402300799 on `expiry_date`, so that value itself is "no expiry" too.
-
-fn detailed_domain_select_clause(protocol: &Protocol) -> String {
-    let owner = owner_select_expr(protocol);
-    let ensv2_migrated = ensv2_migrated_expr(protocol);
-    format!(
-        r#"
+const DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE: &str = r#"
 vid,
 block_range,
 id,
@@ -97,22 +92,49 @@ stored_offchain,
 resolved_with_wildcard,
 created_at,
 to_timestamp(created_at) as registration_date,
-{owner} as owner,
-owner as registry_owner,
-{ensv2_migrated} as ensv2_migrated,
+owner,
 registrant,
 wrapped_owner,
 CASE WHEN expiry_date < 253402300799 THEN to_timestamp(expiry_date) END as expiry_date,
 COALESCE(to_timestamp(LEAST(expiry_date, 253402300799)) < now(), false) AS is_expired,
 token_id::text as token_id
-"#
+"#;
+
+// The detailed select of a protocol indexed by ensdomains/ens-subgraph 2.2+
+// adds the ENSv2 registry token of a name live in ENSv2 (active path whose
+// slot holds a current token), so the token links point at it rather than at
+// the retired ENSv1 BaseRegistrar / NameWrapper tokens. Only used for
+// single-name lookups.
+fn detailed_domain_select_clause(protocol: &Protocol) -> String {
+    match protocol.info.protocol_specific.ensv2() {
+        Some(_) => {
+            let token = ensv2_token_subquery(&protocol.subgraph_schema);
+            format!(
+                "{DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE},\n\
+                 (SELECT '0x' || encode(t.registry, 'hex') {token}) as ensv2_token_contract,\n\
+                 (SELECT t.token_id::text {token}) as ensv2_token_id"
+            )
+        }
+        None => DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE.to_string(),
+    }
+}
+
+// `ENSv2NamePath.id` is the namehash as bytes, `Domain.id` the same hash as a
+// 0x-prefixed text, hence the decode. A slot's `current_token` is cleared when
+// the name is unregistered or its token burned.
+fn ensv2_token_subquery(schema: &str) -> String {
+    format!(
+        "FROM {schema}.en_sv_2_name_path p \
+         JOIN {schema}.en_sv_2_name_slot s ON s.id = p.slot \
+         JOIN {schema}.en_sv_2_token t ON t.id = s.current_token \
+         WHERE p.id = decode(substr(domain.id, 3), 'hex') AND p.active \
+         AND p.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE} AND s.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE} \
+         AND t.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE} \
+         LIMIT 1"
     )
 }
 
-fn domain_select_clause(protocol: &Protocol) -> String {
-    let owner = owner_select_expr(protocol);
-    format!(
-        r#"
+const DOMAIN_DEFAULT_SELECT_CLAUSE: &str = r#"
 vid,
 id,
 name,
@@ -120,107 +142,13 @@ resolved_address,
 resolver,
 created_at,
 to_timestamp(created_at) as registration_date,
-{owner} as owner,
+owner,
 wrapped_owner,
 stored_offchain,
 resolved_with_wildcard,
 CASE WHEN expiry_date < 253402300799 THEN to_timestamp(expiry_date) END as expiry_date,
 COALESCE(to_timestamp(LEAST(expiry_date, 253402300799)) < now(), false) AS is_expired
-"#
-    )
-}
-
-// ENSv2 (ensdomains/ens-subgraph 2.x) keeps `Domain.owner` as the ENSv1
-// registry owner. For a migrated name that is either a migration contract
-// (the Graveyard or a migration controller: the migration's voiding step for
-// an unwrapped name or an unlocked wrapped one) or still the NameWrapper (a
-// locked migration leaves the name wrapped and parks the ERC-1155 token in
-// the Graveyard). Neither is the holder. The holder is the wrapped owner
-// (locked migration), the registrant (unlocked .eth migration) or, for
-// migrated subnames that have neither, the owner of the ENSv2 name slot the
-// Domain is projected from (`ENSv2NamePath.domain` -> `ENSv2NameSlot.owner`).
-//
-// `migration_contracts` is empty for every protocol without `ensv2` in its
-// config, so other ENS-like subgraphs (which have no ENSv2 tables) keep the
-// plain column.
-fn owner_select_expr(protocol: &Protocol) -> String {
-    match protocol.info.protocol_specific.ensv2() {
-        Some(v2) if !v2.migration_contracts.is_empty() => {
-            let schema = &protocol.subgraph_schema;
-            let contracts = migration_contracts_array(&v2.migration_contracts);
-            // A locked migration can park the v1 BaseRegistrar token in the
-            // Graveyard as well, so a registrant (or wrapped owner) that is a
-            // migration contract is skipped like the owner. The wrapped-owner
-            // check for the NameWrapper case is a cheap guard in front of the
-            // slot lookup: a migrated name whose registry owner is not a
-            // migration contract is always a locked (wrapped) one.
-            format!(
-                "(CASE WHEN owner = ANY({contracts}) \
-                 OR (wrapped_owner IS NOT NULL AND {ENSV2_MIGRATED}) THEN (CASE \
-                 WHEN wrapped_owner IS NOT NULL AND NOT (wrapped_owner = ANY({contracts})) THEN wrapped_owner \
-                 WHEN registrant IS NOT NULL AND NOT (registrant = ANY({contracts})) THEN registrant \
-                 ELSE COALESCE(({ENSV2_SLOT_OWNER_SUBQUERY}), owner) END) ELSE owner END)",
-                ENSV2_MIGRATED = ensv2_migrated_subquery(schema),
-                ENSV2_SLOT_OWNER_SUBQUERY = ensv2_slot_owner_subquery(schema),
-            )
-        }
-        _ => "owner".to_string(),
-    }
-}
-
-// Whether the current domain row is an ENSv1 name migrated to ENSv2
-// (`ENSv2NameSlot.migratedFromV1` of its active slot). `false` for protocols
-// without `ensv2`, which have no ENSv2 tables.
-fn ensv2_migrated_expr(protocol: &Protocol) -> String {
-    match protocol.info.protocol_specific.ensv2() {
-        Some(v2) if !v2.migration_contracts.is_empty() => {
-            ensv2_migrated_subquery(&protocol.subgraph_schema)
-        }
-        _ => "false".to_string(),
-    }
-}
-
-fn ensv2_migrated_subquery(schema: &str) -> String {
-    format!(
-        "EXISTS (SELECT 1 FROM {schema}.en_sv_2_name_path p \
-         JOIN {schema}.en_sv_2_name_slot s ON s.id = p.slot \
-         WHERE p.id = decode(substr(domain.id, 3), 'hex') AND p.active AND s.migrated_from_v1 \
-         AND p.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE} AND s.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE})"
-    )
-}
-
-fn migration_contracts_array(contracts: &[Address]) -> String {
-    let items = contracts
-        .iter()
-        .map(|c| format!("'{}'", hex(c)))
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!("ARRAY[{items}]::text[]")
-}
-
-// Owner of the active ENSv2 name slot behind the current domain row.
-// `ENSv2NamePath.id` is the namehash as bytes, `Domain.id` the same hash as a
-// 0x-prefixed text, hence the decode.
-fn ensv2_slot_owner_subquery(schema: &str) -> String {
-    format!(
-        "SELECT s.owner FROM {schema}.en_sv_2_name_path p \
-         JOIN {schema}.en_sv_2_name_slot s ON s.id = p.slot \
-         WHERE p.id = decode(substr(domain.id, 3), 'hex') AND p.active \
-         AND p.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE} AND s.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE} \
-         LIMIT 1"
-    )
-}
-
-// Domains whose active ENSv2 name slot is owned by `$1`, for the owned-by
-// filter; the current domain row and the slot are matched by namehash.
-fn ensv2_slot_owned_by_subquery(schema: &str) -> String {
-    format!(
-        "SELECT '0x' || encode(p.id, 'hex') FROM {schema}.en_sv_2_name_path p \
-         JOIN {schema}.en_sv_2_name_slot s ON s.id = p.slot \
-         WHERE s.owner = $1 AND p.active \
-         AND p.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE} AND s.{DOMAIN_BLOCK_RANGE_WHERE_CLAUSE}"
-    )
-}
+"#;
 
 // `block_range @>` is special sql syntax for fast filtering int4range
 // to access current version of domain.
@@ -229,7 +157,7 @@ pub const DOMAIN_BLOCK_RANGE_WHERE_CLAUSE: &str = "block_range @> 2147483647";
 
 pub const DOMAIN_NONEMPTY_LABEL_WHERE_CLAUSE: &str = "label_name IS NOT NULL";
 
-// See `detailed_domain_select_clause` for the clamp.
+// See `DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE` for the clamp.
 pub const DOMAIN_NOT_EXPIRED_WHERE_CLAUSE: &str = r#"
 (
     expiry_date is null
@@ -471,40 +399,8 @@ fn gen_sql_select_domains_by_address(
         main_cond = main_cond.add(Expr::cust("resolved_address = $1"));
     }
     if owned_by {
-        let mut owned = Condition::any()
-            .add(Expr::cust("owner = $1"))
-            .add(Expr::cust("wrapped_owner = $1"))
-            // The .eth registrant: for an ENSv2-migrated (unlocked) name the
-            // registry owner is a migration contract and the registrant is the
-            // holder; for an ENSv1 name it is the BaseRegistrar token holder.
-            .add(Expr::cust("registrant = $1"));
-        match protocol.info.protocol_specific.ensv2() {
-            Some(v2) => {
-                // Migrated subnames carry neither registrant nor wrapped
-                // owner; their holder is the ENSv2 slot owner.
-                owned = owned.add(Expr::cust(format!(
-                    "id = ANY({})",
-                    ensv2_slot_owned_by_subquery(&protocol.subgraph_schema)
-                )));
-                if !v2.migration_contracts.is_empty() {
-                    // A migration contract is the v1 registry owner or
-                    // registrant of every migrated name but holds none of
-                    // them, so its own address page lists nothing. The guard
-                    // only compares the parameter with constants, so the
-                    // indexable disjuncts above are unaffected.
-                    main_cond =
-                        main_cond.add(Condition::all().add(owned).add(Expr::cust(format!(
-                            "NOT ($1 = ANY({}))",
-                            migration_contracts_array(&v2.migration_contracts)
-                        ))));
-                } else {
-                    main_cond = main_cond.add(owned);
-                }
-            }
-            None => {
-                main_cond = main_cond.add(owned);
-            }
-        }
+        main_cond = main_cond.add(Expr::cust("owner = $1"));
+        main_cond = main_cond.add(Expr::cust("wrapped_owner = $1"));
     }
     q = q.cond_where(main_cond);
 
@@ -515,38 +411,12 @@ fn gen_sql_select_domains_by_address(
 mod tests {
     use super::*;
     use crate::protocols::{EnsLikeProtocol, EnsV2Settings, ProtocolSpecific};
-    use std::str::FromStr;
-
-    fn protocol() -> Protocol {
-        Protocol {
-            subgraph_schema: "sgd1".to_string(),
-            ..Default::default()
-        }
-    }
-
-    const GRAVEYARD: &str = "0xda021a2c1c2f99574d861ef8c6fa745851beb7f6";
-
-    fn ensv2_protocol() -> Protocol {
-        let mut protocol = protocol();
-        protocol.info.protocol_specific = ProtocolSpecific::EnsLike(EnsLikeProtocol {
-            ensv2: Some(EnsV2Settings {
-                migration_contracts: vec![Address::from_str(GRAVEYARD).unwrap()],
-            }),
-            ..Default::default()
-        });
-        protocol
-    }
-
-    fn address_filter_sql(resolved_to: bool, owned_by: bool) -> String {
-        gen_sql_select_domains_by_address(&protocol(), None, true, resolved_to, owned_by)
-            .to_string(PostgresQueryBuilder)
-    }
 
     #[test]
-    fn expiry_past_year_9999_is_reported_as_never() {
+    fn expiry_sentinel_is_reported_as_never() {
         for clause in [
-            detailed_domain_select_clause(&protocol()),
-            domain_select_clause(&protocol()),
+            DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE,
+            DOMAIN_DEFAULT_SELECT_CLAUSE,
         ] {
             assert!(
                 clause.contains(
@@ -554,76 +424,42 @@ mod tests {
                 ),
                 "{clause}"
             );
-            assert!(
-                clause.contains("COALESCE(to_timestamp(LEAST(expiry_date, 253402300799)) < now(), false) AS is_expired"),
-                "{clause}"
-            );
         }
     }
 
     #[test]
-    fn owner_is_plain_column_without_ensv2() {
-        let sql = sql_gen::domain_select(&protocol()).to_string(PostgresQueryBuilder);
-        assert!(sql.contains("owner as owner"), "{sql}");
-        assert!(!sql.contains("CASE WHEN owner"), "{sql}");
-        assert!(!sql.contains("en_sv_2"), "{sql}");
+    fn ensv2_token_columns_only_with_ensv2() {
+        let mut protocol = Protocol {
+            subgraph_schema: "sgd1".to_string(),
+            ..Default::default()
+        };
+        let plain = detailed_domain_select_clause(&protocol);
+        assert!(!plain.contains("en_sv_2"), "{plain}");
+        assert!(!plain.contains("ensv2_token"), "{plain}");
 
-        let detailed = detailed_domain_select_clause(&protocol());
-        assert!(detailed.contains("owner as registry_owner"), "{detailed}");
-        assert!(detailed.contains("false as ensv2_migrated"), "{detailed}");
-    }
-
-    #[test]
-    fn owner_substitutes_migration_contracts_with_ensv2() {
-        let sql = sql_gen::domain_select(&ensv2_protocol()).to_string(PostgresQueryBuilder);
-        let contracts = format!("ARRAY['{GRAVEYARD}']::text[]");
-        let migrated = "EXISTS (SELECT 1 FROM sgd1.en_sv_2_name_path p \
-                        JOIN sgd1.en_sv_2_name_slot s ON s.id = p.slot \
-                        WHERE p.id = decode(substr(domain.id, 3), 'hex') AND p.active AND s.migrated_from_v1 \
-                        AND p.block_range @> 2147483647 AND s.block_range @> 2147483647)";
+        protocol.info.protocol_specific = ProtocolSpecific::EnsLike(EnsLikeProtocol {
+            ensv2: Some(EnsV2Settings {}),
+            ..Default::default()
+        });
+        let v2 = detailed_domain_select_clause(&protocol);
+        assert!(v2.contains("as ensv2_token_contract"), "{v2}");
+        assert!(v2.contains("as ensv2_token_id"), "{v2}");
         assert!(
-            sql.contains(&format!(
-                "CASE WHEN owner = ANY({contracts}) \
-                 OR (wrapped_owner IS NOT NULL AND {migrated}) THEN (CASE \
-                 WHEN wrapped_owner IS NOT NULL AND NOT (wrapped_owner = ANY({contracts})) THEN wrapped_owner \
-                 WHEN registrant IS NOT NULL AND NOT (registrant = ANY({contracts})) THEN registrant \
-                 ELSE COALESCE((SELECT s.owner FROM sgd1.en_sv_2_name_path p"
-            )),
-            "{sql}"
-        );
-        assert!(sql.contains("ELSE owner END) as owner"), "{sql}");
-
-        let detailed = detailed_domain_select_clause(&ensv2_protocol());
-        assert!(detailed.contains("owner as registry_owner"), "{detailed}");
-        assert!(
-            detailed.contains(&format!("{migrated} as ensv2_migrated")),
-            "{detailed}"
-        );
-    }
-
-    #[test]
-    fn owned_by_includes_ensv2_slot_owner_only_with_ensv2() {
-        let plain = address_filter_sql(false, true);
-        assert!(!plain.contains("en_sv_2_name_slot"), "{plain}");
-
-        let v2 = gen_sql_select_domains_by_address(&ensv2_protocol(), None, true, false, true)
-            .to_string(PostgresQueryBuilder);
-        assert!(v2.contains("(registrant = $1)"), "{v2}");
-        assert!(
-            v2.contains(
-                "(id = ANY(SELECT '0x' || encode(p.id, 'hex') FROM sgd1.en_sv_2_name_path p"
-            ),
+            v2.contains("JOIN sgd1.en_sv_2_token t ON t.id = s.current_token"),
             "{v2}"
         );
-        assert!(v2.contains("WHERE s.owner = $1"), "{v2}");
-        assert!(
-            v2.contains(&format!(
-                "AND (NOT ($1 = ANY(ARRAY['{GRAVEYARD}']::text[])))"
-            )),
-            "{v2}"
-        );
-        // the subquery must not introduce a second bind parameter
-        assert!(!v2.contains("$2"), "{v2}");
+        // The owned-by filter and the list select stay upstream's.
+        let list = sql_gen::domain_select(&protocol).to_string(PostgresQueryBuilder);
+        assert!(!list.contains("en_sv_2"), "{list}");
+    }
+
+    fn address_filter_sql(resolved_to: bool, owned_by: bool) -> String {
+        let protocol = Protocol {
+            subgraph_schema: "sgd1".to_string(),
+            ..Default::default()
+        };
+        gen_sql_select_domains_by_address(&protocol, None, true, resolved_to, owned_by)
+            .to_string(PostgresQueryBuilder)
     }
 
     #[test]
@@ -646,7 +482,6 @@ mod tests {
         assert!(both.contains("(resolved_address = $1)"), "{both}");
         assert!(both.contains("(owner = $1)"), "{both}");
         assert!(both.contains("(wrapped_owner = $1)"), "{both}");
-        assert!(both.contains("(registrant = $1)"), "{both}");
 
         let resolved_only = address_filter_sql(true, false);
         assert!(
@@ -658,10 +493,6 @@ mod tests {
             !resolved_only.contains("(wrapped_owner = $1)"),
             "{resolved_only}"
         );
-        assert!(
-            !resolved_only.contains("(registrant = $1)"),
-            "{resolved_only}"
-        );
 
         let owned_only = address_filter_sql(false, true);
         assert!(
@@ -670,6 +501,5 @@ mod tests {
         );
         assert!(owned_only.contains("(owner = $1)"), "{owned_only}");
         assert!(owned_only.contains("(wrapped_owner = $1)"), "{owned_only}");
-        assert!(owned_only.contains("(registrant = $1)"), "{owned_only}");
     }
 }
