@@ -37,15 +37,17 @@ impl FromStr for ReleaseVersion {
     /// them, are accepted too and normalized to the dashed form, so that
     /// `0.5.0b1+commit.577d2534` equals `0.5.0-b1+commit.577d2534`.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // The text parts are taken as `str`: for `String`, `scanf!` generates handling of an
+        // error that cannot happen, which the compiler reports as unreachable code.
         let (_prefix, major, minor, patch, pre, commit) = sscanf::scanf!(
             s,
             "{:/v?/}{}.{}.{}{:/(?:-.*|(?:a|b|rc)[0-9]+)?/}+commit.{:/[A-Fa-f0-9]+/}",
-            String,
+            str,
             u64,
             u64,
             u64,
-            String,
-            String,
+            str,
+            str,
         )
         .map_err(|e| ParseError::Parse(format!("{e:?}")))?;
         let version = semver::Version {
@@ -55,7 +57,10 @@ impl FromStr for ReleaseVersion {
             pre: Prerelease::new(pre.trim_start_matches('-'))?,
             build: BuildMetadata::EMPTY,
         };
-        Ok(Self { version, commit })
+        Ok(Self {
+            version,
+            commit: commit.to_string(),
+        })
     }
 }
 
@@ -83,21 +88,21 @@ impl FromStr for NightlyVersion {
         let (_prefix, major, minor, patch, date, commit) = sscanf::scanf!(
             s,
             "{:/v?/}{}.{}.{}-nightly.{}+commit.{:/[A-Fa-f0-9]+/}",
-            String,
+            str,
             u64,
             u64,
             u64,
-            String,
-            String,
+            str,
+            str,
         )
         .map_err(|e| ParseError::Parse(format!("{e:?}")))?;
         let version = semver::Version::new(major, minor, patch);
-        let date = NaiveDate::parse_from_str(&date, DATE_FORMAT)
+        let date = NaiveDate::parse_from_str(date, DATE_FORMAT)
             .map_err(|e| ParseError::Parse(e.to_string()))?;
         Ok(Self {
             version,
             date,
-            commit,
+            commit: commit.to_string(),
         })
     }
 }
@@ -135,15 +140,15 @@ impl FromStr for SolarVersion {
         let (_prefix, major, minor, patch, commit, solar_version) = sscanf::scanf!(
             s,
             "{:/v?/}{}.{}.{}+commit.{:/[A-Fa-f0-9]+/}.solar.{}",
-            String,
+            str,
             u64,
             u64,
             u64,
-            String,
-            String,
+            str,
+            str,
         )
         .map_err(|e| ParseError::Parse(format!("{e:?}")))?;
-        let solar_version = semver::Version::parse(&solar_version)?;
+        let solar_version = semver::Version::parse(solar_version)?;
         if !solar_version.build.is_empty() {
             return Err(ParseError::Parse(
                 "solar version must not have build metadata".to_string(),
@@ -151,7 +156,7 @@ impl FromStr for SolarVersion {
         }
         Ok(Self {
             version: semver::Version::new(major, minor, patch),
-            commit,
+            commit: commit.to_string(),
             solar_version,
         })
     }
