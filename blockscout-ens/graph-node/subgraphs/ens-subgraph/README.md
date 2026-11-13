@@ -29,14 +29,21 @@ source. They are:
   of each ENSIP-19 default primary name, so BENS's `addr_reverse_names` view
   can join ENSv2 primary names to the v1 reverse-record keys without keccak
   in SQL.
+- `specVersion: 1.2.0` in `subgraph.yaml` (upstream: `1.3.0`). From
+  `1.3.0` graph-node enables strict `vid` ordering and creates every entity
+  table's `vid` as a plain `bigint` with no default. BENS inserts offchain and
+  wildcard `domain` rows without a `vid` (`bens-logic/src/subgraph/sql/create.rs`),
+  which then fail. With `1.2.0` the column is a `bigserial`
+  (`nextval('sgdN.domain_vid_seq')`). The manifest uses nothing else from
+  `1.3.0` (no subgraph data sources), and `indexerHints` is valid in `1.2.0`.
 
 To upgrade to a newer upstream tag, replace the directory with the new tree
-(keep `justfile` and this file) and re-apply the two items above.
+(keep `justfile` and this file) and re-apply the three items above.
 
 ## Requirements
 
 - **Graph Node `v0.45.0` or newer** (`../../docker-compose.yml`). The
-  manifest is `specVersion 1.3.0` / `apiVersion 0.0.9` with `indexerHints`,
+  manifest is `specVersion 1.2.0` / `apiVersion 0.0.9` with `indexerHints`,
   which `v0.34.x` rejects.
 - **`ens_names` must be seeded** before the first deployment. Graph Node's
   `ens.nameByHash` errors with "Missing ENS data" while `public.ens_names` is
