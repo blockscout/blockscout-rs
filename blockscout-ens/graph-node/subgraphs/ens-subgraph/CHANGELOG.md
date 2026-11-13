@@ -3,6 +3,20 @@
 Version labels match the Subgraph Studio deployments of the mainnet subgraph
 `5XqPmWe6gjyrJtFn9cLy237i4cWw2j9HcUJEXsP5qGtH`.
 
+## v2.3.0 (2026-11-13)
+
+### Added
+
+- `Domain.registryToken`: the name's current token in its ENSv2 registry
+  (an `ENSv2Token`, whose id is the registry address followed by the uint256
+  token id), so consumers can link a live ENSv2 name to its token without
+  joining the native entities. Set when the registration's `TokenResource`
+  arrives and on `TokenRegenerated`, cleared when the name is unregistered or
+  its namespace unlinked; null for names that are not live in ENSv2. Their
+  ENSv1 BaseRegistrar / NameWrapper tokens are retired or unrelated.
+
+Requires a full re-index.
+
 ## v2.2.1 (2026-11-13)
 
 ### Fixed

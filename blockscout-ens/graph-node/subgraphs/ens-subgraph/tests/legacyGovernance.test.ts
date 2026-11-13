@@ -23,10 +23,11 @@ import {
   handleLabelUnregistered,
   handleResolverUpdated,
   handleSubregistryUpdated,
+  handleTokenRegenerated,
   handleTokenResource,
   handleTransferSingle,
 } from "../src/ensv2Registry";
-import { pathNamehash } from "../src/ensv2Utils";
+import { pathNamehash, tokenEntityId } from "../src/ensv2Utils";
 import { createResolverID } from "../src/resolver";
 import { NameRegistered, NameRenewed, Transfer } from "../src/types/BaseRegistrar/BaseRegistrar";
 import { NewResolver } from "../src/types/ENSRegistry/EnsRegistry";
@@ -38,6 +39,7 @@ import {
   createLabelUnregisteredEvent,
   createResolverUpdatedEvent,
   createSubregistryUpdatedEvent,
+  createTokenRegeneratedEvent,
   createTokenResourceEvent,
   createTransferSingleEvent,
   slotToken,
@@ -447,4 +449,45 @@ test("joyuri.eth: a migrated name's v1 token renewals do not override its ENSv2 
   assert.fieldEquals("Domain", id, "expiryDate", expiry);
   assert.fieldEquals("Registration", lh.toHexString(), "expiryDate", "2000000000");
   assert.fieldEquals("Domain", id, "registrant", a(HOLDER));
+});
+
+test("Domain.registryToken follows the name's current ENSv2 token", () => {
+  let parent = setupUserRegistryName();
+  let subId = subNode(parent, labelhash("bmw-000")).toHexString();
+  let registry = Address.fromString(USER_REGISTRY);
+
+  // Set by the registration's TokenResource.
+  assert.fieldEquals(
+    "Domain",
+    subId,
+    "registryToken",
+    tokenEntityId(registry, slotToken(1)).toHexString()
+  );
+  // The parent, registered natively in the ETH registry, has its own.
+  assert.fieldEquals(
+    "Domain",
+    parent.toHexString(),
+    "registryToken",
+    tokenEntityId(Address.fromString(ETH_REGISTRY), slotToken(3)).toHexString()
+  );
+
+  // A regenerated token replaces it.
+  let regenerated = slotToken(1).plus(BigInt.fromI32(1));
+  handleTokenRegenerated(createTokenRegeneratedEvent(USER_REGISTRY, slotToken(1), regenerated));
+  assert.fieldEquals(
+    "Domain",
+    subId,
+    "registryToken",
+    tokenEntityId(registry, regenerated).toHexString()
+  );
+
+  // Unregistering clears it.
+  handleLabelUnregistered(createLabelUnregisteredEvent(USER_REGISTRY, slotToken(1)));
+  assert.assertTrue(!Domain.load(subId)!.registryToken);
+});
+
+test("an ENSv1 name has no registryToken", () => {
+  setupEnsv2Eth();
+  let node = seedV1EthName(labelhash("v1only"));
+  assert.assertTrue(!Domain.load(node.toHexString())!.registryToken);
 });

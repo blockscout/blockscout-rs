@@ -34,6 +34,7 @@ import {
   retireProjectedDomain,
   syncProjectedExpiry,
   syncProjectedHolder,
+  syncProjectedToken,
 } from "./ensv2Domain";
 import { processEACRolesChanged } from "./ensv2Roles";
 import { syncRegistrationFromSlot } from "./ensv2Registrar";
@@ -453,6 +454,7 @@ export function handleTokenResource(event: TokenResource): void {
   slot.updatedAt = event.block.timestamp;
   slot.updatedAtBlock = event.block.number;
   slot.save();
+  syncProjectedToken(slot);
 
   // Complete the registrar enrichment if NameRegistered was observed before
   // this registry-side resource event. For non-ETH registries the helper is
@@ -514,6 +516,7 @@ export function handleTokenRegenerated(event: TokenRegenerated): void {
       slot.updatedAt = event.block.timestamp;
       slot.updatedAtBlock = event.block.number;
       slot.save();
+      syncProjectedToken(slot);
     }
     let oldTokenResourceEntityId = oldToken.resourceEntity;
     if (oldTokenResourceEntityId) {

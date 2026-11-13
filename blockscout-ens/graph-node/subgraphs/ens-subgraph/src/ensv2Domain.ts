@@ -144,6 +144,21 @@ export function syncProjectedHolder(slot: ENSv2NameSlot, ownerId: string): void 
   }
 }
 
+// The slot's current token (TokenResource on registration, TokenRegenerated)
+// on every projected row, so consumers find a name's ENSv2 token without
+// joining the native entities.
+export function syncProjectedToken(slot: ENSv2NameSlot): void {
+  let paths = projectedPathsForSlot(slot);
+  for (let i = 0; i < paths.length; i++) {
+    let domain = Domain.load(paths[i].domain!);
+    if (domain == null) {
+      continue;
+    }
+    domain.registryToken = slot.currentToken;
+    domain.save();
+  }
+}
+
 // ENSv2 renewal (ExpiryUpdated) of a REGISTERED slot, in every registry.
 export function syncProjectedExpiry(slot: ENSv2NameSlot, expiry: BigInt): void {
   let isEth = slot.registry.equals(getEthRegistryAddress());
@@ -190,6 +205,7 @@ export function retireProjectedDomain(
   domain.owner = EMPTY_ADDRESS;
   domain.registrant = null;
   domain.wrappedOwner = null;
+  domain.registryToken = null;
   domain.resolver = null;
   domain.resolvedAddress = null;
   domain.expiryDate = timestamp;
@@ -377,6 +393,10 @@ export function projectPathToDomain(
     domain.registrant = registrantId;
   }
   domain.isMigrated = true;
+  // Null until this registration's TokenResource, which the registry emits
+  // after LabelRegistered (PermissionedRegistry._register) and which
+  // syncProjectedToken writes through.
+  domain.registryToken = slot.currentToken;
 
   linkProjectedDomainToParent(domain, path, countsAsNewChild);
 

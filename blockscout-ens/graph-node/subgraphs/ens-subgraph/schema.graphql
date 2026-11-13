@@ -32,6 +32,8 @@ type Domain @entity(immutable: false) {
   registrant: Account
   "The account that owns the wrapped domain"
   wrappedOwner: Account
+  "The name's current token in its ENSv2 registry (id = registry address ++ uint256 token id); null for a name not live in ENSv2"
+  registryToken: ENSv2Token
 
   "The expiry date for the domain, from either the registration, or the wrapped domain if PCC is burned"
   expiryDate: BigInt

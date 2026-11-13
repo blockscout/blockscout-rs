@@ -9,6 +9,7 @@ import {
   LabelUnregistered,
   ResolverUpdated,
   SubregistryUpdated,
+  TokenRegenerated,
   TokenResource,
   TransferSingle,
 } from "../src/types/RootRegistry/PermissionedRegistry";
@@ -308,6 +309,31 @@ export const createResolverUpdatedEvent = (
       "sender",
       ethereum.Value.fromAddress(Address.fromString(SENDER))
     )
+  );
+  return event;
+};
+
+export const createTokenRegeneratedEvent = (
+  registryAddress: string,
+  oldTokenId: BigInt,
+  newTokenId: BigInt
+): TokenRegenerated => {
+  let mockEvent = newMockEvent();
+  let event = new TokenRegenerated(
+    Address.fromString(registryAddress),
+    mockEvent.logIndex,
+    mockEvent.transactionLogIndex,
+    mockEvent.logType,
+    mockEvent.block,
+    mockEvent.transaction,
+    new Array<ethereum.EventParam>(),
+    mockEvent.receipt
+  );
+  event.parameters.push(
+    new ethereum.EventParam("oldTokenId", ethereum.Value.fromUnsignedBigInt(oldTokenId))
+  );
+  event.parameters.push(
+    new ethereum.EventParam("newTokenId", ethereum.Value.fromUnsignedBigInt(newTokenId))
   );
   return event;
 };
