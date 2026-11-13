@@ -15,8 +15,12 @@ build:
 create:
     yarn graph create --node {{graph_node_url}} {{name}}
 
+# `yarn deploy:<network>` (scripts/run-network-command.mjs) validates
+# networks.json against the ENSv2 constants and deploys from a temporary copy
+# of the manifest: a bare `graph deploy --network` rewrites subgraph.yaml in
+# place.
 deploy VERSION:
-    yarn graph deploy --node {{graph_node_url}} --ipfs {{ipfs_url}} {{name}} --network {{network}} --version-label {{VERSION}}
+    yarn deploy:{{network}} {{name}} --node {{graph_node_url}} --ipfs {{ipfs_url}} --version-label {{VERSION}}
 
 deploy-remote VERSION:
     just graph_node_url={{graph_node_url}} ipfs_url=http://ipfs.node.blockscout.com network={{network}} name={{name}} \

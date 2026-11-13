@@ -63,11 +63,11 @@ Or directly: `just network=sepolia name=ens-sepolia-subgraph deploy v2.3.0`.
 
 ## BENS configuration
 
-The `ens` and `ens-sepolia` protocols in `bens-server/config/*.json` carry an
-empty `specific.ensv2` section. It makes BENS read the ENSv2 tables: the
+The `ens` and `ens-sepolia` protocols in `bens-server/config/*.json` set
+`specific.ensv2: true`. It makes BENS read the ENSv2 parts of this schema: the
 reverse-name view includes ENSIP-19 default primary names, and a name live in
-ENSv2 links its ENSv2 registry token (`Domain.registryToken`). See `../../../README.md`, section
-"ENSv2".
+ENSv2 links its ENSv2 registry token (`Domain.registryToken`). See
+`../../../README.md`, section "ENSv2".
 
 ## Tests
 
