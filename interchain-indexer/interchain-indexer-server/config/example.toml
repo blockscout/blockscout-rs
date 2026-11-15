@@ -47,6 +47,12 @@ fetch_interval = 1
 # record_retry_attempts = 3
 # record_retry_initial_backoff = 200  # milliseconds
 
+# OP interop indexer settings (all fields optional, these are the defaults)
+# [op_interop_indexer]
+# pull_interval_ms = 2000
+# batch_size = 500
+# confirmation_block_tag = "finalized"   # or "safe"
+
 [database.connect_options]
 min_connections = 10
 max_connections = 20

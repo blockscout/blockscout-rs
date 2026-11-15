@@ -151,6 +151,12 @@ For `type: "xdai"`, `version` is the value `EternalStorageProxy.version()` retur
 
 For the same bridge type, `started_at_block` is also an **identity epoch floor**, and the service refuses to start a window beneath its deployment's floor. Below the floor the same `topic0`s carry a source transaction hash in the `bytes32` field rather than a nonce, with no on-chain signal, so identities would be silently wrong. The floors are per deployment and live in `version.rs` beside the grammar; `.memory-bank/research/xdai-bridge-protocol-and-indexing-fit.md` and `…-testnet-deployment-fit.md` carry the on-chain evidence for each. Raising a window above its floor is legal and simply indexes less history; lowering it below is rejected.
 
+#### OP interop: one bridge per dependency set, and `kind` replaces the ABI
+
+For `type: "op_interop"` (OP Stack native interop, the Lagoon hardfork) one bridge covers one dependency set. Each chain has two contract entries: `kind: "cross_l2_inbox"` at `0x4200000000000000000000000000000000000022` and `kind: "l2_to_l2_messenger"` at `0x4200000000000000000000000000000000000023`. The address must be exactly that predeploy. `version` is this service's grammar revision, not an on-chain counter: `1` is `CrossL2Inbox` 1.1.0 / `L2ToL2CrossDomainMessenger` 2.1.0. `started_at_block` is the chain's Lagoon activation block (both predeploys start there). `abi` is not used: the events are pinned in code. A wrong `kind`, address or `version` is a startup error. Messages to or from a chain that is not configured for the bridge are skipped. Use one RPC backend (or a consistently wired pool) per chain, because nodes can disagree about the confirmed head.
+
+The indexer reads only up to `confirmation_block_tag` (`finalized` by default), so indexed data lags the chain; see [`config/op-interop/ENVs.md`](config/op-interop/ENVs.md) for a ready-made devnet configuration.
+
 #### Changing `started_at_block` on a live deployment
 
 Both directions are supported; neither deletes anything already indexed.
@@ -625,6 +631,26 @@ rejected with 400 first.
 
 [anchor]: <> (anchors.envs.end.xdai)
 
+### OP Interop Indexer Settings
+
+[anchor]: <> (anchors.envs.start.op_interop)
+
+| Variable                                                                              | Req&#x200B;uir&#x200B;ed | Description | Default value |
+| ------------------------------------------------------------------------------------- | ------------------------ | ----------- | ------------- |
+| `INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__BATCH_SIZE`                                  |                          | Number of blocks scanned per log request. | `500`         |
+| `INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__CONFIRMATION_BLOCK_TAG`                      |                          | Block tag up to which the indexer reads: `finalized` or `safe`. Nothing above it is indexed, so indexed data lags the chain by the tag's depth. `safe` is cross-chain validated only on RPCs wired to op-supernode; `finalized` is sound on any RPC. `latest` is not accepted. | `finalized`   |
+| `INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__FAILURE_RETRY__BACKOFF_BASE`                 |                          | Base delay used for initial due calculation and between complete retry sweeps. An active sweep continues across ticks without this delay. Unit: `seconds` | `30`          |
+| `INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__FAILURE_RETRY__BACKOFF_CAP`                  |                          | Ceiling of the capped exponential backoff between wholly unsuccessful sweeps. This makes singleton retry forever affordable. Unit: `seconds` | `3600`        |
+| `INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__FAILURE_RETRY__ENABLED`                      |                          | Kill switch for the failed-range replay pass. Recording failed ranges still happens when `false`; only replay of already-recorded ranges is paused. | `true`        |
+| `INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__FAILURE_RETRY__MAX_CHUNKS_PER_PASS`          |                          | Maximum number of adaptively sized chunks emitted per retry tick, across all ready intervals and chains. Each chunk is at most `batch_size` blocks; the bridge-wide budget bounds replay RPC load. | `8`           |
+| `INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__FAILURE_RETRY__RECORD_RETRY_ATTEMPTS`        |                          | Number of attempts to persist a failed range to `indexer_failures` before the indexer gives up and stops (enters a failed state). | `3`           |
+| `INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__FAILURE_RETRY__RECORD_RETRY_INITIAL_BACKOFF` |                          | Initial delay before retrying a failed `indexer_failures` write; doubles on each subsequent retry. Unit: `milliseconds` | `200`         |
+| `INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__FAILURE_RETRY__SCAN_INTERVAL`                |                          | How often the retry tick reads the full open-ledger snapshot. Unit: `seconds` | `60`          |
+| `INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__FAILURE_RETRY__SPLIT_AFTER_ATTEMPTS`         |                          | Initial ledger record plus wholly unsuccessful replay sweeps required before request width starts halving. Width changes only after a complete sweep, never between its chunks. | `3`           |
+| `INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__PULL_INTERVAL_MS`                            |                          | Duration between log requests, for both realtime polling and historical catch-up. Unit: `milliseconds` | `2000`        |
+
+[anchor]: <> (anchors.envs.end.op_interop)
+
 ### Metrics Settings (Prometheus-compatible)
 
 [anchor]: <> (anchors.envs.start.metrics)
@@ -779,6 +805,7 @@ just new-migration <name>
     ```bash
     just generate-entities
     ```
++ Run against the OP Labs interop devnets (`config/op-interop/`) with `just run-op-devnet`.
 + Now you ready to start API server! Just run it:
     ```
     just run

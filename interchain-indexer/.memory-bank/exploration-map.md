@@ -88,6 +88,25 @@
     transaction with a hash-keyed completion follows the completion's canonical
     key, ADR-015)
 
+## If You Need to Understand OP Interop Indexing
+
+- `interchain-indexer-logic/src/indexer/op_interop/indexer.rs`
+  - stream construction per chain with the confirmation tag, log validation,
+    per-transaction grouping and sorting, failed-block attribution
+- `interchain-indexer-logic/src/indexer/op_interop/events.rs`
+  - `plan_transaction` (pure pairing and skip rules) and
+    `dispatch_transaction` (buffer mutation, metrics)
+- `interchain-indexer-logic/src/indexer/op_interop/version.rs`
+  - pinned `topic0` literals, contract kinds, grammar table
+- `interchain-indexer-logic/src/indexer/op_interop/consolidation.rs`
+  - infallible assembly, status, `op_interop_legs` rows, `extra` metadata
+- `interchain-indexer-logic/src/log_stream.rs`
+  - `HeadBlockTag` and `resolve_head_block`: the confirmed head
+- `interchain-indexer-logic/src/message_buffer/persistence.rs`
+  - the ledger write (`op_interop_legs_on_conflict`, dedup) and the one-level
+    `op_interop` metadata merge
+- `.memory-bank/adr/018-op-interop-confirmed-reading-and-leg-ledger.md`
+
 ## If You Need to Understand Incoming ICTT Reconstruction / ICM Payload Decoding
 
 - `interchain-indexer-logic/src/indexer/avalanche/ictt_payload.rs`

@@ -76,6 +76,13 @@ run-testnet:
     INTERCHAIN_INDEXER__TOKEN_INFO__BLOCKSCOUT_TOKEN_INFO__URL=https://contracts-info-test.k8s-dev.blockscout.com \
     cargo run --bin interchain-indexer-server
 
+run-op-devnet:
+    INTERCHAIN_INDEXER__DATABASE__CONNECT__URL={{DATABASE_URL}} \
+    INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS=true \
+    INTERCHAIN_INDEXER__CHAINS_CONFIG=config/op-interop/chains-devnet.json \
+    INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/op-interop/bridges-devnet.json \
+    cargo run --bin interchain-indexer-server
+
 run-dev:
     dotenv -e .env -- just run
 

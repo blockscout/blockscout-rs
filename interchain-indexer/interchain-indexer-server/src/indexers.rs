@@ -9,6 +9,7 @@ use interchain_indexer_logic::{
     indexer::{
         amb::{AmbChainConfig, AmbContractConfig, AmbIndexer},
         avalanche::{AvalancheChainConfig, AvalancheIndexer},
+        op_interop::{OpInteropChainConfig, OpInteropContractConfig, OpInteropIndexer},
         xdai::{XDaiChainConfig, XDaiContractConfig, XDaiIndexer},
     },
 };
@@ -210,6 +211,63 @@ pub async fn spawn_configured_indexers(
                 }
 
                 tracing::info!(bridge_id = bridge.bridge_id, "Started xDai indexer");
+                indexers.push(indexer);
+            }
+            BridgeType::OpInterop => {
+                let configs =
+                    build_op_interop_chain_configs(bridge, &chain_lookup, chain_providers);
+
+                if configs.is_empty() {
+                    tracing::warn!(
+                        bridge_id = bridge.bridge_id,
+                        "No viable chain configurations for OP interop indexer, skipping"
+                    );
+                    continue;
+                }
+
+                let indexer: Arc<dyn CrosschainIndexer> = match bridge.indexer_type {
+                    IndexerType::OpInterop => {
+                        let indexer = OpInteropIndexer::new(
+                            stats.clone(),
+                            bridge.bridge_id,
+                            configs,
+                            &settings.op_interop_indexer,
+                            &settings.buffer_settings,
+                        )
+                        .with_context(|| {
+                            format!(
+                                "failed to spawn OP interop indexer for bridge {}",
+                                bridge.bridge_id
+                            )
+                        })?;
+
+                        Arc::new(indexer)
+                    }
+                    _ => {
+                        tracing::error!(
+                            bridge_id = bridge.bridge_id,
+                            indexer_type =? bridge.indexer_type,
+                            "Unsupported indexer type for OP interop bridge"
+                        );
+                        continue;
+                    }
+                };
+
+                if let Err(err) = indexer.start().await.with_context(|| {
+                    format!(
+                        "failed to start OP interop indexer for bridge {}",
+                        bridge.bridge_id
+                    )
+                }) {
+                    tracing::error!(
+                        bridge_id = bridge.bridge_id,
+                        err = ?err,
+                        "Failed to start OP interop indexer"
+                    );
+                    continue;
+                }
+
+                tracing::info!(bridge_id = bridge.bridge_id, "Started OP interop indexer");
                 indexers.push(indexer);
             }
             _ => {
@@ -457,6 +515,79 @@ fn build_xdai_chain_configs(
     chain_configs
 }
 
+/// One `OpInteropChainConfig` per planned chain, carrying both predeploy
+/// entries. `kind` is forwarded raw: the logic crate parses and validates it
+/// (and the address and version) when the indexer is constructed.
+fn build_op_interop_chain_configs(
+    bridge: &BridgeConfig,
+    chain_lookup: &HashMap<i64, ChainConfig>,
+    chain_providers: &HashMap<i64, DynProvider<Ethereum>>,
+) -> Vec<OpInteropChainConfig> {
+    let mut chain_configs = Vec::new();
+    for plan in plan_bridge(bridge) {
+        let chain_id = plan.chain_id;
+        let Some(_chain_config) = chain_lookup.get(&chain_id) else {
+            tracing::warn!(
+                bridge_id = bridge.bridge_id,
+                chain_id,
+                "Chain configuration missing for OP interop indexer"
+            );
+            continue;
+        };
+
+        let Some(provider) = chain_providers.get(&chain_id) else {
+            tracing::warn!(
+                bridge_id = bridge.bridge_id,
+                chain_id,
+                "No configured provider for chain"
+            );
+            continue;
+        };
+
+        let contracts: Vec<OpInteropContractConfig> = plan
+            .contracts
+            .iter()
+            .filter_map(|contract| {
+                let address = parse_contract_address(
+                    bridge.bridge_id,
+                    chain_id,
+                    contract.kind.as_deref(),
+                    contract.version,
+                    &contract.address,
+                )?;
+                Some(OpInteropContractConfig {
+                    address,
+                    kind: contract.kind.clone(),
+                    version: contract.version,
+                    started_at_block: contract.started_at_block,
+                })
+            })
+            .collect();
+
+        if contracts.is_empty() {
+            tracing::error!(
+                bridge_id = bridge.bridge_id,
+                chain_id,
+                "OP interop bridge requires at least one usable contract per chain"
+            );
+            continue;
+        }
+
+        let Some(start_block) = plan.start_block() else {
+            continue;
+        };
+
+        chain_configs.push(OpInteropChainConfig {
+            chain_id,
+            provider: provider.clone(),
+            start_block,
+            contracts,
+        });
+    }
+
+    chain_configs
+}
+
 fn build_avalanche_chain_configs(
     bridge: &BridgeConfig,
     chain_lookup: &HashMap<i64, ChainConfig>,
@@ -621,7 +752,9 @@ pub(crate) fn plan_bridge(bridge: &BridgeConfig) -> Vec<ChainPlan<'_>> {
             // xDai falls into the `_` (min-across-contracts) branch
             // deliberately, not by omission: it has one contract kind per
             // chain (`kind` stays unset, like Avalanche), so there is no
-            // AMB-style proxy/mediator split to prefer a floor from.
+            // AMB-style proxy/mediator split to prefer a floor from. OP
+            // interop takes the same minimum across the chain's contracts:
+            // both predeploys start at the chain's activation block.
             let floor_contracts = match bridge.bridge_type {
                 BridgeType::Amb => contracts
                     .iter()
@@ -1041,6 +1174,101 @@ mod tests {
                 assert!(contract.abi.is_some(), "the ABI must be parsed");
             }
         }
+    }
+
+    /// The committed OP interop devnet config: both files load through the
+    /// real loaders and plan to the two Lagoon activation floors.
+    #[test]
+    fn test_op_interop_devnet_config_loads_and_plans_floors() {
+        let chains =
+            crate::load_chains_from_file(repo_config_path("config/op-interop/chains-devnet.json"))
+                .expect("the devnet chains config must load");
+        assert_eq!(
+            chains
+                .iter()
+                .map(|chain| chain.chain_id)
+                .collect::<Vec<_>>(),
+            vec![420130019, 420130020]
+        );
+
+        let bridges = crate::load_bridges_from_file(repo_config_path(
+            "config/op-interop/bridges-devnet.json",
+        ))
+        .expect("the devnet bridges config must load");
+        assert_eq!(bridges.len(), 1);
+        assert_eq!(bridges[0].bridge_id, 2004);
+        assert_eq!(bridges[0].bridge_type, BridgeType::OpInterop);
+        assert_eq!(bridges[0].indexer_type, IndexerType::OpInterop);
+
+        let plans = plan_bridge(&bridges[0]);
+        assert_eq!(
+            plans
+                .iter()
+                .map(|plan| (plan.chain_id, plan.start_block()))
+                .collect::<Vec<_>>(),
+            vec![(420130019, Some(465679)), (420130020, Some(829213))]
+        );
+
+        let targets = enumerate_indexing_targets(&bridges);
+        let mut pairs = targets
+            .iter()
+            .map(|target| (target.bridge_id, target.chain_id, target.start_block))
+            .collect::<Vec<_>>();
+        pairs.sort_unstable();
+        assert_eq!(
+            pairs,
+            vec![(2004, 420130019, 465679), (2004, 420130020, 829213)]
+        );
+    }
+
+    #[test]
+    fn test_build_op_interop_chain_configs_from_devnet_config() {
+        let bridges = crate::load_bridges_from_file(repo_config_path(
+            "config/op-interop/bridges-devnet.json",
+        ))
+        .expect("the devnet bridges config must load");
+        let chain_lookup = HashMap::from([
+            (420130019i64, chain_config_fixture(420130019)),
+            (420130020i64, chain_config_fixture(420130020)),
+        ]);
+        let providers = HashMap::from([
+            (420130019i64, dummy_provider()),
+            (420130020i64, dummy_provider()),
+        ]);
+
+        let configs = build_op_interop_chain_configs(&bridges[0], &chain_lookup, &providers);
+
+        assert_eq!(configs.len(), 2);
+        for config in &configs {
+            assert_eq!(config.contracts.len(), 2);
+            let mut kinds = config
+                .contracts
+                .iter()
+                .map(|contract| contract.kind.clone().expect("kind is forwarded raw"))
+                .collect::<Vec<_>>();
+            kinds.sort();
+            assert_eq!(kinds, vec!["cross_l2_inbox", "l2_to_l2_messenger"]);
+            assert!(
+                config
+                    .contracts
+                    .iter()
+                    .all(|contract| contract.version == 1)
+            );
+            assert!(
+                config
+                    .contracts
+                    .iter()
+                    .all(|contract| contract.started_at_block == config.start_block),
+                "both predeploys start at the activation block"
+            );
+        }
+        assert_eq!(
+            configs
+                .iter()
+                .map(|config| (config.chain_id, config.start_block))
+                .collect::<Vec<_>>(),
+            vec![(420130019, 465679), (420130020, 829213)]
+        );
     }
 
     #[test]

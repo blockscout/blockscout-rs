@@ -214,6 +214,7 @@ fn build_source_led(
         transfers,
         amb_confirmations,
         amb_anomalies: Vec::new(),
+        op_interop_legs: Vec::new(),
     })
 }
 
@@ -266,6 +267,7 @@ fn build_destination_only(
         transfers,
         amb_confirmations: Vec::new(),
         amb_anomalies: Vec::new(),
+        op_interop_legs: Vec::new(),
     })
 }
 

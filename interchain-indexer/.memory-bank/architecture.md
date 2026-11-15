@@ -46,6 +46,18 @@ pub trait CrosschainIndexer: Send + Sync {
 
 States: `Idle` → `Running` → `Idle` or `Failed(String)`
 
+### OP Interop Indexer
+
+Location: `interchain-indexer-logic/src/indexer/op_interop/`
+
+Reads only logs, only up to a confirmed block tag (`HeadBlockTag` on
+`LogStream`, ADR-018). Per transaction, `events::plan_transaction` (pure)
+pairs each `RelayedMessage` with its `ExecutingMessage` and decides what to
+apply; `dispatch_transaction` then mutates `MessageBuffer` entries keyed by
+the messenger `messageHash`. `Message::consolidate` is infallible. Besides
+`crosschain_messages`, every observed log is written to `op_interop_legs` by
+`flush_to_final_storage`.
+
 ### MessageBuffer
 
 Location: `interchain-indexer-logic/src/message_buffer/`

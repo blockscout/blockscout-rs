@@ -133,6 +133,37 @@ impl<K: Copy> AbiRegistry<K> {
             events_by_topic.insert(event.selector(), event);
         }
 
+        self.insert_version(chain_id, address, started_at_block, kind, events_by_topic)
+    }
+
+    /// [`Self::insert_contract`] for a protocol whose grammar is declared in
+    /// code rather than carried as a JSON ABI in the config: the caller hands
+    /// over already-built events, keyed here by `event.selector()`.
+    pub(crate) fn insert_contract_events(
+        &mut self,
+        chain_id: i64,
+        address: Address,
+        started_at_block: u64,
+        kind: K,
+        events: impl IntoIterator<Item = Event>,
+    ) -> Result<()> {
+        let events_by_topic = events
+            .into_iter()
+            .map(|event| (event.selector(), event))
+            .collect();
+
+        self.insert_version(chain_id, address, started_at_block, kind, events_by_topic)
+    }
+
+    /// The shared tail of every insert: one version window of one address.
+    fn insert_version(
+        &mut self,
+        chain_id: i64,
+        address: Address,
+        started_at_block: u64,
+        kind: K,
+        events_by_topic: HashMap<B256, Event>,
+    ) -> Result<()> {
         ensure!(
             !events_by_topic.is_empty(),
             "ABI for chain_id={chain_id} address={address} has no subscribed items"
@@ -454,5 +485,76 @@ mod tests {
 
         assert!(filter.topics[0].contains(&topic_of("FirstEvent")));
         assert!(filter.topics[0].contains(&topic_of("SecondEvent")));
+    }
+
+    fn named_event(name: &str) -> Event {
+        Event {
+            name: name.into(),
+            inputs: Vec::new(),
+            anonymous: false,
+        }
+    }
+
+    #[test]
+    fn test_insert_contract_events_resolves_by_block_and_builds_filter() {
+        let address = Address::from([2; 20]);
+        let mut registry = AbiRegistry::<u8>::default();
+        // Inserted out of order on purpose.
+        registry
+            .insert_contract_events(1, address, 1_000, 2, [named_event("SecondEvent")])
+            .expect("second version inserted");
+        registry
+            .insert_contract_events(1, address, 100, 1, [named_event("FirstEvent")])
+            .expect("first version inserted");
+        let first = topic_of("FirstEvent");
+        let second = topic_of("SecondEvent");
+
+        assert!(matches!(
+            registry.resolve_log(1, address, &first, 999),
+            LogResolution::Matched(event, 1) if event.name == "FirstEvent"
+        ));
+        assert!(matches!(
+            registry.resolve_log(1, address, &second, 1_000),
+            LogResolution::Matched(event, 2) if event.name == "SecondEvent"
+        ));
+        // Declared by the address, but not in the window the block falls into.
+        assert!(matches!(
+            registry.resolve_log(1, address, &second, 999),
+            LogResolution::WrongVersion
+        ));
+        assert!(matches!(
+            registry.resolve_log(1, address, &first, 99),
+            LogResolution::WrongVersion
+        ));
+        assert!(matches!(
+            registry.resolve_log(1, Address::from([9; 20]), &first, 500),
+            LogResolution::NotConfigured
+        ));
+        assert!(matches!(
+            registry.resolve_log(1, address, &topic_of("UnrelatedEvent"), 500),
+            LogResolution::NotConfigured
+        ));
+
+        let err = registry
+            .insert_contract_events(1, address, 100, 3, [named_event("ThirdEvent")])
+            .expect_err("duplicate floor rejected");
+        assert!(
+            err.to_string()
+                .contains("two versions starting at block 100"),
+            "unexpected error: {err}"
+        );
+        let err = registry
+            .insert_contract_events(1, address, 5_000, 4, [])
+            .expect_err("a version without events rejected");
+        assert!(
+            err.to_string().contains("has no subscribed items"),
+            "unexpected error: {err}"
+        );
+
+        let filter = registry.filter_for_chain(1).expect("filter");
+        assert!(filter.address.contains(&address));
+        assert!(filter.topics[0].contains(&first));
+        assert!(filter.topics[0].contains(&second));
+        assert_eq!(filter.topics[0].len(), 2);
     }
 }

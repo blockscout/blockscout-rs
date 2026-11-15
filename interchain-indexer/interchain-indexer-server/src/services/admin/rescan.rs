@@ -62,6 +62,10 @@ pub(crate) fn build_replay_profiles(
                     settings.xdai_indexer.batch_size,
                     &settings.xdai_indexer.failure_retry,
                 ),
+                (BridgeType::OpInterop, IndexerType::OpInterop) => (
+                    settings.op_interop_indexer.batch_size,
+                    &settings.op_interop_indexer.failure_retry,
+                ),
                 _ => return None,
             };
             let profile = ReplayProfile {
@@ -1030,6 +1034,30 @@ mod tests {
             !profiles[&3].failure_retry.enabled,
             "the profile carries the switch; the plan rejects on it"
         );
+    }
+
+    #[test]
+    fn test_build_replay_profiles_includes_op_interop() {
+        let mut settings = Settings::default("postgres://unused".to_string());
+        settings.op_interop_indexer.batch_size = 14;
+        settings
+            .op_interop_indexer
+            .failure_retry
+            .max_chunks_per_pass = 24;
+
+        let bridges = [
+            bridge_config(1, BridgeType::OpInterop, IndexerType::OpInterop, true),
+            // The type pair decides, not either half alone.
+            bridge_config(2, BridgeType::OpInterop, IndexerType::XDai, true),
+            bridge_config(3, BridgeType::Xdai, IndexerType::OpInterop, true),
+            bridge_config(4, BridgeType::OpInterop, IndexerType::OpInterop, false),
+        ];
+
+        let profiles = build_replay_profiles(&bridges, &settings);
+
+        assert_eq!(profiles.keys().copied().collect::<Vec<_>>(), vec![1]);
+        assert_eq!(profiles[&1].batch_size, 14);
+        assert_eq!(profiles[&1].failure_retry.max_chunks_per_pass, 24);
     }
 
     #[test]

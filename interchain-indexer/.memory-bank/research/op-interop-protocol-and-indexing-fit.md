@@ -28,9 +28,12 @@ Dispute Game / super-root proofs, L1 contract upgrades (ETHLockbox, OPCM
 `migrate`) beyond what an indexer observes on L2, and node-operator topology
 beyond what constrains RPC choice.
 
-Status: **pre-implementation; no OP interop indexer exists in this repo.**
-Interop is **not live on any network** as of the snapshot date. Every status
-fact below is a snapshot taken **2026-11-11**; protocol facts were read at
+Status: **an indexer now exists for messenger messages, confirmed blocks only
+(`interchain-indexer-logic/src/indexer/op_interop/`, ADR-018); ETH transfers,
+expiry/refund events and pull reads are not built.**
+Interop is **not live on any public network** as of the snapshot date; since
+2026-11-13 it is active on two OP Labs staging devnets (see *Chains, devnets,
+and Base*). Every other status fact below is a snapshot taken **2026-11-11**; protocol facts were read at
 optimism `develop` `09c4bf5a3a` (2026-11-11) and specs `main` `1849ed23c2`
 (2026-11-10). Evidence tags: **[V]** verified against source code, a primary
 document, or on-chain state; **[R]** reported by a secondary source; **[I]**
@@ -38,8 +41,9 @@ inferred.
 
 ## Short Answer
 
-Lagoon is not live anywhere. The first activation is a *target*, not a
-scheduled timestamp: OP Sepolia + Unichain Sepolia around 2026-12-03, then OP
+Lagoon is not live on any public network (two staging devnets activated it on
+2026-11-13). The first public activation is a *target*, not a scheduled
+timestamp: OP Sepolia + Unichain Sepolia around 2026-12-03, then OP
 Mainnet + Unichain around 2026-12-15 or 2027-01-11 (the operator notice gives
 both), subject to a governance vote that has not been posted. Each pair forms a
 two-chain dependency set; launch scope is **native ETH transfers only**. Base
@@ -162,6 +166,32 @@ docs still describe them.
   get-started page still points to interop-alpha, which returns 404. The only
   usable environment before testnet activation is local Supersim (chains
   901/902).
+- **[V] Update 2026-11-14:** Lagoon is active on two OP Labs staging devnets,
+  `sepolia-devnet-4` (chain 420130019, 2 s blocks,
+  `https://sepolia-devnet-4.optimism.io/rpc`) and `sepolia-devnet-5`
+  (420130020, 1 s blocks, `https://sepolia-devnet-5.optimism.io/rpc`), both
+  op-reth. superchain-registry PR #1409 set `lagoon_time = 1794603601`
+  (2026-11-13 21:00:01 UTC) and PR #1411 joined them into one dependency set
+  hours before activation. Activation blocks: 465679 and 829213. Checked
+  2026-11-14 15:20 UTC:
+  - The five predeploys have implementations (same addresses on both chains)
+    at the versions listed under *Predeploys*; `expiryPeriod()` is 691200 s.
+  - No interop message has been sent on either chain (`messageNonce()` is 0).
+    The only logs at the predeploy addresses are in the activation block:
+    `Upgraded(address)` on each proxy, `Initialized(uint64)` on the messenger,
+    `LiquidityFunded(address,uint256)` on `ETHLiquidity`. A log filter must
+    therefore list topics, not only addresses.
+  - Simulating `sendETH`, `sendMessage`, `relayMessage`,
+    `exportUndeliveredMessage`, `expireMessage` and `refundETH` against the
+    deployed bytecode (`eth_simulateV1`) reproduced every `topic0` in the
+    event table, the log orders under *Step-by-Step Flow*, and both hash
+    derivations under *`Identifier` and the two hashes*.
+  - `eth_getLogs` rows carry `blockHash`, `blockTimestamp` and `removed`.
+  - RPC limits: `eth_getLogs` at most 1000 blocks and HTTP 429 above roughly
+    three calls per second; `debug_*` and `optimism_*` not whitelisted;
+    `eth_getBlockReceipts`, `eth_simulateV1` and the `safe` / `finalized` tags
+    available. Observed lag: `safe` 3 to 6 minutes, `finalized` 21 to 30
+    minutes.
 - **[V]** Explorers for the first pairs are Blockscout instances:
   `explorer.optimism.io`, `testnet-explorer.optimism.io`,
   `unichain.blockscout.com`, `unichain-sepolia.blockscout.com`.
@@ -269,6 +299,10 @@ dependency set has two or more members (`L2ContractsManager`,
 | ETHLiquidity | `LiquidityBurned(address indexed caller, uint256 value)` | `0x875e07afd7ce17c6531b1a6b7b34829dcd8b7e6639448afbd6a8e29fa1422b82` |
 | ETHLiquidity | `LiquidityMinted(address indexed caller, uint256 value)` | `0x85719716ac5bd2744ae7ed3d16702129383049b97123b506320e7a5826ebbbba` |
 
+`ETHLiquidity` 2.0.0 also emits `LiquidityFunded(address indexed funder,
+uint256 amount)` (`0xbb9e497a…3598`, seen in the activation block) and
+`PausedSet(bool paused, uint256 messageNonce)`. Neither is part of a message.
+
 Historical (devnet/pre-Lagoon only, never on a public network): 3-argument
 `RelayedMessage(uint256,uint256,bytes32)` = `0x59480765…a379` (until v1.1.0;
 `returnDataHash` added in v1.2.0); `FailedRelayedMessage` (dropped in 2024);
@@ -373,13 +407,17 @@ Detecting attempts needs transaction/receipt or trace scanning, and a filter on
 
 ### Expiry and refund
 
-1. After `sentAt + expiryPeriod` (production `expiryPeriod` = 8 days;
-   protocol `EXPIRY_WINDOW` for executing messages = 7 days; test dependency
-   sets may override the window), anyone calls
-   `UndeliveredMessageExporter.exportUndeliveredMessage(...)` on the
-   **destination**. It reverts if the message was relayed, and emits
+1. Anyone calls `UndeliveredMessageExporter.exportUndeliveredMessage(...)` on
+   the **destination**. It reverts if the message was relayed, and emits
    `UndeliveredMessageExported(messageHash, source, sourceMessenger,
-   undeliveredAt)`. It can be forced via a deposit.
+   undeliveredAt)`. It can be forced via a deposit. **[V] The exporter has no
+   time condition and takes the message fields as arguments** (contract 1.0.0;
+   confirmed by simulation on the devnets, 2026-11-14): it can be called before
+   the period has passed, for a message that will still be relayed, or for
+   fields that match no sent message. The event alone is not evidence of
+   expiry or of the message's existence. Only step 3 checks the period
+   (production `expiryPeriod` = 8 days; protocol `EXPIRY_WINDOW` for executing
+   messages = 7 days; test dependency sets may override the window).
 2. The L2→L1 withdrawal is proven and finalized. The source chain's
    `L1CrossDomainMessenger.relayUndeliveredMessage` deposits `expireMessage`
    into the source.
@@ -442,7 +480,8 @@ never expire; messages to non-member chains stay pending forever.
 - **Two-sided message in `MessageBuffer`.** `SentMessage` creates or updates
   the source half; `RelayedMessage` the destination half; arrival order is free.
   Structurally this is Teleporter send/receive.
-- **Key.** `messageHash` (32 bytes) goes in `crosschain_messages.native_id`;
+- **Key.** *(Built: `op_interop/types.rs`, `key_from_message_hash`.)*
+  `messageHash` (32 bytes) goes in `crosschain_messages.native_id`;
   `Key.message_id` is a keccak prefix to `i64`, like `xdai::key_from_native_id`.
   `(source, nonce)` from `RelayedMessage` and the hash computed on the source
   side agree. No new message columns are needed.
@@ -455,7 +494,8 @@ never expire; messages to non-member chains stay pending forever.
   `SendETH`/`RelayETH` or the `relayETH` payload. Correlating with the
   messenger event uses the existing transaction grouping
   (`indexer/evm/transaction_grouping.rs`), as ICTT does with Teleporter.
-- **Relay attribute.** The `ExecutingMessage` paired with a relay gives the
+- **Relay attribute.** *(Built: `op_interop/events.rs`, `plan_transaction`;
+  stored under `protocol_metadata.op_interop`.)* The `ExecutingMessage` paired with a relay gives the
   exact source pointer (`chainId`, `blockNumber`, `logIndex`, `timestamp`); it
   fits in a `protocol_metadata` namespace.
 
@@ -471,12 +511,15 @@ never expire; messages to non-member chains stay pending forever.
   `RefundETH` arrive days after the message may already be flushed. They are
   keyed by `messageHash` only and must update a stored row. This is the same
   class of problem as AMB/xDai late confirmations (ADR-014, ADR-015).
-- **Finality.** `LogStream` follows `latest` with no reorg handling. Options:
+- **Finality.** *Implemented differently from both options:* the indexer
+  reads only up to the `finalized` (default) or `safe` tag, so nothing needs
+  retracting (`HeadBlockTag` in `log_stream.rs`, ADR-018). Original analysis:
+  `LogStream` follows `latest` with no reorg handling. Options:
   cap the realtime head at the `safe` tag (lag of minutes, needs a
   supernode-wired RPC), or accept `latest` and mark rows provisional until safe.
   Replacement happens at the same height with a new hash, so per-chain reorg
   handling suffices; no cross-chain invalidation logic is needed.
-- **ABI churn.** Pin current signatures and use version windows per ADR-006 if
+- **ABI churn.** *(Built: grammar table in `op_interop/version.rs`.)* Pin current signatures and use version windows per ADR-006 if
   pre-release ABIs ever matter. There is no public history to backfill:
   activation starts from zero.
 - **Receipts on Lagoon chains.** Tx type `0x7D` and the `opGasRefund` receipt

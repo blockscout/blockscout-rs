@@ -1,0 +1,42 @@
+[
+  {
+    "bridge_id": 2004,
+    "name": "OP Interop (sepolia-devnet-4/5)",
+    "type": "op_interop",
+    "indexer_type": "op_interop",
+    "enabled": true,
+    "api_url": null,
+    "ui_url": null,
+    "docs_url": "https://specs.optimism.io/interop/messaging.html",
+    "contracts": [
+      {
+        "chain_id": 420130019,
+        "address": "0x4200000000000000000000000000000000000022",
+        "version": 1,
+        "started_at_block": 465679,
+        "kind": "cross_l2_inbox"
+      },
+      {
+        "chain_id": 420130019,
+        "address": "0x4200000000000000000000000000000000000023",
+        "version": 1,
+        "started_at_block": 465679,
+        "kind": "l2_to_l2_messenger"
+      },
+      {
+        "chain_id": 420130020,
+        "address": "0x4200000000000000000000000000000000000022",
+        "version": 1,
+        "started_at_block": 829213,
+        "kind": "cross_l2_inbox"
+      },
+      {
+        "chain_id": 420130020,
+        "address": "0x4200000000000000000000000000000000000023",
+        "version": 1,
+        "started_at_block": 829213,
+        "kind": "l2_to_l2_messenger"
+      }
+    ]
+  }
+]

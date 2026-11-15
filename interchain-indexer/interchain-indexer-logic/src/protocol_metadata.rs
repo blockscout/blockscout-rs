@@ -72,6 +72,66 @@ pub struct ProtocolMetadata {
     pub unresolved_destination: Option<UnresolvedDestination>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub multiple_executions: Option<MultipleExecutions>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub op_interop: Option<OpInterop>,
+}
+
+/// Namespace of an OP Stack interop message (`L2ToL2CrossDomainMessenger`):
+/// where this indexer saw each leg.
+///
+/// Unlike the other namespaces this one is **not sparse**: it is written for
+/// every OP interop message, at the first flush (`nonce` + `source`), grown by
+/// the flush that carries the relay (`destination`, and `executing_message`
+/// when the relay was paired), and never cleared. Because the parts arrive in
+/// separate flushes, the upsert merges this namespace one level deep — see
+/// `message_buffer::persistence::crosschain_messages_on_conflict`.
+///
+/// Transaction hashes and timestamps are not repeated here: they are the
+/// message's own `src_tx_hash`, `dst_tx_hash`, `init_timestamp` and
+/// `last_update_timestamp`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpInterop {
+    /// Full versioned `uint256` nonce as emitted, decimal.
+    pub nonce: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<OpInteropLegRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination: Option<OpInteropLegRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executing_message: Option<OpInteropExecutingMessage>,
+}
+
+/// Where one leg's messenger log (`SentMessage` or `RelayedMessage`) was seen.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpInteropLegRef {
+    pub block_number: u64,
+    /// 0x-hex, lower case.
+    pub block_hash: String,
+    /// Block-level log index.
+    pub log_index: u64,
+}
+
+/// The `CrossL2Inbox.ExecutingMessage` log a relay was paired with. Absent for
+/// a relay that could not be paired.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpInteropExecutingMessage {
+    /// `ExecutingMessage.msgHash`: the hash of the source *log*, not the
+    /// message hash. 0x-hex.
+    pub msg_hash: String,
+    /// Index of the `ExecutingMessage` log in the destination block.
+    pub log_index: u64,
+    pub identifier: OpInteropIdentifier,
+}
+
+/// The on-chain `Identifier` struct verbatim; `uint256` members as decimal
+/// strings.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpInteropIdentifier {
+    pub origin: String,
+    pub chain_id: String,
+    pub block_number: String,
+    pub log_index: String,
+    pub timestamp: String,
 }
 
 /// Namespace for a canonical message that has been executed on its
@@ -269,6 +329,57 @@ impl PublicMetadata for MultipleExecutions {
     }
 }
 
+impl OpInteropLegRef {
+    fn extra_value(&self) -> Value {
+        let mut out = Map::new();
+        out.insert("block_number".to_string(), self.block_number.into());
+        out.insert("block_hash".to_string(), self.block_hash.clone().into());
+        out.insert("log_index".to_string(), self.log_index.into());
+        Value::Object(out)
+    }
+}
+
+impl PublicMetadata for OpInterop {
+    const EXTRA_KEY: &'static str = "op_interop";
+
+    /// Every stored field is public. Absent parts are omitted, never `null`.
+    fn extra_value(&self) -> Value {
+        let mut out = Map::new();
+        out.insert("nonce".to_string(), self.nonce.clone().into());
+        if let Some(source) = &self.source {
+            out.insert("source".to_string(), source.extra_value());
+        }
+        if let Some(destination) = &self.destination {
+            out.insert("destination".to_string(), destination.extra_value());
+        }
+        if let Some(executing_message) = &self.executing_message {
+            let identifier = &executing_message.identifier;
+            let mut identifier_out = Map::new();
+            identifier_out.insert("origin".to_string(), identifier.origin.clone().into());
+            identifier_out.insert("chain_id".to_string(), identifier.chain_id.clone().into());
+            identifier_out.insert(
+                "block_number".to_string(),
+                identifier.block_number.clone().into(),
+            );
+            identifier_out.insert("log_index".to_string(), identifier.log_index.clone().into());
+            identifier_out.insert("timestamp".to_string(), identifier.timestamp.clone().into());
+
+            let mut executing_out = Map::new();
+            executing_out.insert(
+                "msg_hash".to_string(),
+                executing_message.msg_hash.clone().into(),
+            );
+            executing_out.insert("log_index".to_string(), executing_message.log_index.into());
+            executing_out.insert("identifier".to_string(), Value::Object(identifier_out));
+            out.insert(
+                "executing_message".to_string(),
+                Value::Object(executing_out),
+            );
+        }
+        Value::Object(out)
+    }
+}
+
 impl ProtocolMetadata {
     /// `None` when the container is empty — the column must stay SQL NULL.
     /// An empty `{}` object must never reach the database.
@@ -309,6 +420,9 @@ impl ProtocolMetadata {
                 MultipleExecutions::EXTRA_KEY.to_string(),
                 multiple_executions.extra_value(),
             );
+        }
+        if let Some(op_interop) = &self.op_interop {
+            out.insert(OpInterop::EXTRA_KEY.to_string(), op_interop.extra_value());
         }
         out
     }
@@ -521,6 +635,157 @@ mod tests {
     fn multiple_executions_absent_from_default_metadata() {
         assert_eq!(ProtocolMetadata::default().to_json_value(), None);
         assert!(ProtocolMetadata::default().render_extra().is_empty());
+    }
+
+    // --- `op_interop` namespace ---
+
+    fn op_interop_source() -> OpInteropLegRef {
+        OpInteropLegRef {
+            block_number: 498_922,
+            block_hash: "0x8580247817bcfdd8f258ebd2f9a73aeddb4b87953114a723da65206fa002c8b5"
+                .to_string(),
+            log_index: 1,
+        }
+    }
+
+    fn op_interop_initiated() -> ProtocolMetadata {
+        ProtocolMetadata {
+            op_interop: Some(OpInterop {
+                nonce: "0".to_string(),
+                source: Some(op_interop_source()),
+                destination: None,
+                executing_message: None,
+            }),
+            ..Default::default()
+        }
+    }
+
+    fn op_interop_completed() -> ProtocolMetadata {
+        ProtocolMetadata {
+            op_interop: Some(OpInterop {
+                nonce: "0".to_string(),
+                source: Some(op_interop_source()),
+                destination: Some(OpInteropLegRef {
+                    block_number: 895_701,
+                    block_hash:
+                        "0x7ea9e26557b70150ae7360da608f0f231e30397b4e5b4c98f4edd431d6630c73"
+                            .to_string(),
+                    log_index: 3,
+                }),
+                executing_message: Some(OpInteropExecutingMessage {
+                    msg_hash: "0xbb39b9f3ce34b43c1ae2bcc42aa7a2ceb451b20cdd22f2396d2ea6ce16bf31fb"
+                        .to_string(),
+                    log_index: 0,
+                    identifier: OpInteropIdentifier {
+                        origin: "0x4200000000000000000000000000000000000023".to_string(),
+                        chain_id: "420130019".to_string(),
+                        block_number: "498922".to_string(),
+                        log_index: "1".to_string(),
+                        timestamp: "1794670098".to_string(),
+                    },
+                }),
+            }),
+            ..Default::default()
+        }
+    }
+
+    /// The documented shape of a completed message, as parsed JSON: key order
+    /// is not part of the contract (`extra` is a `google.protobuf.Struct`).
+    fn op_interop_completed_json() -> Value {
+        serde_json::json!({
+            "nonce": "0",
+            "source": {
+                "block_number": 498922,
+                "block_hash": "0x8580247817bcfdd8f258ebd2f9a73aeddb4b87953114a723da65206fa002c8b5",
+                "log_index": 1
+            },
+            "destination": {
+                "block_number": 895701,
+                "block_hash": "0x7ea9e26557b70150ae7360da608f0f231e30397b4e5b4c98f4edd431d6630c73",
+                "log_index": 3
+            },
+            "executing_message": {
+                "msg_hash": "0xbb39b9f3ce34b43c1ae2bcc42aa7a2ceb451b20cdd22f2396d2ea6ce16bf31fb",
+                "log_index": 0,
+                "identifier": {
+                    "origin": "0x4200000000000000000000000000000000000023",
+                    "chain_id": "420130019",
+                    "block_number": "498922",
+                    "log_index": "1",
+                    "timestamp": "1794670098"
+                }
+            }
+        })
+    }
+
+    #[test]
+    fn test_op_interop_metadata_serializes_sparsely() {
+        let initiated = op_interop_initiated()
+            .to_json_value()
+            .expect("non-empty metadata");
+        assert_eq!(
+            initiated,
+            serde_json::json!({
+                "op_interop": {
+                    "nonce": "0",
+                    "source": {
+                        "block_number": 498922,
+                        "block_hash": "0x8580247817bcfdd8f258ebd2f9a73aeddb4b87953114a723da65206fa002c8b5",
+                        "log_index": 1
+                    }
+                }
+            }),
+            "absent parts are omitted, never null"
+        );
+
+        let completed = op_interop_completed()
+            .to_json_value()
+            .expect("non-empty metadata");
+        assert_eq!(
+            completed,
+            serde_json::json!({"op_interop": op_interop_completed_json()})
+        );
+    }
+
+    #[test]
+    fn test_op_interop_metadata_round_trips() {
+        for metadata in [op_interop_initiated(), op_interop_completed()] {
+            let value = metadata.to_json_value().expect("non-empty metadata");
+            let round_tripped = ProtocolMetadata::from_json_value(Some(value)).expect("decodes");
+            assert_eq!(round_tripped, metadata);
+        }
+
+        // A relay that could not be paired: destination without
+        // `executing_message`.
+        let unpaired = serde_json::json!({
+            "op_interop": {
+                "nonce": "7",
+                "source": {"block_number": 1, "block_hash": "0x01", "log_index": 0},
+                "destination": {"block_number": 2, "block_hash": "0x02", "log_index": 5}
+            }
+        });
+        let decoded = ProtocolMetadata::from_json_value(Some(unpaired.clone())).expect("decodes");
+        let op_interop = decoded.op_interop.as_ref().expect("namespace is present");
+        assert!(op_interop.destination.is_some());
+        assert_eq!(op_interop.executing_message, None);
+        assert_eq!(decoded.to_json_value(), Some(unpaired));
+    }
+
+    #[test]
+    fn test_op_interop_metadata_renders_under_extra_key() {
+        let extra = Value::Object(op_interop_completed().render_extra());
+        assert_eq!(
+            extra,
+            serde_json::json!({"op_interop": op_interop_completed_json()})
+        );
+
+        let extra = Value::Object(op_interop_initiated().render_extra());
+        let rendered = extra.get("op_interop").expect("namespace is rendered");
+        assert_eq!(rendered["nonce"], "0");
+        assert_eq!(rendered["source"]["block_number"], 498_922);
+        assert_eq!(rendered["source"]["log_index"], 1);
+        assert!(rendered.get("destination").is_none());
+        assert!(rendered.get("executing_message").is_none());
     }
 
     #[test]

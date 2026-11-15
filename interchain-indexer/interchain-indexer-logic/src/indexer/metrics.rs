@@ -125,4 +125,29 @@ lazy_static! {
         &["protocol", "bridge_id", "chain_id"],
     )
     .unwrap();
+
+    // Head of a `LogStream` that reads to a confirmed block tag. Emitted only
+    // by streams whose tag is not `latest` (today: the OP interop indexer), so
+    // a stream that reads to `latest` has no series here.
+
+    /// The last head block the realtime stream resolved for its tag, per
+    /// bridge and chain. `tag` is a closed set: `safe`, `finalized`. The
+    /// realtime cursor never exceeds this value.
+    pub static ref LOG_STREAM_HEAD_BLOCK: GaugeVec = register_gauge_vec!(
+        "interchain_indexer_log_stream_head_block",
+        "last head block resolved by a log stream that reads to a confirmed block tag",
+        &["bridge_id", "chain_id", "tag"],
+    )
+    .unwrap();
+
+    /// Realtime polls in which the tagged head could not be used: the request
+    /// failed, or the node answered `null` (it has no such block yet). The
+    /// stream waits one poll interval and asks again; it never falls back to
+    /// `latest`. A steadily rising series means the indexer is not advancing.
+    pub static ref LOG_STREAM_HEAD_UNAVAILABLE_TOTAL: IntCounterVec = register_int_counter_vec!(
+        "interchain_indexer_log_stream_head_unavailable_total",
+        "realtime polls in which a tagged head block was unavailable (error or null)",
+        &["bridge_id", "chain_id", "tag"],
+    )
+    .unwrap();
 }

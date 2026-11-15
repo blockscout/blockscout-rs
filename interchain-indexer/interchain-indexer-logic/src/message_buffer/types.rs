@@ -4,6 +4,7 @@ use anyhow::Result;
 use chrono::NaiveDateTime;
 use interchain_indexer_entity::{
     amb_message_anomalies, amb_messages_confirmations, crosschain_messages, crosschain_transfers,
+    op_interop_legs,
 };
 use serde::{Deserialize, Serialize};
 
@@ -46,6 +47,9 @@ pub struct ConsolidatedMessage {
     /// AMB-specific `messageId` collision captures. Internal-only, append-only.
     /// Avalanche leaves this empty (mirrors `amb_confirmations`).
     pub amb_anomalies: Vec<amb_message_anomalies::ActiveModel>,
+    /// OP interop leg-ledger rows for this message. Empty for every other
+    /// indexer (mirrors `amb_confirmations`).
+    pub op_interop_legs: Vec<op_interop_legs::ActiveModel>,
 }
 
 /// One observed destination-execution, in a form suitable for writing as an

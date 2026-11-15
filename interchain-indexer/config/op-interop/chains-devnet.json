@@ -1,0 +1,28 @@
+[
+  {
+    "chain_id": 420130019,
+    "name": "OP Sepolia Devnet 4",
+    "icon": "",
+    "rpcs": [
+      {
+        "optimism": {
+          "url": "https://sepolia-devnet-4.optimism.io/rpc",
+          "max_rps": 2
+        }
+      }
+    ]
+  },
+  {
+    "chain_id": 420130020,
+    "name": "OP Sepolia Devnet 5",
+    "icon": "",
+    "rpcs": [
+      {
+        "optimism": {
+          "url": "https://sepolia-devnet-5.optimism.io/rpc",
+          "max_rps": 2
+        }
+      }
+    ]
+  }
+]

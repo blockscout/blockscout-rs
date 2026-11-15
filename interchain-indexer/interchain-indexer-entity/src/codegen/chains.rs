@@ -28,6 +28,8 @@ pub enum Relation {
     IndexerCheckpoints,
     #[sea_orm(has_many = "super::indexer_failures::Entity")]
     IndexerFailures,
+    #[sea_orm(has_many = "super::op_interop_legs::Entity")]
+    OpInteropLegs,
     #[sea_orm(has_many = "super::stats_asset_tokens::Entity")]
     StatsAssetTokens,
     #[sea_orm(has_one = "super::stats_chains::Entity")]
@@ -59,6 +61,12 @@ impl Related<super::indexer_checkpoints::Entity> for Entity {
 impl Related<super::indexer_failures::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::IndexerFailures.def()
+    }
+}
+
+impl Related<super::op_interop_legs::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::OpInteropLegs.def()
     }
 }
 

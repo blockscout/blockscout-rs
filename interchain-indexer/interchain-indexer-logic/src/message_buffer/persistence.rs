@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use alloy::primitives::ChainId;
 use interchain_indexer_entity::{
     amb_message_anomalies, amb_messages_confirmations, crosschain_messages, crosschain_transfers,
-    indexer_checkpoints, pending_messages,
+    indexer_checkpoints, op_interop_legs, pending_messages,
 };
 use itertools::Itertools;
 use sea_orm::{
@@ -91,19 +91,40 @@ fn crosschain_messages_on_conflict() -> OnConflict {
     // destination is unknown: as soon as the merged `dst_chain_id` is known,
     // drop that namespace (merging can otherwise resurrect a stale snapshot
     // from a late `Unresolved` observation, or leave a cleared row's
-    // diagnostics untouched). Any other namespace merges via plain `||` and
-    // is never removed — this rule is specific to `unresolved_destination`
-    // because that concept, by definition, loses meaning once identity is
-    // known. `NULLIF(..., '{{}}'::jsonb)` turns an empty merge result back
-    // into SQL NULL: an empty JSON object must never reach the column.
+    // diagnostics untouched). No other namespace is ever removed — this rule
+    // is specific to `unresolved_destination` because that concept, by
+    // definition, loses meaning once identity is known.
+    // `NULLIF(..., '{{}}'::jsonb)` turns an empty merge result back into SQL
+    // NULL: an empty JSON object must never reach the column.
+    //
+    // The merge itself (`merged_metadata_sql`) is a plain, shallow `||` for
+    // every namespace but one: `op_interop` merges **one level deep**. That
+    // namespace is a single object with a sub-object per leg (`source`,
+    // `destination`, `executing_message`), and a source-only flush can follow
+    // a complete one — a retry or rescan re-reads the source block after the
+    // message was finalized and evicted. A shallow `||` would let that flush
+    // replace the stored object whole and erase the destination part; the
+    // one-level rule unions the per-leg keys instead, so the upsert stays
+    // order-independent. When either side lacks `op_interop` the `CASE` takes
+    // its `ELSE` branch, which is the plain `||` every other bridge has
+    // always had. `jsonb_exists(..)` is the function behind the `?` operator,
+    // spelled out because `?` is a bind placeholder inside `Expr::cust`.
+    const STORED_METADATA: &str = "COALESCE(crosschain_messages.protocol_metadata, '{}'::jsonb)";
+    const INCOMING_METADATA: &str = "COALESCE(EXCLUDED.protocol_metadata, '{}'::jsonb)";
+    let merged_metadata_sql = format!(
+        "(CASE WHEN jsonb_exists({STORED_METADATA}, 'op_interop') \
+                AND jsonb_exists({INCOMING_METADATA}, 'op_interop') \
+               THEN jsonb_set({STORED_METADATA} || {INCOMING_METADATA}, '{{op_interop}}', \
+                              ({STORED_METADATA} -> 'op_interop') \
+                              || ({INCOMING_METADATA} -> 'op_interop')) \
+               ELSE {STORED_METADATA} || {INCOMING_METADATA} \
+          END)"
+    );
     let protocol_metadata_sql = format!(
         "NULLIF(\
          CASE WHEN ({dst_result_sql}) IS NOT NULL \
-              THEN (COALESCE(crosschain_messages.protocol_metadata, '{{}}'::jsonb) \
-                    || COALESCE(EXCLUDED.protocol_metadata, '{{}}'::jsonb)) \
-                   - 'unresolved_destination' \
-              ELSE (COALESCE(crosschain_messages.protocol_metadata, '{{}}'::jsonb) \
-                    || COALESCE(EXCLUDED.protocol_metadata, '{{}}'::jsonb)) \
+              THEN {merged_metadata_sql} - 'unresolved_destination' \
+              ELSE {merged_metadata_sql} \
          END, \
          '{{}}'::jsonb)"
     );
@@ -249,6 +270,94 @@ fn amb_message_anomalies_on_conflict() -> OnConflict {
     OnConflict::new().do_nothing().to_owned()
 }
 
+/// Conflict policy for `op_interop_legs`: the primary key is the log itself
+/// (`block_hash` + block-level `log_index`, per bridge and chain), so a replay
+/// rewrites the row with identical values, and a replay after a decoder fix
+/// repairs it.
+fn op_interop_legs_on_conflict() -> OnConflict {
+    OnConflict::columns([
+        op_interop_legs::Column::BridgeId,
+        op_interop_legs::Column::ChainId,
+        op_interop_legs::Column::BlockHash,
+        op_interop_legs::Column::LogIndex,
+    ])
+    .update_columns([
+        op_interop_legs::Column::BlockNumber,
+        op_interop_legs::Column::BlockTimestamp,
+        op_interop_legs::Column::TxHash,
+        op_interop_legs::Column::EventKind,
+        op_interop_legs::Column::MessageId,
+        op_interop_legs::Column::MessageHash,
+        op_interop_legs::Column::EventData,
+    ])
+    .value(
+        op_interop_legs::Column::UpdatedAt,
+        Expr::current_timestamp(),
+    )
+    .to_owned()
+}
+
+/// Keeps the last row per primary key, in first-appearance order.
+///
+/// Two rows with one key in a single `INSERT … ON CONFLICT DO UPDATE` is a
+/// statement error ("command cannot affect row a second time"), and a
+/// statement error here rolls back the maintenance transaction for the whole
+/// bridge on every cycle. A log belongs to one message by construction, so
+/// this is a guard, not a code path.
+///
+/// A model whose four key columns are not all `Set` is a programming error in
+/// the indexer that built it. It is dropped with a warning, never turned into
+/// an `Err` — for the same reason.
+fn dedup_op_interop_legs(
+    legs: Vec<op_interop_legs::ActiveModel>,
+) -> Vec<op_interop_legs::ActiveModel> {
+    let mut index_by_key: HashMap<(i32, i64, Vec<u8>, i64), usize> = HashMap::new();
+    let mut deduplicated: Vec<op_interop_legs::ActiveModel> = Vec::with_capacity(legs.len());
+
+    for leg in legs {
+        let key = match (
+            &leg.bridge_id,
+            &leg.chain_id,
+            &leg.block_hash,
+            &leg.log_index,
+        ) {
+            (
+                ActiveValue::Set(bridge_id),
+                ActiveValue::Set(chain_id),
+                ActiveValue::Set(block_hash),
+                ActiveValue::Set(log_index),
+            ) => (*bridge_id, *chain_id, block_hash.clone(), *log_index),
+            _ => {
+                debug_assert!(
+                    false,
+                    "op_interop_legs key columns must all be Set; found bridge_id={:?} \
+                     chain_id={:?} log_index={:?}",
+                    leg.bridge_id, leg.chain_id, leg.log_index
+                );
+                tracing::warn!(
+                    bridge_id = ?leg.bridge_id,
+                    chain_id = ?leg.chain_id,
+                    log_index = ?leg.log_index,
+                    message_id = ?leg.message_id,
+                    "op_interop_legs row reached flush_to_final_storage without its \
+                     key columns set; dropping the row"
+                );
+                continue;
+            }
+        };
+
+        match index_by_key.get(&key) {
+            Some(index) => deduplicated[*index] = leg,
+            None => {
+                index_by_key.insert(key, deduplicated.len());
+                deduplicated.push(leg);
+            }
+        }
+    }
+
+    deduplicated
+}
+
 fn consolidated_message_pk(
     message: &crosschain_messages::ActiveModel,
 ) -> Result<(i64, i32), DbErr> {
@@ -358,19 +467,37 @@ pub(super) async fn flush_to_final_storage(
         .map(|entry| consolidated_message_pk(&entry.message))
         .collect::<Result<Vec<_>, _>>()?;
 
-    let (messages, transfers, amb_confirmations, amb_anomalies): (Vec<_>, Vec<_>, Vec<_>, Vec<_>) =
-        consolidated_entries
-            .into_iter()
-            .map(|c| (c.message, c.transfers, c.amb_confirmations, c.amb_anomalies))
-            .multiunzip();
+    let (messages, transfers, amb_confirmations, amb_anomalies, op_interop_legs): (
+        Vec<_>,
+        Vec<_>,
+        Vec<_>,
+        Vec<_>,
+        Vec<_>,
+    ) = consolidated_entries
+        .into_iter()
+        .map(|c| {
+            (
+                c.message,
+                c.transfers,
+                c.amb_confirmations,
+                c.amb_anomalies,
+                c.op_interop_legs,
+            )
+        })
+        .multiunzip();
     let transfers = transfers.into_iter().flatten().collect::<Vec<_>>();
     let amb_confirmations = amb_confirmations.into_iter().flatten().collect::<Vec<_>>();
     let amb_anomalies = amb_anomalies.into_iter().flatten().collect::<Vec<_>>();
+    let op_interop_legs = op_interop_legs.into_iter().flatten().collect::<Vec<_>>();
 
     reject_unset_asset_linkage(&transfers);
 
     delete_replaced_messages(tx, &replacement_pks).await?;
     batched_upsert(tx, &messages, crosschain_messages_on_conflict()).await?;
+    // Empty for every indexer but OP interop: `batched_upsert` issues no
+    // statement for an empty slice.
+    let op_interop_legs = dedup_op_interop_legs(op_interop_legs);
+    batched_upsert(tx, &op_interop_legs, op_interop_legs_on_conflict()).await?;
     batched_upsert(tx, &transfers, crosschain_transfers_on_conflict()).await?;
     batched_upsert(
         tx,
@@ -1037,7 +1164,7 @@ mod tests {
     use chrono::{DateTime, NaiveDateTime};
     use interchain_indexer_entity::{
         amb_message_anomalies, amb_messages_confirmations, bridges, chains, crosschain_messages,
-        crosschain_transfers, indexer_checkpoints, pending_messages,
+        crosschain_transfers, indexer_checkpoints, op_interop_legs, pending_messages,
         sea_orm_active_enums::{MessageStatus, TransferAssetLinkage},
         stats_assets,
     };
@@ -1091,6 +1218,7 @@ mod tests {
             transfers: vec![],
             amb_confirmations: vec![],
             amb_anomalies: vec![],
+            op_interop_legs: vec![],
         }
     }
 
@@ -1123,6 +1251,7 @@ mod tests {
             transfers: vec![],
             amb_confirmations: vec![],
             amb_anomalies: vec![],
+            op_interop_legs: vec![],
         }
     }
 
@@ -1516,6 +1645,7 @@ mod tests {
             transfers: vec![],
             amb_confirmations: vec![],
             amb_anomalies: vec![],
+            op_interop_legs: vec![],
         }
     }
 
@@ -1771,6 +1901,7 @@ mod tests {
             transfers: vec![],
             amb_confirmations: vec![],
             amb_anomalies: vec![],
+            op_interop_legs: vec![],
         }
     }
 
@@ -1909,6 +2040,271 @@ mod tests {
         let row = load(&db).await;
         assert_eq!(row.dst_chain_id, None);
         assert_eq!(row.protocol_metadata, None);
+    }
+
+    // --- `op_interop` namespace: one-level deep merge at upsert ---
+
+    fn op_interop_source_json() -> serde_json::Value {
+        serde_json::json!({"block_number": 498922, "block_hash": "0x85", "log_index": 1})
+    }
+
+    fn op_interop_destination_json() -> serde_json::Value {
+        serde_json::json!({"block_number": 895701, "block_hash": "0x7e", "log_index": 3})
+    }
+
+    fn op_interop_executing_message_json() -> serde_json::Value {
+        serde_json::json!({
+            "msg_hash": "0xbb",
+            "log_index": 0,
+            "identifier": {
+                "origin": "0x4200000000000000000000000000000000000023",
+                "chain_id": "420130019",
+                "block_number": "498922",
+                "log_index": "1",
+                "timestamp": "1794670098",
+            }
+        })
+    }
+
+    /// What a source-only (`initiated`) flush carries.
+    fn op_interop_source_only_meta_json() -> serde_json::Value {
+        serde_json::json!({
+            "op_interop": {"nonce": "0", "source": op_interop_source_json()}
+        })
+    }
+
+    /// What a flush of a completed, paired message carries.
+    fn op_interop_complete_meta_json() -> serde_json::Value {
+        serde_json::json!({
+            "op_interop": {
+                "nonce": "0",
+                "source": op_interop_source_json(),
+                "destination": op_interop_destination_json(),
+                "executing_message": op_interop_executing_message_json(),
+            }
+        })
+    }
+
+    /// The case the one-level rule exists for: a source-only flush after a
+    /// complete one (a retry or rescan re-read the source block after the
+    /// message was finalized and evicted). A shallow `||` would replace the
+    /// stored `op_interop` object whole and erase the destination part.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_protocol_metadata_merge_op_interop_unions_leg_keys() {
+        let test_db = init_db("protocol_metadata_merge_op_interop_unions_leg_keys").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(
+            &db,
+            merge_test_row(Some(DST_CHAIN), Some(op_interop_complete_meta_json())),
+        )
+        .await;
+        flush(
+            &db,
+            merge_test_row(Some(DST_CHAIN), Some(op_interop_source_only_meta_json())),
+        )
+        .await;
+
+        let row = load(&db).await;
+        assert_eq!(
+            row.protocol_metadata,
+            Some(op_interop_complete_meta_json()),
+            "a source-only re-flush must keep destination and executing_message"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_protocol_metadata_merge_op_interop_incoming_adds_destination() {
+        let test_db = init_db("protocol_metadata_merge_op_interop_incoming_adds_destination").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(
+            &db,
+            merge_test_row(Some(DST_CHAIN), Some(op_interop_source_only_meta_json())),
+        )
+        .await;
+        flush(
+            &db,
+            merge_test_row(Some(DST_CHAIN), Some(op_interop_complete_meta_json())),
+        )
+        .await;
+
+        let row = load(&db).await;
+        assert_eq!(row.protocol_metadata, Some(op_interop_complete_meta_json()));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_protocol_metadata_merge_op_interop_only_stored_is_kept() {
+        let test_db = init_db("protocol_metadata_merge_op_interop_only_stored_is_kept").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(
+            &db,
+            merge_test_row(Some(DST_CHAIN), Some(op_interop_complete_meta_json())),
+        )
+        .await;
+        flush(&db, merge_test_row(Some(DST_CHAIN), None)).await;
+
+        let row = load(&db).await;
+        assert_eq!(row.protocol_metadata, Some(op_interop_complete_meta_json()));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_protocol_metadata_merge_op_interop_only_incoming_is_written() {
+        let test_db = init_db("protocol_metadata_merge_op_interop_only_incoming_is_written").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(&db, merge_test_row(Some(DST_CHAIN), None)).await;
+        flush(
+            &db,
+            merge_test_row(Some(DST_CHAIN), Some(op_interop_source_only_meta_json())),
+        )
+        .await;
+
+        let row = load(&db).await;
+        assert_eq!(
+            row.protocol_metadata,
+            Some(op_interop_source_only_meta_json())
+        );
+    }
+
+    // --- `op_interop_legs` ledger rows ---
+
+    fn op_interop_leg(
+        log_index: i64,
+        event_kind: &str,
+        event_data: serde_json::Value,
+    ) -> op_interop_legs::ActiveModel {
+        op_interop_legs::ActiveModel {
+            bridge_id: ActiveValue::Set(BRIDGE_ID),
+            chain_id: ActiveValue::Set(SRC_CHAIN),
+            block_hash: ActiveValue::Set(vec![0xB1; 32]),
+            log_index: ActiveValue::Set(log_index),
+            block_number: ActiveValue::Set(498_922),
+            block_timestamp: ActiveValue::Set(ts(1_000)),
+            tx_hash: ActiveValue::Set(vec![0x7A; 32]),
+            event_kind: ActiveValue::Set(event_kind.to_string()),
+            message_id: ActiveValue::Set(MESSAGE_ID),
+            message_hash: ActiveValue::Set(vec![0x27; 32]),
+            event_data: ActiveValue::Set(event_data),
+            created_at: ActiveValue::NotSet,
+            updated_at: ActiveValue::NotSet,
+        }
+    }
+
+    fn merge_test_row_with_legs(legs: Vec<op_interop_legs::ActiveModel>) -> ConsolidatedMessage {
+        let mut entry = merge_test_row(Some(DST_CHAIN), None);
+        entry.op_interop_legs = legs;
+        entry
+    }
+
+    async fn load_op_interop_legs(db: &InterchainDatabase) -> Vec<op_interop_legs::Model> {
+        op_interop_legs::Entity::find()
+            .order_by_asc(op_interop_legs::Column::LogIndex)
+            .all(db.db.as_ref())
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_flush_op_interop_legs_twice_keeps_one_row_and_updates_data() {
+        let test_db = init_db("flush_op_interop_legs_twice_keeps_one_row").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(
+            &db,
+            merge_test_row_with_legs(vec![op_interop_leg(
+                1,
+                "sent_message",
+                serde_json::json!({"nonce": "0"}),
+            )]),
+        )
+        .await;
+        let first = load_op_interop_legs(&db).await;
+        assert_eq!(first.len(), 1);
+
+        // The same log again, decoded differently (a replay after a decoder
+        // fix): the row is repaired in place, not duplicated.
+        flush(
+            &db,
+            merge_test_row_with_legs(vec![op_interop_leg(
+                1,
+                "sent_message",
+                serde_json::json!({"nonce": "0", "sender": "0xaa"}),
+            )]),
+        )
+        .await;
+
+        let legs = load_op_interop_legs(&db).await;
+        assert_eq!(legs.len(), 1, "a replayed log must not add a row: {legs:?}");
+        let leg = &legs[0];
+        assert_eq!(leg.bridge_id, BRIDGE_ID);
+        assert_eq!(leg.chain_id, SRC_CHAIN);
+        assert_eq!(leg.block_hash, vec![0xB1; 32]);
+        assert_eq!(leg.log_index, 1);
+        assert_eq!(leg.event_kind, "sent_message");
+        assert_eq!(leg.message_id, MESSAGE_ID);
+        assert_eq!(
+            leg.event_data,
+            serde_json::json!({"nonce": "0", "sender": "0xaa"})
+        );
+        assert_eq!(leg.created_at, first[0].created_at);
+    }
+
+    /// Two rows with one primary key in a single statement would fail the
+    /// statement, and with it the whole maintenance transaction.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_flush_op_interop_legs_duplicate_key_in_one_flush_does_not_fail() {
+        let test_db = init_db("flush_op_interop_legs_duplicate_key_in_one_flush").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(
+            &db,
+            merge_test_row_with_legs(vec![
+                op_interop_leg(3, "relayed_message", serde_json::json!({"nonce": "first"})),
+                op_interop_leg(0, "executing_message", serde_json::json!({})),
+                op_interop_leg(3, "relayed_message", serde_json::json!({"nonce": "last"})),
+            ]),
+        )
+        .await;
+
+        let legs = load_op_interop_legs(&db).await;
+        assert_eq!(
+            legs.iter().map(|leg| leg.log_index).collect::<Vec<_>>(),
+            vec![0, 3]
+        );
+        assert_eq!(
+            legs[1].event_data,
+            serde_json::json!({"nonce": "last"}),
+            "the last row for a key wins"
+        );
+        // The message row of the same flush was written too.
+        assert_eq!(load(&db).await.id, MESSAGE_ID);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_flush_without_op_interop_legs_writes_no_leg_rows() {
+        let test_db = init_db("flush_without_op_interop_legs_writes_no_leg_rows").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(&db, merge_test_row(Some(DST_CHAIN), None)).await;
+
+        assert_eq!(load(&db).await.id, MESSAGE_ID);
+        assert!(load_op_interop_legs(&db).await.is_empty());
     }
 
     /// Cohort size that exceeds PostgreSQL's planner stack for a row-valued

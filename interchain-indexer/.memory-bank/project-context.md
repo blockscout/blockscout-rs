@@ -17,6 +17,9 @@ for finalized cross-chain records.
 
 - Implemented protocol family: Avalanche Teleporter (ICM) and ICTT
 - Implemented indexer: Avalanche native indexer
+- Also implemented: AMB, xDai, and the OP interop indexer
+  (`L2ToL2CrossDomainMessenger` messages of OP Stack native interop, read from
+  logs only and only up to a confirmed block tag; ADR-018)
 - Storage model: PostgreSQL tables for chains, bridges, contracts, finalized
   messages, transfers, pending messages, checkpoints, failures, and aggregated
   stats
@@ -81,6 +84,11 @@ current production logic is concentrated in the Avalanche path.
 - `AvalancheIndexer`
   - per-bridge indexer implementation for Teleporter / ICTT
   - source: `interchain-indexer-logic/src/indexer/avalanche/mod.rs`
+- `OpInteropIndexer`
+  - per-bridge indexer for OP Stack interop messenger messages; reads
+    `finalized` (or `safe`) blocks only, no receipts, writes the
+    `op_interop_legs` ledger
+  - source: `interchain-indexer-logic/src/indexer/op_interop/`
 - `LogStream`
   - catchup + realtime log streaming with checkpoint-aware cursors
   - source: `interchain-indexer-logic/src/log_stream.rs`

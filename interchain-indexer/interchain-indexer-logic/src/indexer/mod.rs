@@ -8,6 +8,7 @@ pub(crate) mod evm;
 pub mod example;
 pub mod failure_ledger;
 pub mod metrics;
+pub mod op_interop;
 pub mod progress;
 pub mod range_driver;
 pub(crate) mod retry_scheduler;

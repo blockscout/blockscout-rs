@@ -13,6 +13,8 @@ pub enum BridgeType {
     Amb,
     #[sea_orm(string_value = "xdai")]
     Xdai,
+    #[sea_orm(string_value = "op_interop")]
+    OpInterop,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "edge_amount_side")]

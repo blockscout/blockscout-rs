@@ -32,6 +32,7 @@ pub enum IndexerType {
     AMB,
     #[serde(rename = "xdai")]
     XDai,
+    OpInterop,
     #[default]
     Unknown,
 }
@@ -1253,6 +1254,12 @@ mod tests {
         let bridges: Vec<BridgeConfig> = serde_json::from_str(json).unwrap();
         assert_eq!(bridges.len(), 1);
         assert!(!bridges[0].reconstruct_incoming_ictt_transfers);
+    }
+
+    #[test]
+    fn test_indexer_type_deserializes_op_interop() {
+        let indexer_type: IndexerType = serde_json::from_str("\"op_interop\"").unwrap();
+        assert_eq!(indexer_type, IndexerType::OpInterop);
     }
 
     #[test]

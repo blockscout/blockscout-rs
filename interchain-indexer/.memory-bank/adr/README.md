@@ -31,6 +31,7 @@ An ADR captures the context, decision, and consequences of an architectural choi
 | [015](./015-message-level-confirmations-attach-to-stored-row.md) | Validator Confirmations Are Message-Level; Late Ones Attach To The Stored Row | Accepted | 2026-09-29 |
 | [016](./016-operator-write-api-v1.md) | Operator Write API v1 | Accepted | 2026-10-02 |
 | [017](./017-cluster-scoped-read-api.md) | Cluster-Scoped Read API | Accepted | 2026-11-03 |
+| [018](./018-op-interop-confirmed-reading-and-leg-ledger.md) | OP Interop Indexer Reads Confirmed Blocks Only And Keeps A Leg Ledger | Accepted | 2026-11-14 |
 
 ## Creating a New ADR
 

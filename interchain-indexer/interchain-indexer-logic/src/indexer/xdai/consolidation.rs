@@ -60,6 +60,7 @@ impl Consolidate for Message {
             // The nonce is contract-issued, so a duplicate key can only be an
             // indexing bug; there is no protocol-level collision to record.
             amb_anomalies: Vec::new(),
+            op_interop_legs: Vec::new(),
         }))
     }
 

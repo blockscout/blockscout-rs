@@ -3264,3 +3264,39 @@ See `NAME_SORT_PREFIX_CHARS` in
   the messages pagination index with a transfers probe per message: 68,804
   buffers for page 1. `:byAddress` transfers behaves the same. A
   denormalized timestamp on transfers would close it.
+
+## Catch-Up Batches Arrive In Descending `(block, log_index)` Order
+
+`LogStream` sorts realtime batches ascending and catch-up batches
+**descending** (the `.map` after each stream in `log_stream.rs`), and
+`evm::group_logs_by_transaction` keeps input order. Any per-transaction logic
+that depends on log order must sort its group ascending by `log_index` first.
+The OP interop indexer pairs a `RelayedMessage` with the closest preceding
+messenger-origin `ExecutingMessage`; unsorted, a catch-up batch pairs nothing.
+`indexer/op_interop/indexer.rs` sorts each group before `dispatch_transaction`,
+and `test_replay_reversed_log_order_gives_same_result` pins it.
+
+## `protocol_metadata` Upsert Is A Shallow `||`, Except For The `op_interop` Key
+
+`crosschain_messages_on_conflict` merges `protocol_metadata` with a plain
+JSONB `||`: a key in the incoming value replaces the stored key wholesale.
+For `op_interop` it merges one level deep instead
+(`jsonb_set(S || E, '{op_interop}', S->'op_interop' || E->'op_interop')`).
+That namespace is one object with a sub-object per leg (`source`,
+`destination`, `executing_message`), and a source-only flush can follow a
+complete one: a retry or rescan re-reads the source block after the message
+was finalized and evicted. With a shallow `||` the incoming `{op_interop:
+{nonce, source}}` would erase the stored `destination`. A new namespace that
+holds per-leg sub-objects needs the same rule; one that does not should keep
+the shallow merge. See ADR-018.
+
+## A One-Sided Replay Of A Finalized OP Interop Message Leaves A `pending_messages` Row
+
+If a retry or rescan re-reads only one chain's block of an already finalized
+OP interop message (for example only the source block), the new buffer entry
+holds one leg, consolidates as `initiated`, is flushed (non-regressing, so the
+canonical row keeps its `completed` status and destination columns) and, once
+stale, is offloaded to `pending_messages`. It can never finalize because the
+other leg is not re-read. This is harmless to the canonical row and is not a
+leak to chase. `test_replay_source_only_after_completion_keeps_destination`
+asserts the single leftover row. See ADR-018.

@@ -11,6 +11,7 @@ This file doubles as the shared reference for the whole `config/` tree: grammar,
 | `config/omnibridge` | AMB/Omnibridge only, mainnet + testnet | [ENVs.md](omnibridge/ENVs.md) |
 | `config/avalanche` | Avalanche ICM/ICTT only: C-Chain, NUMINE, Henesys | [ENVs.md](avalanche/ENVs.md) |
 | `config/xdai` | xDai bridge only, mainnet + testnet | [ENVs.md](xdai/ENVs.md) |
+| `config/op-interop` | OP Stack native interop only: OP Labs `sepolia-devnet-4` and `sepolia-devnet-5` | [ENVs.md](op-interop/ENVs.md) |
 
 ## Prefixes and grammar
 

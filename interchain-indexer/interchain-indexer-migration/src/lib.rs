@@ -11,6 +11,7 @@ mod m20260910_132423_add_protocol_metadata;
 mod m20260915_120000_add_xdai_and_cross_asset_stats;
 mod m20261002_115013_add_write_api_audit_log;
 mod m20261106_084608_add_message_address_search_indexes;
+mod m20261115_011222_add_op_interop_indexer;
 
 pub struct Migrator;
 
@@ -27,6 +28,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260915_120000_add_xdai_and_cross_asset_stats::Migration),
             Box::new(m20261002_115013_add_write_api_audit_log::Migration),
             Box::new(m20261106_084608_add_message_address_search_indexes::Migration),
+            Box::new(m20261115_011222_add_op_interop_indexer::Migration),
         ]
     }
 }
