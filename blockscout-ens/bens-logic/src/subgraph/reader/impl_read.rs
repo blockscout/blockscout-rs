@@ -980,6 +980,24 @@ mod tests {
         assert!(domains.is_empty(), "{domains:?}");
     }
 
+    // Two NameChanged events for one reverse node in the same block, with
+    // vids in the opposite order to their log indexes (graph-node's write
+    // order below specVersion 1.3.0): the later log, a clear, wins.
+    #[sqlx::test(migrations = "tests/migrations")]
+    async fn same_block_name_changes_follow_log_order_not_vid(pool: PgPool) {
+        let reader = mocked_reader(pool).await;
+        let domains = reader
+            .batch_resolve_address_names(BatchResolveAddressNamesInput {
+                addresses: vec![addr("0x5555555555555555555555555555555555555555")],
+                network_id: Some(DEFAULT_CHAIN_ID),
+                protocols: None,
+                all_protocols: false,
+            })
+            .await
+            .expect("failed to resolve addresses");
+        assert!(domains.is_empty(), "{domains:?}");
+    }
+
     // A deployment still on a pre-2.3 ENS subgraph: no `registry_token`
     // column, no ENSv2 primary names, `ensv2` off. Lookups and reverse names
     // must work exactly as before.

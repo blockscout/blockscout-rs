@@ -67,11 +67,16 @@ impl AddrReverseNamesView {
         nc.block_number as block_number,
         0 as scheme
     FROM (
-        -- name_changed has no log index; vid is graph-node's write order,
-        -- which follows log order inside a block.
+        -- The latest NameChanged per resolver. Inside a block, vid is not
+        -- log order (graph-node assigns it in write order unless the
+        -- manifest is specVersion >= 1.3.0), so break ties with the log
+        -- index from the event id, `<block>-<logIndex>`.
         SELECT DISTINCT ON (resolver) *
         FROM {schema}.name_changed
-        ORDER BY resolver, block_number DESC, vid DESC
+        ORDER BY resolver, block_number DESC,
+            CASE WHEN id ~ '^[0-9]+-[0-9]+$'
+                THEN split_part(id, '-', 2)::bigint END DESC NULLS LAST,
+            vid DESC
     ) nc
     JOIN {schema}.domain addr_reversed_domain ON nc.resolver = addr_reversed_domain.resolver
     -- LEFT JOIN: a non-empty addr.reverse name keeps its row even when it
