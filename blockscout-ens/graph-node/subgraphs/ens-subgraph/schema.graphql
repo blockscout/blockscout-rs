@@ -503,6 +503,9 @@ type ENSv2Registry @entity(immutable: false) {
   canonicalParentLabel: String
   namespaces: [ENSv2Namespace!]! @derivedFrom(field: "registry")
   namespaceCount: Int!
+  # Number of ENSv2RegistrySlotIndex rows: every slot this registry has ever
+  # had, so a namespace linked after its names were registered can project them.
+  slotCount: Int!
   discoveredAt: BigInt!
   createdAtBlock: BigInt!
   updatedAtBlock: BigInt!
@@ -996,6 +999,13 @@ type ENSv2RegistryNamespaceIndex @entity(immutable: true) {
   registry: ENSv2Registry!
   index: Int!
   namespace: ENSv2Namespace!
+}
+
+type ENSv2RegistrySlotIndex @entity(immutable: true) {
+  id: Bytes! # registry + index
+  registry: ENSv2Registry!
+  index: Int!
+  slot: ENSv2NameSlot!
 }
 
 type ENSv2SlotPathIndex @entity(immutable: true) {

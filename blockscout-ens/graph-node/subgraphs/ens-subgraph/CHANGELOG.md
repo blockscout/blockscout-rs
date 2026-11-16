@@ -3,6 +3,33 @@
 Version labels match the Subgraph Studio deployments of the mainnet subgraph
 `5XqPmWe6gjyrJtFn9cLy237i4cWw2j9HcUJEXsP5qGtH`.
 
+## v2.3.2 (2026-11-16)
+
+### Fixed
+
+- Names registered in a registry before that registry was linked under a
+  parent ("late-linked") were never projected: they had no `ENSv2NamePath`
+  and no `Domain` row, while the registry they replaced had its rows
+  deleted. This is how subnames are copied into a new registry (deploy it,
+  register the names, then point the parent at it), the planned recovery
+  for registries on the affected UserRegistry implementations. Linking a
+  registry now backfills every name already `REGISTERED` there, with its
+  resolver, and recurses into the registries those names link to (up to 16
+  levels). The backfill runs only when the namespace is new or was inactive.
+  18 mainnet names were affected as of block 26,425,585 (for example
+  support.v1.orivonid.eth and preview.app.navik.eth). Adds
+  `ENSv2Registry.slotCount` and `ENSv2RegistrySlotIndex`.
+- On a registry running the fixed UserRegistry implementation (contracts-v2
+  #501: mainnet `0x86013382…25cb`, Sepolia `0x0822d199…a126`), `unregister()`
+  also clears the name's resolver and subregistry without emitting events.
+  The slot now clears both too, and the subregistry's namespaces are
+  unlinked. Registries on older implementations keep both, as on chain.
+- The later UserRegistry implementations (`0x75ff…51bb`, `0x6648…0Dc0`,
+  `0x43d9…b23D`, `0x8601…25cb` on mainnet, `0x0822…a126` on Sepolia) are
+  classified as `USER` instead of `UNKNOWN`.
+
+Requires a full re-index.
+
 ## v2.3.1 (2026-11-13)
 
 ### Fixed

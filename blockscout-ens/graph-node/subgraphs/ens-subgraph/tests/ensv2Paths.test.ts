@@ -27,6 +27,7 @@ import {
   handleLinked,
 } from "../src/ensv2Resolver";
 import { namespaceId, pathNamehash, resolverLinkId } from "../src/ensv2Utils";
+import { getOrCreateRegistry } from "../src/ensv2Discovery";
 import { createResolverID, handleAddrChanged } from "../src/resolver";
 import { AddrChanged } from "../src/types/Resolver/Resolver";
 import {
@@ -720,7 +721,7 @@ test("resolver set, change, clear, and re-registration reset reach every path of
   assert.entityCount("ENSv2NamePath", 4);
 });
 
-test("late-link: pre-existing child registrations get zero new path rows and pathCount stays untouched", () => {
+test("late-link: each pre-existing child registration gets exactly one path", () => {
   dataSourceMock.setNetwork("sepolia");
 
   const LATE_CHILD_REGISTRY = "0x333333333333333333333333333333333333333c";
@@ -768,10 +769,20 @@ test("late-link: pre-existing child registrations get zero new path rows and pat
     "1"
   );
 
-  // A late link must not backfill a path for the pre-existing registration.
-  // The index count also proves that no unexpected path was appended.
-  assert.fieldEquals("ENSv2NameSlot", walletSlotId, "pathCount", "0");
-  assert.entityCount("ENSv2SlotPathIndex", 1);
+  // The link backfills one path for the pre-existing registration.
+  assert.fieldEquals("ENSv2NameSlot", walletSlotId, "pathCount", "1");
+  assert.entityCount("ENSv2SlotPathIndex", 2);
+
+  // Re-emitting the same link does not backfill again.
+  handleSubregistryUpdated(
+    createSubregistryUpdatedEvent(
+      ROOT_REGISTRY,
+      slotToken(1),
+      LATE_CHILD_REGISTRY
+    )
+  );
+  assert.fieldEquals("ENSv2NameSlot", walletSlotId, "pathCount", "1");
+  assert.entityCount("ENSv2SlotPathIndex", 2);
 });
 
 test("unregister -> re-register does not inflate pathCount", () => {
@@ -1392,10 +1403,11 @@ test("an ETHRegistry slot with several paths keeps legacy Registration.domain on
   );
 });
 
-test("late-linked path has no Domain row", () => {
+test("a late-linked registration is projected into Domain, with its resolver", () => {
   dataSourceMock.setNetwork("sepolia");
 
   const LATE_CHILD_REGISTRY = "0x777777777777777777777777777777777777777a";
+  const RESOLVER_ADDRESS = "0x999999999999999999999999999999999999999c";
 
   handleLabelRegistered(
     createLabelRegisteredEvent(
@@ -1403,6 +1415,14 @@ test("late-linked path has no Domain row", () => {
       slotToken(1),
       Bytes.fromI32(90),
       "orphan"
+    )
+  );
+  // Resolver set while the registry is not linked anywhere yet.
+  handleResolverUpdated(
+    createResolverUpdatedEvent(
+      LATE_CHILD_REGISTRY,
+      slotToken(1),
+      RESOLVER_ADDRESS
     )
   );
   handleLabelRegistered(
@@ -1425,31 +1445,21 @@ test("late-linked path has no Domain row", () => {
     Bytes.fromHexString(ROOT_NAMEHASH),
     Bytes.fromI32(91)
   ).toHexString();
-  let wouldBeOrphanPathId = pathNamehash(
+  let orphanPathId = pathNamehash(
     Bytes.fromHexString(late2PathId),
     Bytes.fromI32(90)
   ).toHexString();
 
-  assert.notInStore("Domain", wouldBeOrphanPathId);
-
-  // A later resolver association still cannot backfill the deliberately
-  // unmaterialised path or a legacy Resolver row for it.
-  const RESOLVER_ADDRESS = "0x999999999999999999999999999999999999999c";
-  handleResolverUpdated(
-    createResolverUpdatedEvent(
-      LATE_CHILD_REGISTRY,
-      slotToken(1),
-      RESOLVER_ADDRESS
-    )
+  assert.fieldEquals("Domain", orphanPathId, "name", "orphan.late2");
+  assert.fieldEquals("Domain", orphanPathId, "owner", OWNER.toLowerCase());
+  let resolverId = createResolverID(
+    Bytes.fromHexString(orphanPathId),
+    Address.fromString(RESOLVER_ADDRESS)
   );
-  assert.notInStore("Domain", wouldBeOrphanPathId);
-  assert.notInStore(
-    "Resolver",
-    createResolverID(
-      Bytes.fromHexString(wouldBeOrphanPathId),
-      Address.fromString(RESOLVER_ADDRESS)
-    )
-  );
+  assert.fieldEquals("Domain", orphanPathId, "resolver", resolverId);
+  assert.fieldEquals("Resolver", resolverId, "domain", orphanPathId);
+  // The RootRegistry parent stays native-only.
+  assert.notInStore("Domain", late2PathId);
 });
 
 test("RootRegistry re-registration reactivates the native path without a legacy Domain", () => {
@@ -1870,4 +1880,137 @@ test("ENSv2 ResolverUpdated to a PermissionedResolver whose link is active proje
     "resolvedAddress",
     Address.fromString(RESOLVED).toHexString()
   );
+});
+
+// --- v2.3.2: late-link backfill (subname copy) and unregister clearing ---
+
+const EMPTY = "0x0000000000000000000000000000000000000000";
+
+function rootPath(labelHash: Bytes): Bytes {
+  return pathNamehash(Bytes.fromHexString(ROOT_NAMEHASH), labelHash);
+}
+
+test("subname copy: names registered in a new registry before the parent switches to it take over their paths", () => {
+  dataSourceMock.setNetwork("sepolia");
+  const OLD_REGISTRY = "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1";
+  const NEW_REGISTRY = "0xb1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1";
+  const RESOLVER_ADDRESS = "0x999999999999999999999999999999999999999d";
+
+  let baseHash = Bytes.fromI32(500);
+  let supportHash = Bytes.fromI32(501);
+  let legacyHash = Bytes.fromI32(502);
+  handleLabelRegistered(createLabelRegisteredEvent(ROOT_REGISTRY, slotToken(1), baseHash, "base"));
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(ROOT_REGISTRY, slotToken(1), OLD_REGISTRY));
+  handleLabelRegistered(createLabelRegisteredEvent(OLD_REGISTRY, slotToken(1), supportHash, "support"));
+  handleLabelRegistered(createLabelRegisteredEvent(OLD_REGISTRY, slotToken(2), legacyHash, "legacy"));
+
+  let supportId = pathNamehash(rootPath(baseHash), supportHash).toHexString();
+  let legacyId = pathNamehash(rootPath(baseHash), legacyHash).toHexString();
+  assert.fieldEquals("Domain", supportId, "owner", OWNER.toLowerCase());
+  assert.fieldEquals("Domain", legacyId, "owner", OWNER.toLowerCase());
+
+  // The copy: deploy NEW, register the name there (with its resolver), and
+  // only then point the parent at NEW. "legacy" is not copied.
+  handleLabelRegistered(
+    createLabelRegisteredEvent(NEW_REGISTRY, slotToken(1), supportHash, "support", OWNER_2)
+  );
+  handleResolverUpdated(createResolverUpdatedEvent(NEW_REGISTRY, slotToken(1), RESOLVER_ADDRESS));
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(ROOT_REGISTRY, slotToken(1), NEW_REGISTRY));
+
+  assert.fieldEquals("Domain", supportId, "name", "support.base");
+  assert.fieldEquals("Domain", supportId, "owner", OWNER_2.toLowerCase());
+  assert.fieldEquals(
+    "Domain",
+    supportId,
+    "resolver",
+    createResolverID(Bytes.fromHexString(supportId), Address.fromString(RESOLVER_ADDRESS))
+  );
+  assert.fieldEquals("ENSv2NamePath", supportId, "slot", slotIdFor(NEW_REGISTRY, 1));
+  assert.fieldEquals("ENSv2NamePath", supportId, "active", "true");
+  // The name left behind in OLD is no longer reachable: deleted.
+  assert.fieldEquals("Domain", legacyId, "owner", EMPTY);
+  assert.fieldEquals("ENSv2NamePath", legacyId, "active", "false");
+});
+
+test("subname copy: nested registries linked before the top-level switch are backfilled too", () => {
+  dataSourceMock.setNetwork("sepolia");
+  const NEW_REGISTRY = "0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2";
+  const NEW_CHILD_REGISTRY = "0xc2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2";
+
+  let baseHash = Bytes.fromI32(510);
+  let aHash = Bytes.fromI32(511);
+  let bHash = Bytes.fromI32(512);
+  // a.<NEW> -> NEW_CHILD, and b registered in NEW_CHILD, all before any link.
+  handleLabelRegistered(createLabelRegisteredEvent(NEW_REGISTRY, slotToken(1), aHash, "a"));
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(NEW_REGISTRY, slotToken(1), NEW_CHILD_REGISTRY));
+  handleLabelRegistered(createLabelRegisteredEvent(NEW_CHILD_REGISTRY, slotToken(1), bHash, "b"));
+
+  handleLabelRegistered(createLabelRegisteredEvent(ROOT_REGISTRY, slotToken(1), baseHash, "base"));
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(ROOT_REGISTRY, slotToken(1), NEW_REGISTRY));
+
+  let aId = pathNamehash(rootPath(baseHash), aHash);
+  let bId = pathNamehash(aId, bHash).toHexString();
+  assert.fieldEquals("Domain", aId.toHexString(), "name", "a.base");
+  assert.fieldEquals("Domain", bId, "name", "b.a.base");
+  assert.fieldEquals("Domain", bId, "parent", aId.toHexString());
+  assert.fieldEquals("Domain", aId.toHexString(), "subdomainCount", "1");
+
+  // A registration in NEW_CHILD after the link is projected as before.
+  let cHash = Bytes.fromI32(513);
+  handleLabelRegistered(createLabelRegisteredEvent(NEW_CHILD_REGISTRY, slotToken(2), cHash, "c"));
+  assert.fieldEquals("Domain", pathNamehash(aId, cHash).toHexString(), "name", "c.a.base");
+  assert.fieldEquals("Domain", aId.toHexString(), "subdomainCount", "2");
+});
+
+function setupUnregisterScenario(parentRegistry: string, childRegistry: string): Bytes {
+  let baseHash = Bytes.fromI32(520);
+  let xHash = Bytes.fromI32(521);
+  let yHash = Bytes.fromI32(522);
+  handleLabelRegistered(createLabelRegisteredEvent(ROOT_REGISTRY, slotToken(1), baseHash, "base"));
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(ROOT_REGISTRY, slotToken(1), parentRegistry));
+  handleLabelRegistered(createLabelRegisteredEvent(parentRegistry, slotToken(1), xHash, "x"));
+  handleResolverUpdated(
+    createResolverUpdatedEvent(parentRegistry, slotToken(1), "0x999999999999999999999999999999999999999e")
+  );
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(parentRegistry, slotToken(1), childRegistry));
+  handleLabelRegistered(createLabelRegisteredEvent(childRegistry, slotToken(1), yHash, "y"));
+  let xPath = pathNamehash(rootPath(baseHash), xHash);
+  assert.fieldEquals("Domain", pathNamehash(xPath, yHash).toHexString(), "owner", OWNER.toLowerCase());
+  handleLabelUnregistered(createLabelUnregisteredEvent(parentRegistry, slotToken(1)));
+  return xPath;
+}
+
+test("unregister on a registry with the fixed UserRegistry implementation clears resolver and subregistry and unlinks the child registry", () => {
+  dataSourceMock.setNetwork("sepolia");
+  const PARENT = "0xd1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1";
+  const CHILD = "0xd2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2";
+  let parent = Address.fromString(PARENT);
+  getOrCreateRegistry(
+    parent,
+    parent,
+    newMockEvent().block,
+    Address.fromString("0x0822d199699f0a9D378617817a1439663234a126")
+  );
+
+  let xPath = setupUnregisterScenario(PARENT, CHILD);
+  let xSlot = slotIdFor(PARENT, 1);
+  assert.fieldEquals("ENSv2NameSlot", xSlot, "subregistry", "null");
+  assert.fieldEquals("ENSv2NameSlot", xSlot, "resolver", "null");
+  let ns = namespaceId(Address.fromString(CHILD), xPath).toHexString();
+  assert.fieldEquals("ENSv2Namespace", ns, "active", "false");
+  let yId = pathNamehash(xPath, Bytes.fromI32(522)).toHexString();
+  assert.fieldEquals("ENSv2NamePath", yId, "active", "false");
+  assert.fieldEquals("Domain", yId, "owner", EMPTY);
+});
+
+test("unregister on an older registry implementation keeps resolver, subregistry and the child namespace, as on chain", () => {
+  dataSourceMock.setNetwork("sepolia");
+  const PARENT = "0xe1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1";
+  const CHILD = "0xe2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2";
+
+  let xPath = setupUnregisterScenario(PARENT, CHILD);
+  let xSlot = slotIdFor(PARENT, 1);
+  assert.fieldEquals("ENSv2NameSlot", xSlot, "subregistry", Address.fromString(CHILD).toHexString());
+  let ns = namespaceId(Address.fromString(CHILD), xPath).toHexString();
+  assert.fieldEquals("ENSv2Namespace", ns, "active", "true");
 });

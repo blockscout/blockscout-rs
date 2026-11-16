@@ -213,9 +213,47 @@ export function getAdditionalUserRegistryImplAddresses(): Address[] {
   if (network == "mainnet") {
     return [
       Address.fromString("0xC927bCaA77cd7bE283518760896Be0CF3Cfbe08d"), // UserRegistryImpl used by the ENS app / ENSjs
+      // Later UserRegistryImpl deployments (contracts-v2 deployments/mainnet*):
+      Address.fromString("0x75ff9adbcfce2469b097ac68f6ae650eae1351bb"), // mainnet-redeploy-20261026
+      Address.fromString("0x664814F5bD5E6E617742029fA781bbee6c230Dc0"),
+      Address.fromString("0x43d937F91eC7597c096A1e2e6B7cbd2ddcAEb23D"),
+      Address.fromString("0x86013382f943c6214e1433d1e64936f4000925cb"), // fixed impl (mainnet-adhoc)
+    ];
+  }
+  if (network == "sepolia") {
+    return [
+      Address.fromString("0x0822d199699f0a9D378617817a1439663234a126"), // fixed impl
     ];
   }
   return [];
+}
+
+// UserRegistry implementations whose unregister() also clears the slot's
+// resolver and subregistry without emitting events (contracts-v2 #501). The
+// fixed impl cannot be upgraded into from earlier ones (empty upgradeable
+// list), so a registry runs it exactly when its proxy was deployed with it.
+export function getUnregisterClearingImplAddresses(): Address[] {
+  let network = dataSource.network();
+  if (network == "mainnet") {
+    return [Address.fromString("0x86013382f943c6214e1433d1e64936f4000925cb")];
+  }
+  if (network == "sepolia") {
+    return [Address.fromString("0x0822d199699f0a9D378617817a1439663234a126")];
+  }
+  return [];
+}
+
+export function clearsOnUnregister(implementation: Bytes | null): boolean {
+  if (!implementation) {
+    return false;
+  }
+  let impls = getUnregisterClearingImplAddresses();
+  for (let i = 0; i < impls.length; i++) {
+    if (implementation!.equals(impls[i])) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function isUserRegistryImpl(implementation: Bytes): boolean {

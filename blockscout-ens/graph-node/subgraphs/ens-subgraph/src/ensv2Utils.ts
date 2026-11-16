@@ -11,8 +11,10 @@ import { Address, BigInt, Bytes, crypto } from "@graphprotocol/graph-ts";
 import { concat, i32ToBytes, uint256ToByteArray } from "./utils";
 import {
   ENSv2Namespace,
+  ENSv2NameSlot,
   ENSv2Registry,
   ENSv2RegistryNamespaceIndex,
+  ENSv2RegistrySlotIndex,
 } from "./types/schema";
 
 // 2^32, used to zero the lower 32 bits of a BigInt without relying on
@@ -89,6 +91,10 @@ export function registryNamespaceIndexId(
   return Bytes.fromByteArray(concat(registryId, i32ToBytes(index)));
 }
 
+export function registrySlotIndexId(registryId: Bytes, index: i32): Bytes {
+  return Bytes.fromByteArray(concat(registryId, i32ToBytes(index)));
+}
+
 export function pathNamespaceIndexId(pathId: Bytes, index: i32): Bytes {
   return Bytes.fromByteArray(concat(pathId, i32ToBytes(index)));
 }
@@ -144,5 +150,25 @@ export function appendRegistryNamespaceIndex(
   index.save();
 
   registry.namespaceCount = registry.namespaceCount + 1;
+  registry.save();
+}
+
+// Records a newly created slot on its registry, so a namespace linked after
+// the slot was registered can still find it (ensv2Paths.backfillNamespace).
+// Loads the registry fresh: callers may hold an older snapshot of it.
+export function appendRegistrySlotIndex(slot: ENSv2NameSlot): void {
+  let registry = ENSv2Registry.load(slot.registry);
+  if (registry == null) {
+    return;
+  }
+  let index = new ENSv2RegistrySlotIndex(
+    registrySlotIndexId(registry.id, registry.slotCount)
+  );
+  index.registry = registry.id;
+  index.index = registry.slotCount;
+  index.slot = slot.id;
+  index.save();
+
+  registry.slotCount = registry.slotCount + 1;
   registry.save();
 }

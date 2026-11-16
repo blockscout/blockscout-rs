@@ -12,7 +12,9 @@ import { Address, BigInt, Bytes, ethereum, log } from "@graphprotocol/graph-ts";
 
 import { getOrCreateRegistry, getOrCreateRootNamespace } from "./ensv2Discovery";
 import {
+  appendRegistrySlotIndex,
   nameSlotId,
+  namespaceLinkId,
   resourceId,
   slotPathIndexId,
   toSlotId,
@@ -26,6 +28,7 @@ import {
   i32ToBytes,
 } from "./utils";
 import {
+  clearsOnUnregister,
   getEthRegistryAddress,
   isMigrationController,
 } from "./ensv2Constants";
@@ -44,6 +47,7 @@ import {
   handleResolverUpdated as handleResolverUpdatedPaths,
   handleSubregistryUpdated as handleSubregistryUpdatedPaths,
   clearProjectedDomainResolversForSlot,
+  deactivateNamespacesFromParentSlot,
   materializePathsForSlot,
 } from "./ensv2Paths";
 import {
@@ -53,6 +57,7 @@ import {
   ENSv2LabelUnregistered,
   ENSv2NamePath,
   ENSv2NameSlot,
+  ENSv2NamespaceLink,
   ENSv2Registry,
   ENSv2Resource,
   ENSv2SlotPathIndex,
@@ -143,6 +148,7 @@ export function handleLabelRegistered(event: LabelRegistered): void {
   // this exact case (PermissionedRegistry.sol::_register, ROLE_WAS_RESERVED),
   // so check the pre-mutation status rather than mere row existence.
   let isReRegistration = slot != null && slot.status != "RESERVED";
+  let isNewSlot = false;
   if (slot == null) {
     slot = new ENSv2NameSlot(id);
     slot.registry = registryId;
@@ -150,6 +156,7 @@ export function handleLabelRegistered(event: LabelRegistered): void {
     slot.pathCount = 0;
     slot.createdAt = event.block.timestamp;
     slot.createdAtBlock = event.block.number;
+    isNewSlot = true;
   }
 
   slot.labelhash = event.params.labelHash;
@@ -179,6 +186,9 @@ export function handleLabelRegistered(event: LabelRegistered): void {
   slot.updatedAt = event.block.timestamp;
   slot.updatedAtBlock = event.block.number;
   slot.save();
+  if (isNewSlot) {
+    appendRegistrySlotIndex(slot);
+  }
 
   clearProjectedDomainResolversForSlot(slot);
 
@@ -219,6 +229,7 @@ export function handleLabelReserved(event: LabelReserved): void {
   let id = nameSlotId(registryId, slotId);
 
   let slot = ENSv2NameSlot.load(id);
+  let isNewSlot = false;
   if (slot == null) {
     slot = new ENSv2NameSlot(id);
     slot.registry = registryId;
@@ -227,6 +238,7 @@ export function handleLabelReserved(event: LabelReserved): void {
     slot.migratedFromV1 = false;
     slot.createdAt = event.block.timestamp;
     slot.createdAtBlock = event.block.number;
+    isNewSlot = true;
   }
 
   slot.labelhash = event.params.labelHash;
@@ -238,6 +250,9 @@ export function handleLabelReserved(event: LabelReserved): void {
   slot.updatedAt = event.block.timestamp;
   slot.updatedAtBlock = event.block.number;
   slot.save();
+  if (isNewSlot) {
+    appendRegistrySlotIndex(slot);
+  }
   // LabelReserved is represented as current slot state only.
 }
 
@@ -299,6 +314,32 @@ export function handleLabelUnregistered(event: LabelUnregistered): void {
     path.save();
     if (wasActive) {
       retireProjectedDomain(path, slot, event.block.timestamp);
+    }
+  }
+
+  // Registries on an implementation with contracts-v2 #501 also clear the
+  // slot's resolver and subregistry on unregister, without emitting
+  // ResolverUpdated or SubregistryUpdated. Mirror it, and unlink the
+  // subregistry's namespaces, which no longer hang off this name. Older
+  // implementations keep both on chain (and restore them on a revive), so
+  // their slots keep them here too.
+  let registry = ENSv2Registry.load(registryId);
+  if (registry != null && clearsOnUnregister(registry.implementation)) {
+    let previousSubregistry = slot.subregistry;
+    slot.resolver = null;
+    slot.resolverAddress = null;
+    slot.subregistry = null;
+    slot.subregistryAddress = null;
+    slot.save();
+    if (previousSubregistry) {
+      let link = ENSv2NamespaceLink.load(
+        namespaceLinkId(registryId, slot.slotId, previousSubregistry)
+      );
+      if (link != null) {
+        link.active = false;
+        link.save();
+      }
+      deactivateNamespacesFromParentSlot(slot, previousSubregistry, event.block);
     }
   }
 

@@ -496,7 +496,7 @@ test("registrar-before-registry and registrar-after-registry orderings produce i
   assert.fieldEquals("ENSv2Registration", slotIdB, "expiryDate", "2000000000");
 });
 
-test("late-link + Domain projection combined: pre-existing child registration stays unprojected, a fresh post-link registration is fully projected", () => {
+test("late-link + Domain projection combined: a pre-existing child registration is backfilled at the link, a fresh post-link registration is projected at registration", () => {
   dataSourceMock.setNetwork("sepolia");
 
   const LATE_CHILD_REGISTRY = "0x777777777777777777777777777777777777777f";
@@ -528,12 +528,11 @@ test("late-link + Domain projection combined: pre-existing child registration st
   let baseNamehash = pathNamehash(Bytes.fromHexString(ROOT_NAMEHASH), baseLabelHash);
   let basePathId = baseNamehash.toHexString();
 
-  // The pre-existing registration is still not backfilled: no Domain row
-  // exists at the id it would have gotten had it been materialised now.
-  let wouldBePathId = pathNamehash(baseNamehash, preexistingLabelHash).toHexString();
-  assert.notInStore("Domain", wouldBePathId);
-  assert.notInStore("ENSv2NamePath", wouldBePathId);
-  assert.fieldEquals("ENSv2NameSlot", preexistingSlotId, "pathCount", "0");
+  // The link backfills the pre-existing registration.
+  let preexistingPathId = pathNamehash(baseNamehash, preexistingLabelHash).toHexString();
+  assert.fieldEquals("Domain", preexistingPathId, "name", "preexisting.latebase");
+  assert.fieldEquals("ENSv2NamePath", preexistingPathId, "active", "true");
+  assert.fieldEquals("ENSv2NameSlot", preexistingSlotId, "pathCount", "1");
 
   // A fresh registration in the same child registry, after the link, is
   // projected into Domain; its RootRegistry parent remains native-only.

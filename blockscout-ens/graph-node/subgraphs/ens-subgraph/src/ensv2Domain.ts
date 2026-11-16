@@ -16,7 +16,7 @@
 // and later ENSv2 transfers, renewals and unregistrations keep the row in
 // sync in every registry. ENSv1 events for a governed node only write their
 // history rows.
-import { BigInt, Bytes, log, store } from "@graphprotocol/graph-ts";
+import { BigInt, Bytes, ethereum, log, store } from "@graphprotocol/graph-ts";
 import {
   checkValidLabel,
   clampLegacyExpiry,
@@ -40,7 +40,6 @@ import {
   Registration,
   WrappedDomain,
 } from "./types/schema";
-import { LabelRegistered } from "./types/RootRegistry/PermissionedRegistry";
 import { syncRegistrationFromSlot } from "./ensv2Registrar";
 
 // Recovers a slot's namehash (Domain.id) without a ENSv2NamePath in hand —
@@ -279,8 +278,8 @@ function linkProjectedDomainToParent(
 // callers invoke this on an active-flag transition: -1 when a projected path
 // is deactivated (LabelUnregistered, namespace unlink), +1 when a previously
 // deactivated path is reactivated by a re-registration. Creation is counted
-// separately by linkProjectedDomainToParent. Root paths and late-linked paths
-// have no Domain projection and are ignored.
+// separately by linkProjectedDomainToParent. Root paths have no Domain
+// projection and are ignored.
 export function adjustParentSubdomainCount(
   path: ENSv2NamePath,
   delta: i32
@@ -309,7 +308,7 @@ export function adjustParentSubdomainCount(
 function syncEthRegistration(
   slot: ENSv2NameSlot,
   path: ENSv2NamePath,
-  event: LabelRegistered,
+  event: ethereum.Event,
   isV1Migration: boolean
 ): void {
   let id = slot.labelhash.toHexString();
@@ -342,7 +341,7 @@ function syncEthRegistration(
 export function projectPathToDomain(
   path: ENSv2NamePath,
   slot: ENSv2NameSlot,
-  event: LabelRegistered,
+  event: ethereum.Event,
   isV1Migration: boolean,
   pathReactivated: boolean
 ): void {

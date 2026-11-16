@@ -39,7 +39,7 @@ export function isGovernedByEnsv2(node: Bytes, blockNumber: BigInt): boolean {
   if (path == null || !path.active) {
     return false;
   }
-  // RootRegistry paths (eth, reverse) and late-linked names have no Domain
+  // RootRegistry paths (eth, reverse) have no Domain
   // projection; ENSv1 keeps writing those rows.
   if (!path.domain) {
     return false;

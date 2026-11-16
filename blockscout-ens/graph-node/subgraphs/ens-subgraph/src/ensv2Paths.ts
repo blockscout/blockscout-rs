@@ -1,21 +1,19 @@
-// Namespace/path materialisation — the load-bearing cost-bound mechanism.
-// Two complementary bounded loops implement it, and BOTH are needed:
-//
-//   handleSubregistryUpdated creates namespaces by looping over the PARENT
-//   slot's existing paths (bounded by parentSlot.pathCount) — never the
-//   child registry's slots. This is what makes a late link cheap.
+// Namespace/path materialisation.
 //
 //   materializePathsForSlot (called from ensv2Registry.ts::handleLabelRegistered)
 //   creates paths by looping over the REGISTERING slot's own registry's
-//   existing namespaces (bounded by registry.namespaceCount). This is what
-//   makes "project into Domain only when the namespace existed at
-//   registration time" true: a namespace linked after a name is already
-//   registered simply isn't in that loop yet, so no path gets materialised
-//   for it.
+//   existing namespaces (bounded by registry.namespaceCount).
 //
-// Both directions must remain bounded; this mapping never performs recursive
-// backfills.
-import { Address, Bytes, ethereum, log } from "@graphprotocol/graph-ts";
+//   handleSubregistryUpdated creates namespaces by looping over the PARENT
+//   slot's existing paths (bounded by parentSlot.pathCount). A namespace
+//   that is new or reactivated is then backfilled (backfillNamespace): every
+//   name already registered in the child registry gets its path and Domain
+//   projection, and so do the registries those names link to in turn. This
+//   is the subname copy flow (deploy a registry, register the names, then
+//   point the parent at it), where every name is registered before the link.
+//   The backfill is bounded by the child registry's slotCount per level and
+//   by MAX_BACKFILL_DEPTH levels.
+import { Address, BigInt, Bytes, ethereum, log } from "@graphprotocol/graph-ts";
 
 import { checkValidLabel, createEventID } from "./utils";
 import {
@@ -28,6 +26,7 @@ import {
   pathNamehash,
   pathNamespaceIndexId,
   registryNamespaceIndexId,
+  registrySlotIndexId,
   slotPathIndexId,
   toSlotId,
 } from "./ensv2Utils";
@@ -51,13 +50,14 @@ import {
   ENSv2PathNamespaceIndex,
   ENSv2Registry,
   ENSv2RegistryNamespaceIndex,
+  ENSv2RegistrySlotIndex,
   ENSv2ResolverUpdate,
   ENSv2Resource,
   ENSv2SlotPathIndex,
   ENSv2SubregistryUpdate,
+  ENSv2Token,
 } from "./types/schema";
 import {
-  LabelRegistered,
   ParentUpdated,
   ResolverUpdated,
   SubregistryUpdated,
@@ -143,7 +143,8 @@ function createOrReactivateNamespace(
   childRegistry: ENSv2Registry,
   parentSlot: ENSv2NameSlot,
   parentPath: ENSv2NamePath,
-  event: SubregistryUpdated
+  parentTokenId: BigInt,
+  event: ethereum.Event
 ): ENSv2Namespace {
   let id = namespaceId(childRegistry.id, parentPath.namehash);
   let namespace = ENSv2Namespace.load(id);
@@ -158,7 +159,7 @@ function createOrReactivateNamespace(
   namespace.parentSlot = parentSlot.id;
   namespace.parentRegistry = parentSlot.registry;
   namespace.parentSlotId = parentSlot.slotId;
-  namespace.parentTokenId = event.params.tokenId;
+  namespace.parentTokenId = parentTokenId;
   let parentResourceId = parentSlot.currentResource;
   if (parentResourceId) {
     let resourceEntity = ENSv2Resource.load(parentResourceId);
@@ -237,7 +238,7 @@ function upsertNamespaceLink(
 // Reconstructs the same namespace ids the creation loop would have produced
 // (childRegistry + each existing path's namehash) and deactivates them —
 // never deletes.
-function deactivateNamespacesFromParentSlot(
+export function deactivateNamespacesFromParentSlot(
   parentSlot: ENSv2NameSlot,
   previousChildRegistryId: Bytes,
   block: ethereum.Block
@@ -382,20 +383,130 @@ export function handleSubregistryUpdated(event: SubregistryUpdated): void {
       continue;
     }
 
-    let isNewNamespace =
-      ENSv2Namespace.load(namespaceId(childRegistry.id, parentPath.namehash)) ==
-      null;
-    let namespace = createOrReactivateNamespace(
+    linkAndBackfillNamespace(
       childRegistry,
       parentSlot,
       parentPath,
-      event
+      event.params.tokenId,
+      event,
+      0
     );
-    if (isNewNamespace) {
-      appendRegistryNamespaceIndex(childRegistry, namespace);
-      appendPathNamespaceIndex(parentPath, namespace);
+  }
+}
+
+// Names nested deeper than this below a late link are left unprojected.
+// Guards against registries that (directly or indirectly) link to
+// themselves, whose namehashes would otherwise grow without end.
+const MAX_BACKFILL_DEPTH = 16;
+
+// Creates or reactivates the namespace (childRegistry under parentPath).
+// When it was not already active, names registered in childRegistry before
+// the link have no path under it yet, so backfill them.
+function linkAndBackfillNamespace(
+  childRegistry: ENSv2Registry,
+  parentSlot: ENSv2NameSlot,
+  parentPath: ENSv2NamePath,
+  parentTokenId: BigInt,
+  event: ethereum.Event,
+  depth: i32
+): void {
+  let existing = ENSv2Namespace.load(
+    namespaceId(childRegistry.id, parentPath.namehash)
+  );
+  let wasActive = existing != null && existing.active;
+  let namespace = createOrReactivateNamespace(
+    childRegistry,
+    parentSlot,
+    parentPath,
+    parentTokenId,
+    event
+  );
+  if (existing == null) {
+    appendRegistryNamespaceIndex(childRegistry, namespace);
+    appendPathNamespaceIndex(parentPath, namespace);
+  }
+  if (!wasActive) {
+    backfillNamespace(childRegistry.id, namespace, event, depth);
+  }
+}
+
+// Projects every name already REGISTERED in the namespace's registry, then
+// follows each one's subregistry. Same projection as a registration, except
+// that the slot's resolver is attached here (at registration time the
+// registry emits ResolverUpdated afterwards instead).
+function backfillNamespace(
+  registryId: Bytes,
+  namespace: ENSv2Namespace,
+  event: ethereum.Event,
+  depth: i32
+): void {
+  if (depth >= MAX_BACKFILL_DEPTH) {
+    log.warning("backfillNamespace: depth limit reached at namespace {}", [
+      namespace.id.toHexString(),
+    ]);
+    return;
+  }
+  // Fresh load: the caller's snapshot may predate namespace index appends.
+  let registry = ENSv2Registry.load(registryId);
+  if (registry == null) {
+    return;
+  }
+  // The RootRegistry has no parent, and the ETHRegistry is linked once, at
+  // deployment, before any .eth registration.
+  if (registry.kind == "ROOT" || registry.kind == "ETH") {
+    return;
+  }
+  let slotCount = registry.slotCount;
+  for (let i = 0; i < slotCount; i++) {
+    let index = ENSv2RegistrySlotIndex.load(registrySlotIndexId(registryId, i));
+    if (index == null) {
+      continue;
+    }
+    let slot = ENSv2NameSlot.load(index.slot);
+    if (slot == null || slot.status != "REGISTERED") {
+      continue;
+    }
+    let path = materializePathInNamespace(
+      registry,
+      namespace,
+      slot,
+      event,
+      slot.migratedFromV1
+    );
+    if (path.domain != null) {
+      let resolverAddress = slot.resolverAddress;
+      if (resolverAddress) {
+        attachDomainResolver(Address.fromBytes(resolverAddress), path.namehash);
+      }
+    }
+    let subregistry = slot.subregistry;
+    if (subregistry) {
+      let childRegistry = getOrCreateRegistry(
+        subregistry,
+        Address.fromBytes(subregistry),
+        event.block
+      );
+      linkAndBackfillNamespace(
+        childRegistry,
+        slot,
+        path,
+        currentTokenIdOf(slot),
+        event,
+        depth + 1
+      );
     }
   }
+}
+
+function currentTokenIdOf(slot: ENSv2NameSlot): BigInt {
+  let tokenEntityId = slot.currentToken;
+  if (tokenEntityId) {
+    let token = ENSv2Token.load(tokenEntityId);
+    if (token != null) {
+      return token.tokenId;
+    }
+  }
+  return slot.slotId;
 }
 
 // The other bounded loop (see file header): iterates the REGISTERING
@@ -405,7 +516,7 @@ export function handleSubregistryUpdated(event: SubregistryUpdated): void {
 export function materializePathsForSlot(
   registry: ENSv2Registry,
   slot: ENSv2NameSlot,
-  event: LabelRegistered,
+  event: ethereum.Event,
   isV1Migration: boolean
 ): void {
   for (let i = 0; i < registry.namespaceCount; i++) {
@@ -419,55 +530,67 @@ export function materializePathsForSlot(
     if (namespace == null || !namespace.active) {
       continue;
     }
+    materializePathInNamespace(registry, namespace, slot, event, isV1Migration);
+  }
+}
 
-    let pathId = pathNamehash(namespace.baseNamehash, slot.labelhash);
-    let path = ENSv2NamePath.load(pathId);
-    let pathReactivated = false;
-    if (path == null) {
-      path = materializeNamePath(pathId, namespace, slot, event);
+// Materialises (or rebinds and reactivates) the slot's path under one
+// namespace and projects it.
+function materializePathInNamespace(
+  registry: ENSv2Registry,
+  namespace: ENSv2Namespace,
+  slot: ENSv2NameSlot,
+  event: ethereum.Event,
+  isV1Migration: boolean
+): ENSv2NamePath {
+  let pathId = pathNamehash(namespace.baseNamehash, slot.labelhash);
+  let path = ENSv2NamePath.load(pathId);
+  let pathReactivated = false;
+  if (path == null) {
+    path = materializeNamePath(pathId, namespace, slot, event);
+    appendSlotPathIndex(slot, path);
+    appendNamespacePathIndex(namespace, path);
+  } else {
+    // A path id is the namehash, so a parent that switched its subregistry
+    // to a new registry hands the same path to the new registry's slot.
+    // Rebind it, or the new slot's transfers, renewals and unregistration
+    // never reach the projected Domain.
+    if (!path.slot.equals(slot.id)) {
+      path.slot = slot.id;
+      path.registry = slot.registry;
+      path.namespace = namespace.id;
       appendSlotPathIndex(slot, path);
       appendNamespacePathIndex(namespace, path);
-    } else {
-      // A path id is the namehash, so a parent that switched its subregistry
-      // to a new registry hands the same path to the new registry's slot.
-      // Rebind it, or the new slot's transfers, renewals and unregistration
-      // never reach the projected Domain.
-      if (!path.slot.equals(slot.id)) {
-        path.slot = slot.id;
-        path.registry = slot.registry;
-        path.namespace = namespace.id;
-        appendSlotPathIndex(slot, path);
-        appendNamespacePathIndex(namespace, path);
-      }
-      // Reactivation of a path deactivated by LabelUnregistered or a
-      // namespace unlink: the projected Domain row (if any) is reused below,
-      // so the parent's subdomainCount is restored here, before projection,
-      // on the inactive -> active transition only.
-      if (!path.active) {
-        adjustParentSubdomainCount(path, 1);
-        pathReactivated = true;
-      }
-      path.active = true;
-      path.updatedAt = event.block.timestamp;
-      path.updatedAtBlock = event.block.number;
-      path.save();
     }
-
-    // RootRegistry paths are native ENSv2 metadata for the root namespace,
-    // not compatibility projections. Their IDs are ordinary ENSv1 namehashes
-    // (for example, <eth> and <reverse>), so projecting them would overwrite
-    // the existing ENSv1 Domain rows for those nodes.
-    if (registry.kind != "ROOT") {
-      projectPathToDomain(path, slot, event, isV1Migration, pathReactivated);
+    // Reactivation of a path deactivated by LabelUnregistered or a
+    // namespace unlink: the projected Domain row (if any) is reused below,
+    // so the parent's subdomainCount is restored here, before projection,
+    // on the inactive -> active transition only.
+    if (!path.active) {
+      adjustParentSubdomainCount(path, 1);
+      pathReactivated = true;
     }
+    path.active = true;
+    path.updatedAt = event.block.timestamp;
+    path.updatedAtBlock = event.block.number;
+    path.save();
   }
+
+  // RootRegistry paths are native ENSv2 metadata for the root namespace,
+  // not compatibility projections. Their IDs are ordinary ENSv1 namehashes
+  // (for example, <eth> and <reverse>), so projecting them would overwrite
+  // the existing ENSv1 Domain rows for those nodes.
+  if (registry.kind != "ROOT") {
+    projectPathToDomain(path, slot, event, isV1Migration, pathReactivated);
+  }
+  return path;
 }
 
 function materializeNamePath(
   pathId: Bytes,
   namespace: ENSv2Namespace,
   slot: ENSv2NameSlot,
-  event: LabelRegistered
+  event: ethereum.Event
 ): ENSv2NamePath {
   let path = new ENSv2NamePath(pathId);
   path.slot = slot.id;
@@ -540,7 +663,7 @@ export function handleResolverUpdated(event: ResolverUpdated): void {
   slot.save();
 
   // Keep the existing compatibility projection synchronized with the native
-  // slot. The bounded path index deliberately excludes late-linked names.
+  // slot.
   for (let i = 0; i < slot.pathCount; i++) {
     let pathIndex = ENSv2SlotPathIndex.load(slotPathIndexId(slot.id, i));
     if (pathIndex == null) {

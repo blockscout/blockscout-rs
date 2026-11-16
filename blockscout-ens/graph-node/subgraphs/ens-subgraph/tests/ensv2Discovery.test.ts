@@ -189,8 +189,9 @@ test("handleProxyDeployed is idempotent for a duplicate ProxyDeployed on the sam
 const MAINNET_USER_REGISTRY_IMPL_ARTIFACT = "0xfaa23592aca10a6d8875b18ea86954e8eb6d8d72";
 const MAINNET_USER_REGISTRY_IMPL_APP = "0xC927bCaA77cd7bE283518760896Be0CF3Cfbe08d";
 const MAINNET_USER_REGISTRY_IMPL_OLD = "0x75ff9adbcfce2469b097ac68f6ae650eae1351bb";
+const MAINNET_USER_REGISTRY_IMPL_FIXED = "0x86013382f943c6214e1433d1e64936f4000925cb";
 
-test("mainnet: both live UserRegistry implementations classify as USER, the superseded one stays UNKNOWN", () => {
+test("mainnet: every known UserRegistry implementation classifies as USER, an unknown one stays UNKNOWN", () => {
   dataSourceMock.setNetwork("mainnet");
 
   let a = "0x55555555555555555555555555555555555555aa";
@@ -203,7 +204,15 @@ test("mainnet: both live UserRegistry implementations classify as USER, the supe
 
   let c = "0x55555555555555555555555555555555555555cc";
   handleProxyDeployed(createProxyDeployedEvent(c, MAINNET_USER_REGISTRY_IMPL_OLD));
-  assert.fieldEquals("ENSv2Registry", Address.fromString(c).toHexString(), "kind", "UNKNOWN");
+  assert.fieldEquals("ENSv2Registry", Address.fromString(c).toHexString(), "kind", "USER");
+
+  let d = "0x55555555555555555555555555555555555555dd";
+  handleProxyDeployed(createProxyDeployedEvent(d, MAINNET_USER_REGISTRY_IMPL_FIXED));
+  assert.fieldEquals("ENSv2Registry", Address.fromString(d).toHexString(), "kind", "USER");
+
+  let e = "0x55555555555555555555555555555555555555ee";
+  handleProxyDeployed(createProxyDeployedEvent(e, "0x1234567890123456789012345678901234567890"));
+  assert.fieldEquals("ENSv2Registry", Address.fromString(e).toHexString(), "kind", "UNKNOWN");
 
   dataSourceMock.setNetwork("sepolia");
 });

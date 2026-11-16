@@ -67,6 +67,7 @@ export function getOrCreateRegistry(
     registry.kind = kindForAddress(address, implementation);
     registry.implementation = implementation;
     registry.namespaceCount = 0;
+    registry.slotCount = 0;
     registry.discoveredAt = block.timestamp;
     registry.createdAtBlock = block.number;
     registry.updatedAtBlock = block.number;
