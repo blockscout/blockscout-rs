@@ -15,7 +15,7 @@ Every block below stands alone. Copy a chain block to add that chain, a bridge b
 
 | Bridge | Name | `type` / `indexer_type` | Contracts |
 | --- | --- | --- | --- |
-| `2004` | OP Interop (sepolia-devnet-4/5) | `op_interop` / `op_interop` | 4 |
+| `2004` | OP Interop (sepolia-devnet-4/5) | `op_interop` / `op_interop` | 6 |
 
 The endpoints answer HTTP 429 above about three calls per second, hence `max_rps` `2`. Use one RPC backend (or a consistently wired pool) per chain: nodes can disagree about the confirmed head.
 
@@ -88,10 +88,12 @@ INTERCHAIN_INDEXER_BRIDGES__2004__DOCS_URL='https://specs.optimism.io/interop/me
 ##### Contracts of bridge `2004`
 
 Every chain needs one entry of each `kind`: `cross_l2_inbox`
-(`0x4200000000000000000000000000000000000022`) and `l2_to_l2_messenger`
-(`0x4200000000000000000000000000000000000023`). The address must be that
+(`0x4200000000000000000000000000000000000022`), `l2_to_l2_messenger`
+(`0x4200000000000000000000000000000000000023`) and `superchain_eth_bridge`
+(`0x4200000000000000000000000000000000000024`). The address must be that
 predeploy. `version` is this service's grammar revision (`1` = `CrossL2Inbox`
-1.1.0 / `L2ToL2CrossDomainMessenger` 2.1.0), not an on-chain counter.
+1.1.0 / `L2ToL2CrossDomainMessenger` 2.1.0 / `SuperchainETHBridge` 2.0.0), not
+an on-chain counter.
 `started_at_block` is the chain's Lagoon activation block. There is no `ABI`
 variable: the events are pinned in code.
 
@@ -108,6 +110,12 @@ INTERCHAIN_INDEXER_BRIDGES__2004__CONTRACTS__420130019__0x4200000000000000000000
 ```
 
 ```bash
+# chain 420130019 (devnet 4), SuperchainETHBridge
+INTERCHAIN_INDEXER_BRIDGES__2004__CONTRACTS__420130019__0x4200000000000000000000000000000000000024__1__STARTED_AT_BLOCK=465679
+INTERCHAIN_INDEXER_BRIDGES__2004__CONTRACTS__420130019__0x4200000000000000000000000000000000000024__1__KIND=superchain_eth_bridge
+```
+
+```bash
 # chain 420130020 (devnet 5), CrossL2Inbox
 INTERCHAIN_INDEXER_BRIDGES__2004__CONTRACTS__420130020__0x4200000000000000000000000000000000000022__1__STARTED_AT_BLOCK=829213
 INTERCHAIN_INDEXER_BRIDGES__2004__CONTRACTS__420130020__0x4200000000000000000000000000000000000022__1__KIND=cross_l2_inbox
@@ -117,6 +125,12 @@ INTERCHAIN_INDEXER_BRIDGES__2004__CONTRACTS__420130020__0x4200000000000000000000
 # chain 420130020 (devnet 5), L2ToL2CrossDomainMessenger
 INTERCHAIN_INDEXER_BRIDGES__2004__CONTRACTS__420130020__0x4200000000000000000000000000000000000023__1__STARTED_AT_BLOCK=829213
 INTERCHAIN_INDEXER_BRIDGES__2004__CONTRACTS__420130020__0x4200000000000000000000000000000000000023__1__KIND=l2_to_l2_messenger
+```
+
+```bash
+# chain 420130020 (devnet 5), SuperchainETHBridge
+INTERCHAIN_INDEXER_BRIDGES__2004__CONTRACTS__420130020__0x4200000000000000000000000000000000000024__1__STARTED_AT_BLOCK=829213
+INTERCHAIN_INDEXER_BRIDGES__2004__CONTRACTS__420130020__0x4200000000000000000000000000000000000024__1__KIND=superchain_eth_bridge
 ```
 
 ## Indexer settings

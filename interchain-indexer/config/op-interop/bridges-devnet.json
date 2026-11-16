@@ -24,6 +24,13 @@
         "kind": "l2_to_l2_messenger"
       },
       {
+        "chain_id": 420130019,
+        "address": "0x4200000000000000000000000000000000000024",
+        "version": 1,
+        "started_at_block": 465679,
+        "kind": "superchain_eth_bridge"
+      },
+      {
         "chain_id": 420130020,
         "address": "0x4200000000000000000000000000000000000022",
         "version": 1,
@@ -36,6 +43,13 @@
         "version": 1,
         "started_at_block": 829213,
         "kind": "l2_to_l2_messenger"
+      },
+      {
+        "chain_id": 420130020,
+        "address": "0x4200000000000000000000000000000000000024",
+        "version": 1,
+        "started_at_block": 829213,
+        "kind": "superchain_eth_bridge"
       }
     ]
   }

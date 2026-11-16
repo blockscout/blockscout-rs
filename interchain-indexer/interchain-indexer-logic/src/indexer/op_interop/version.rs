@@ -19,21 +19,31 @@ pub(crate) const CROSS_L2_INBOX: Address = address!("420000000000000000000000000
 /// chain.
 pub(crate) const L2_TO_L2_MESSENGER: Address = address!("4200000000000000000000000000000000000023");
 
+/// `SuperchainETHBridge` predeploy, the same address on every member chain.
+pub(crate) const SUPERCHAIN_ETH_BRIDGE: Address =
+    address!("4200000000000000000000000000000000000024");
+
 /// The contract kinds this indexer reads; the `kind` of a `bridges.json`
 /// contract entry.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum OpInteropContractKind {
     CrossL2Inbox,
     L2ToL2Messenger,
+    SuperchainEthBridge,
 }
 
 impl OpInteropContractKind {
-    pub(crate) const ALL: [Self; 2] = [Self::CrossL2Inbox, Self::L2ToL2Messenger];
+    pub(crate) const ALL: [Self; 3] = [
+        Self::CrossL2Inbox,
+        Self::L2ToL2Messenger,
+        Self::SuperchainEthBridge,
+    ];
 
     pub(crate) fn as_str(&self) -> &'static str {
         match self {
             Self::CrossL2Inbox => "cross_l2_inbox",
             Self::L2ToL2Messenger => "l2_to_l2_messenger",
+            Self::SuperchainEthBridge => "superchain_eth_bridge",
         }
     }
 
@@ -42,6 +52,7 @@ impl OpInteropContractKind {
         match self {
             Self::CrossL2Inbox => CROSS_L2_INBOX,
             Self::L2ToL2Messenger => L2_TO_L2_MESSENGER,
+            Self::SuperchainEthBridge => SUPERCHAIN_ETH_BRIDGE,
         }
     }
 }
@@ -82,14 +93,26 @@ pub(crate) const SENT_MESSAGE_TOPIC0: B256 =
 pub(crate) const RELAYED_MESSAGE_TOPIC0: B256 =
     b256!("c270d73e26d2d39dee7ef92093555927e344e243415547ecc350b2b5385b68a2");
 
-/// The events this indexer reads. `as_str` is both the `event` metric label
-/// and `op_interop_legs.event_kind`.
+/// `SendETH(address,address,uint256,uint256)`
+pub(crate) const SEND_ETH_TOPIC0: B256 =
+    b256!("ed98a2ff78833375c368471a747cdf0633024dde3f870feb08a934ac5be83402");
+/// `RelayETH(address,address,uint256,uint256)`
+pub(crate) const RELAY_ETH_TOPIC0: B256 =
+    b256!("e5479bb8ebad3b9ac81f55f424a6289cf0a54ff2641708f41dcb2b26f264d359");
+/// `relayETH(address,address,uint256)` selector.
+pub(crate) const RELAY_ETH_SELECTOR: [u8; 4] = [0x4f, 0x0e, 0xdc, 0xc9];
+
+/// The events this indexer reads. `as_str` is the `event` metric label. For
+/// the messenger and inbox events it is also `op_interop_legs.event_kind`;
+/// `SendEth` and `RelayEth` are metric labels only and never reach the ledger.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[allow(clippy::enum_variant_names)] // the names mirror the on-chain events
 pub(crate) enum OpInteropEvent {
     ExecutingMessage,
     SentMessage,
     RelayedMessage,
+    SendEth,
+    RelayEth,
 }
 
 impl OpInteropEvent {
@@ -98,6 +121,8 @@ impl OpInteropEvent {
             Self::ExecutingMessage => "executing_message",
             Self::SentMessage => "sent_message",
             Self::RelayedMessage => "relayed_message",
+            Self::SendEth => "send_eth",
+            Self::RelayEth => "relay_eth",
         }
     }
 }
@@ -188,7 +213,30 @@ static L2_TO_L2_MESSENGER_V1: Grammar = Grammar {
     ],
 };
 
-static GRAMMARS: [&Grammar; 2] = [&CROSS_L2_INBOX_V1, &L2_TO_L2_MESSENGER_V1];
+/// Grammar revision 1: `SuperchainETHBridge` 2.0.0. Both events are
+/// diagnostics only; the transfer comes from the message payload.
+static SUPERCHAIN_ETH_BRIDGE_V1: Grammar = Grammar {
+    kind: OpInteropContractKind::SuperchainEthBridge,
+    version: 1,
+    events: &[
+        GrammarEvent {
+            event: OpInteropEvent::SendEth,
+            signature: "event SendETH(address indexed from, address indexed to, uint256 amount, uint256 destination)",
+            topic0: SEND_ETH_TOPIC0,
+        },
+        GrammarEvent {
+            event: OpInteropEvent::RelayEth,
+            signature: "event RelayETH(address indexed from, address indexed to, uint256 amount, uint256 source)",
+            topic0: RELAY_ETH_TOPIC0,
+        },
+    ],
+};
+
+static GRAMMARS: [&Grammar; 3] = [
+    &CROSS_L2_INBOX_V1,
+    &L2_TO_L2_MESSENGER_V1,
+    &SUPERCHAIN_ETH_BRIDGE_V1,
+];
 
 /// The grammar of `(kind, version)`. An unknown pair is a config error.
 pub(crate) fn grammar_for(kind: OpInteropContractKind, version: i16) -> Result<&'static Grammar> {
@@ -239,20 +287,28 @@ mod tests {
             L2_TO_L2_MESSENGER
         );
 
+        assert_eq!(
+            "superchain_eth_bridge"
+                .parse::<OpInteropContractKind>()
+                .unwrap(),
+            OpInteropContractKind::SuperchainEthBridge
+        );
+        assert_eq!(
+            OpInteropContractKind::SuperchainEthBridge.predeploy_address(),
+            SUPERCHAIN_ETH_BRIDGE
+        );
+
         // Kinds of later slices are not accepted yet: accepting and ignoring
         // them would make a typo indistinguishable from an unused kind.
-        for unknown in [
-            "superchain_eth_bridge",
-            "undelivered_message_exporter",
-            "CrossL2Inbox",
-            "",
-        ] {
+        for unknown in ["undelivered_message_exporter", "CrossL2Inbox", ""] {
             let err = unknown
                 .parse::<OpInteropContractKind>()
                 .expect_err("unknown kind rejected");
             let message = err.to_string();
             assert!(
-                message.contains("cross_l2_inbox") && message.contains("l2_to_l2_messenger"),
+                message.contains("cross_l2_inbox")
+                    && message.contains("l2_to_l2_messenger")
+                    && message.contains("superchain_eth_bridge"),
                 "the error must list the known kinds: {message}"
             );
         }
@@ -293,6 +349,19 @@ mod tests {
             None,
             "the inbox does not declare a messenger event"
         );
+        assert_eq!(
+            SUPERCHAIN_ETH_BRIDGE_V1.event_for_topic(&SEND_ETH_TOPIC0),
+            Some(OpInteropEvent::SendEth)
+        );
+        assert_eq!(
+            SUPERCHAIN_ETH_BRIDGE_V1.event_for_topic(&RELAY_ETH_TOPIC0),
+            Some(OpInteropEvent::RelayEth)
+        );
+        assert_eq!(
+            L2_TO_L2_MESSENGER_V1.event_for_topic(&SEND_ETH_TOPIC0),
+            None,
+            "the messenger does not declare a bridge event"
+        );
     }
 
     #[test]
@@ -303,5 +372,7 @@ mod tests {
         );
         assert_eq!(OpInteropEvent::SentMessage.as_str(), "sent_message");
         assert_eq!(OpInteropEvent::RelayedMessage.as_str(), "relayed_message");
+        assert_eq!(OpInteropEvent::SendEth.as_str(), "send_eth");
+        assert_eq!(OpInteropEvent::RelayEth.as_str(), "relay_eth");
     }
 }

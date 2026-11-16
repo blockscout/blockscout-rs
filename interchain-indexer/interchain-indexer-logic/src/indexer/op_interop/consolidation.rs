@@ -20,6 +20,7 @@ use crate::{
 };
 
 use super::{
+    eth_transfer::{EthPayload, RelayEthCheck, check_relay_eth, classify, transfer_model},
     metrics,
     types::{DestinationLeg, ExecutingLeg, LogRef, Message, SourceLeg},
     version::OpInteropEvent,
@@ -78,6 +79,50 @@ impl Consolidate for Message {
             );
         }
 
+        let payload = classify(source.sender, source.target, &source.message);
+
+        if let Some(destination) = destination {
+            let check = check_relay_eth(
+                &payload,
+                source.log.chain_id,
+                destination.relay_eth.as_ref(),
+            );
+            let kind = match check {
+                RelayEthCheck::Ok => None,
+                RelayEthCheck::Missing => Some("relay_eth_missing"),
+                RelayEthCheck::Mismatch => Some("relay_eth_mismatch"),
+            };
+            if let Some(kind) = kind {
+                metrics::OP_INTEROP_ETH_TRANSFER_ANOMALIES_TOTAL
+                    .with_label_values(&[key.bridge_id.to_string().as_str(), kind])
+                    .inc();
+                tracing::warn!(
+                    bridge_id = key.bridge_id,
+                    message_id = key.message_id,
+                    message_hash = %source.message_hash,
+                    src_tx_hash = %source.log.transaction_hash,
+                    dst_tx_hash = %destination.log.transaction_hash,
+                    kind,
+                    "OP interop RelayETH event is missing or disagrees with the ETH transfer \
+                     payload; the message completes anyway"
+                );
+            }
+        }
+
+        // Derived from the payload alone, at `initiated` and `completed` alike;
+        // the bridge events never change it.
+        let transfers = match &payload {
+            EthPayload::Transfer(transfer) => transfer_model(
+                key,
+                rows.source.chain_id,
+                rows.destination_chain_id,
+                transfer,
+            )
+            .into_iter()
+            .collect(),
+            EthPayload::NotBridgeMessage | EthPayload::Unrecognized => Vec::new(),
+        };
+
         let (status, is_final) = match destination {
             Some(_) => (MessageStatus::Completed, true),
             None => (MessageStatus::Initiated, false),
@@ -120,7 +165,7 @@ impl Consolidate for Message {
             is_final,
             replace_existing: false,
             message,
-            transfers: Vec::new(),
+            transfers,
             amb_confirmations: Vec::new(),
             amb_anomalies: Vec::new(),
             op_interop_legs: rows.leg_models(key, source, destination),
@@ -484,7 +529,11 @@ mod tests {
 
         assert!(!consolidated.is_final);
         assert!(!consolidated.replace_existing);
-        assert!(consolidated.transfers.is_empty());
+        assert_eq!(
+            consolidated.transfers.len(),
+            1,
+            "the ETH transfer, from the first flush"
+        );
         assert!(consolidated.amb_confirmations.is_empty());
         assert!(consolidated.amb_anomalies.is_empty());
 
@@ -523,6 +572,100 @@ mod tests {
                     }
                 }
             })
+        );
+    }
+
+    fn assert_fixture_transfer(consolidated: &ConsolidatedMessage) {
+        assert_eq!(consolidated.transfers.len(), 1);
+        let transfer = &consolidated.transfers[0];
+        let amount: sea_orm::prelude::BigDecimal = "1000000000000000000".parse().unwrap();
+        assert_eq!(value(&transfer.message_id), key().message_id);
+        assert_eq!(value(&transfer.bridge_id), BRIDGE_ID);
+        assert_eq!(value(&transfer.index), 0);
+        assert_eq!(value(&transfer.token_src_chain_id), SOURCE_CHAIN_ID as i64);
+        assert_eq!(
+            value(&transfer.token_dst_chain_id),
+            DESTINATION_CHAIN_ID as i64
+        );
+        assert_eq!(value(&transfer.token_src_address), Some(vec![0; 20]));
+        assert_eq!(value(&transfer.token_dst_address), Some(vec![0; 20]));
+        assert_eq!(value(&transfer.src_amount), Some(amount.clone()));
+        assert_eq!(value(&transfer.dst_amount), Some(amount));
+        assert_eq!(
+            value(&transfer.sender_address),
+            Some(Address::repeat_byte(0x11).to_vec())
+        );
+        assert_eq!(
+            value(&transfer.recipient_address),
+            Some(Address::repeat_byte(0x22).to_vec())
+        );
+    }
+
+    #[test]
+    fn test_consolidate_eth_source_only_has_one_transfer_and_keeps_bridge_addresses() {
+        let source = fixture_source();
+        let consolidated = consolidated(&Message {
+            source: Some(source.clone()),
+            destination: None,
+        });
+        assert_fixture_transfer(&consolidated);
+        assert_eq!(
+            value(&consolidated.message.sender_address),
+            Some(source.sender.to_vec()),
+            "the message row keeps the bridge address"
+        );
+    }
+
+    #[test]
+    fn test_consolidate_eth_both_legs_has_the_same_transfer() {
+        let consolidated = consolidated(&Message {
+            source: Some(fixture_source()),
+            destination: Some(fixture_destination()),
+        });
+        assert!(consolidated.is_final);
+        assert_fixture_transfer(&consolidated);
+    }
+
+    #[test]
+    fn test_consolidate_eth_without_relay_eth_still_completes_with_the_transfer() {
+        let mut destination = fixture_destination();
+        destination.relay_eth = None;
+        let consolidated = consolidated(&Message {
+            source: Some(fixture_source()),
+            destination: Some(destination),
+        });
+        assert_eq!(
+            value(&consolidated.message.status),
+            MessageStatus::Completed
+        );
+        assert_fixture_transfer(&consolidated);
+    }
+
+    #[test]
+    fn test_consolidate_non_bridge_message_has_no_transfer() {
+        let mut source = fixture_source();
+        source.sender = Address::repeat_byte(0x11);
+        let consolidated = consolidated(&Message {
+            source: Some(source),
+            destination: None,
+        });
+        assert!(consolidated.transfers.is_empty());
+    }
+
+    #[test]
+    fn test_consolidate_unrecognized_bridge_payload_has_no_transfer_but_consolidates() {
+        let mut source = fixture_source();
+        let mut message = source.message.to_vec();
+        message[0] ^= 0xff;
+        source.message = message.into();
+        let consolidated = consolidated(&Message {
+            source: Some(source),
+            destination: Some(fixture_destination()),
+        });
+        assert!(consolidated.transfers.is_empty());
+        assert_eq!(
+            value(&consolidated.message.status),
+            MessageStatus::Completed
         );
     }
 

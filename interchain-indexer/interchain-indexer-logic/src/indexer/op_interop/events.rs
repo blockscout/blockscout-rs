@@ -27,9 +27,10 @@ use crate::message_buffer::MessageBuffer;
 
 use super::{
     abi::{ContractKind, LogResolution, OpInteropRegistry, v1},
+    eth_transfer::{EthPayload, EthTransfer, classify},
     metrics,
     types::{
-        DestinationLeg, ExecutingLeg, LegOutcome, LogRef, Message, SourceLeg,
+        DestinationLeg, ExecutingLeg, LegOutcome, LogRef, Message, RelayEth, SourceLeg,
         key_from_message_hash, message_hash, payload_hash,
     },
     version::{L2_TO_L2_MESSENGER, OpInteropEvent, grammar_for},
@@ -82,6 +83,15 @@ pub(super) enum Observation {
     RelayUnpaired,
     /// A log whose topic belongs to another version window of its contract.
     WrongVersion,
+    /// A bridge-to-bridge `SentMessage` whose payload is not an ETH transfer
+    /// of the known grammar. The message is still indexed, without a transfer.
+    EthPayloadUnrecognized,
+    /// An ETH transfer message with no `SendETH` after it in its transaction.
+    SendEthMissing,
+    /// A `SendETH` with no ETH transfer message before it.
+    SendEthUnpaired,
+    /// A `SendETH` that disagrees with the ETH transfer message before it.
+    SendEthMismatch,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -164,6 +174,8 @@ enum Decoded {
         log: LogRef,
         event: v1::RelayedMessage,
     },
+    SendEth(v1::SendETH),
+    RelayEth(v1::RelayETH),
 }
 
 fn decode(
@@ -215,6 +227,18 @@ fn decode(
                 .inner
                 .data,
         },
+        OpInteropEvent::SendEth => Decoded::SendEth(
+            log.log_decode::<v1::SendETH>()
+                .context("failed to decode SendETH")?
+                .inner
+                .data,
+        ),
+        OpInteropEvent::RelayEth => Decoded::RelayEth(
+            log.log_decode::<v1::RelayETH>()
+                .context("failed to decode RelayETH")?
+                .inner
+                .data,
+        ),
     })
 }
 
@@ -226,6 +250,12 @@ fn decode(
 /// overwrites and a `RelayedMessage` consumes. Relays never nest, so a
 /// multicall is several `ExecutingMessage … RelayedMessage` groups in order.
 ///
+/// The ETH bridge events are paired by position, with the same single-slot
+/// scheme: a `SentMessage` carrying an ETH transfer payload fills the send
+/// slot and the `SendETH` after it consumes it; `RelayETH` fills the relay
+/// slot and the `RelayedMessage` after it consumes it. Both are diagnostics:
+/// they only ever add observations and `DestinationLeg.relay_eth`.
+///
 /// A decode failure is an `Err` for the whole transaction, with no actions.
 pub(super) fn plan_transaction(
     registry: &OpInteropRegistry,
@@ -235,6 +265,8 @@ pub(super) fn plan_transaction(
 ) -> Result<TxPlan> {
     let mut plan = TxPlan::default();
     let mut pending_exec: Option<ExecutingLeg> = None;
+    let mut pending_send_eth: Option<(EthTransfer, U256)> = None;
+    let mut pending_relay_eth: Option<RelayEth> = None;
 
     for log in logs {
         let Some(topic0) = log.topic0() else {
@@ -270,6 +302,8 @@ pub(super) fn plan_transaction(
         match decoded {
             Decoded::Executing(exec) => {
                 if exec.origin == L2_TO_L2_MESSENGER {
+                    // A new relay group starts.
+                    pending_relay_eth = None;
                     if pending_exec.replace(exec).is_some() {
                         plan.observations
                             .push(Observation::ExecutingMessageUnpaired);
@@ -283,36 +317,51 @@ pub(super) fn plan_transaction(
                 log,
                 event,
                 payload_hash,
-            } => match classify_chain(event.destination, configured_chains) {
-                ChainRef::Configured(destination_chain_id) => {
-                    plan.actions.push(TxAction::Send(SourceLeg {
-                        log,
-                        destination_chain_id,
-                        nonce: event.messageNonce,
-                        sender: event.sender,
-                        target: event.target,
-                        // `source` of the message hash is the chain being
-                        // scanned: it is not in the event.
-                        message_hash: message_hash(
-                            event.destination,
-                            U256::from(chain_id),
-                            event.messageNonce,
-                            event.sender,
-                            event.target,
-                            &event.message,
-                        ),
-                        message: event.message,
-                        payload_hash,
-                    }));
+            } => {
+                match classify(event.sender, event.target, &event.message) {
+                    EthPayload::NotBridgeMessage => {}
+                    EthPayload::Unrecognized => {
+                        plan.observations.push(Observation::EthPayloadUnrecognized);
+                    }
+                    EthPayload::Transfer(transfer) => {
+                        if pending_send_eth.is_some() {
+                            plan.observations.push(Observation::SendEthMissing);
+                        }
+                        pending_send_eth = Some((transfer, event.destination));
+                    }
                 }
-                ChainRef::NotConfigured => plan
-                    .observations
-                    .push(Observation::Skipped(SkipReason::DestinationNotConfigured)),
-                ChainRef::OutOfRange => plan
-                    .observations
-                    .push(Observation::Skipped(SkipReason::DestinationOutOfRange)),
-            },
+                match classify_chain(event.destination, configured_chains) {
+                    ChainRef::Configured(destination_chain_id) => {
+                        plan.actions.push(TxAction::Send(SourceLeg {
+                            log,
+                            destination_chain_id,
+                            nonce: event.messageNonce,
+                            sender: event.sender,
+                            target: event.target,
+                            // `source` of the message hash is the chain being
+                            // scanned: it is not in the event.
+                            message_hash: message_hash(
+                                event.destination,
+                                U256::from(chain_id),
+                                event.messageNonce,
+                                event.sender,
+                                event.target,
+                                &event.message,
+                            ),
+                            message: event.message,
+                            payload_hash,
+                        }));
+                    }
+                    ChainRef::NotConfigured => plan
+                        .observations
+                        .push(Observation::Skipped(SkipReason::DestinationNotConfigured)),
+                    ChainRef::OutOfRange => plan
+                        .observations
+                        .push(Observation::Skipped(SkipReason::DestinationOutOfRange)),
+                }
+            }
             Decoded::Relayed { log, event } => {
+                let relay_eth = pending_relay_eth.take();
                 let exec = pending_exec.take();
                 let exec_existed = exec.is_some();
                 let paired = exec.filter(|exec| exec.source_chain_id == event.source);
@@ -333,6 +382,7 @@ pub(super) fn plan_transaction(
                             message_hash: event.messageHash,
                             return_data_hash: event.returnDataHash,
                             executing: paired,
+                            relay_eth,
                         }));
                     }
                     ChainRef::NotConfigured => plan
@@ -343,7 +393,31 @@ pub(super) fn plan_transaction(
                         .push(Observation::Skipped(SkipReason::SourceOutOfRange)),
                 }
             }
+            Decoded::SendEth(event) => match pending_send_eth.take() {
+                None => plan.observations.push(Observation::SendEthUnpaired),
+                Some((transfer, destination)) => {
+                    if event.from != transfer.from
+                        || event.to != transfer.to
+                        || event.amount != transfer.amount
+                        || event.destination != destination
+                    {
+                        plan.observations.push(Observation::SendEthMismatch);
+                    }
+                }
+            },
+            Decoded::RelayEth(event) => {
+                pending_relay_eth = Some(RelayEth {
+                    from: event.from,
+                    to: event.to,
+                    amount: event.amount,
+                    source: event.source,
+                });
+            }
         }
+    }
+
+    if pending_send_eth.is_some() {
+        plan.observations.push(Observation::SendEthMissing);
     }
 
     if pending_exec.is_some() {
@@ -522,6 +596,18 @@ fn report_observation(
                  the message is indexed without its executing_message detail"
             );
         }
+        Observation::EthPayloadUnrecognized => {
+            report_eth_anomaly(ctx, "unrecognized_payload", tx_hash, block_number)
+        }
+        Observation::SendEthMissing => {
+            report_eth_anomaly(ctx, "send_eth_missing", tx_hash, block_number)
+        }
+        Observation::SendEthUnpaired => {
+            report_eth_anomaly(ctx, "send_eth_unpaired", tx_hash, block_number)
+        }
+        Observation::SendEthMismatch => {
+            report_eth_anomaly(ctx, "send_eth_mismatch", tx_hash, block_number)
+        }
         Observation::WrongVersion => {
             crate::indexer::metrics::LOGS_DROPPED_WRONG_VERSION_TOTAL
                 .with_label_values(&["op_interop", bridge.as_str(), chain.as_str()])
@@ -538,6 +624,25 @@ fn report_observation(
     }
 }
 
+fn report_eth_anomaly(
+    ctx: &EventContext<'_>,
+    kind: &'static str,
+    tx_hash: Option<alloy::primitives::B256>,
+    block_number: Option<u64>,
+) {
+    metrics::OP_INTEROP_ETH_TRANSFER_ANOMALIES_TOTAL
+        .with_label_values(&[ctx.bridge_id.to_string().as_str(), kind])
+        .inc();
+    tracing::warn!(
+        bridge_id = ctx.bridge_id,
+        chain_id = ctx.chain_id,
+        tx_hash = ?tx_hash,
+        block_number,
+        kind,
+        "OP interop ETH transfer anomaly: the payload or the bridge events do not have the expected shape"
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use alloy::primitives::{Address, B256, b256};
@@ -546,7 +651,8 @@ mod tests {
         super::{
             test_fixtures::{
                 DESTINATION_CHAIN_ID, SOURCE_CHAIN_ID, configured_chains, executing_message_log,
-                registry, relay_logs, relayed_message_log, send_calls, sent_message_logs,
+                registry, relay_eth_log, relay_logs, relayed_message_log, send_calls, send_eth_log,
+                sent_message_logs,
             },
             version::CROSS_L2_INBOX,
         },
@@ -622,7 +728,7 @@ mod tests {
     }
 
     #[test]
-    fn test_plan_transaction_send_fixture_yields_two_sends_and_ignores_other_contracts() {
+    fn test_plan_transaction_send_fixture_yields_two_sends() {
         let calls = send_calls();
         assert_eq!(calls.len(), 2);
         // The first call also holds a liquidity log and a bridge log.
@@ -631,14 +737,20 @@ mod tests {
         let first = plan(SOURCE_CHAIN_ID, &calls[0]).expect("first call plans");
         let second = plan(SOURCE_CHAIN_ID, &calls[1]).expect("second call plans");
 
-        for plan in [&first, &second] {
-            assert_eq!(plan.actions.len(), 1);
-            assert_eq!(
-                plan.observations,
-                vec![Observation::Event(OpInteropEvent::SentMessage)],
-                "logs of other contracts leave no trace"
-            );
-        }
+        assert_eq!(first.actions.len(), 1);
+        assert_eq!(
+            first.observations,
+            vec![
+                Observation::Event(OpInteropEvent::SentMessage),
+                Observation::Event(OpInteropEvent::SendEth),
+            ],
+            "the liquidity log leaves no trace; the paired SendETH raises no anomaly"
+        );
+        assert_eq!(second.actions.len(), 1);
+        assert_eq!(
+            second.observations,
+            vec![Observation::Event(OpInteropEvent::SentMessage)]
+        );
 
         let leg = sends(&first)[0];
         assert_eq!(leg.message_hash, MESSAGE_0_HASH);
@@ -688,6 +800,7 @@ mod tests {
             plan.observations,
             vec![
                 Observation::Event(OpInteropEvent::ExecutingMessage),
+                Observation::Event(OpInteropEvent::RelayEth),
                 Observation::Event(OpInteropEvent::RelayedMessage),
             ]
         );
@@ -911,13 +1024,18 @@ mod tests {
         assert!(plan.actions.is_empty());
         assert_eq!(
             plan.observations,
-            vec![Observation::WrongVersion, Observation::WrongVersion]
+            vec![
+                Observation::WrongVersion,
+                Observation::WrongVersion,
+                Observation::WrongVersion
+            ]
         );
     }
 
     #[test]
     fn test_plan_transaction_skips_unconfigured_and_out_of_range_endpoints() {
-        let [sent, _] = sent_message_logs();
+        // The plain message: an ETH send would also expect its `SendETH`.
+        let [_, sent] = sent_message_logs();
 
         // Destination topic is the first indexed parameter of `SentMessage`.
         let unconfigured = with_topic(sent.clone(), 1, word(U256::from(10)));
@@ -977,6 +1095,194 @@ mod tests {
         assert_eq!(no_topics.address(), CROSS_L2_INBOX);
         let plan = plan_of_destination(&[no_topics]);
         assert_eq!(plan, TxPlan::default());
+    }
+
+    fn eth_send_pair() -> [Log; 2] {
+        let [sent, _] = sent_message_logs();
+        [sent, send_eth_log()]
+    }
+
+    /// Rewrites one byte of a fixture log's data.
+    fn with_data_byte(mut log: Log, index: usize, value: u8) -> Log {
+        let mut data = log.inner.data.data.to_vec();
+        data[index] = value;
+        log.inner.data = alloy::primitives::LogData::new_unchecked(
+            log.inner.data.topics().to_vec(),
+            data.into(),
+        );
+        log
+    }
+
+    const ETH_ANOMALIES: [Observation; 4] = [
+        Observation::EthPayloadUnrecognized,
+        Observation::SendEthMissing,
+        Observation::SendEthUnpaired,
+        Observation::SendEthMismatch,
+    ];
+
+    fn eth_anomalies(plan: &TxPlan) -> Vec<Observation> {
+        plan.observations
+            .iter()
+            .copied()
+            .filter(|observation| ETH_ANOMALIES.contains(observation))
+            .collect()
+    }
+
+    #[test]
+    fn test_plan_transaction_eth_send_fixture_has_no_anomaly() {
+        let calls = send_calls();
+        let plan = plan(SOURCE_CHAIN_ID, &calls[0]).expect("plans");
+        assert!(eth_anomalies(&plan).is_empty());
+        assert_eq!(count(&plan, Observation::Event(OpInteropEvent::SendEth)), 1);
+    }
+
+    #[test]
+    fn test_plan_transaction_eth_send_without_send_eth_is_missing() {
+        let [sent, _] = eth_send_pair();
+        let plan = plan(SOURCE_CHAIN_ID, &[sent]).expect("plans");
+        assert_eq!(plan.actions.len(), 1, "the message is indexed regardless");
+        assert_eq!(eth_anomalies(&plan), vec![Observation::SendEthMissing]);
+    }
+
+    #[test]
+    fn test_plan_transaction_send_eth_that_disagrees_is_mismatch() {
+        let [sent, send_eth] = eth_send_pair();
+        let other = U256::from(2);
+        for edited in [
+            with_data_word(send_eth.clone(), 0, word(other)),
+            with_topic(send_eth.clone(), 2, word(U256::from(0x33))),
+            with_topic(send_eth.clone(), 1, word(U256::from(0x33))),
+            with_data_word(send_eth, 1, word(U256::from(SOURCE_CHAIN_ID))),
+        ] {
+            let plan = plan(SOURCE_CHAIN_ID, &[sent.clone(), edited]).expect("plans");
+            assert_eq!(plan.actions.len(), 1);
+            assert_eq!(eth_anomalies(&plan), vec![Observation::SendEthMismatch]);
+        }
+    }
+
+    #[test]
+    fn test_plan_transaction_send_eth_alone_is_unpaired() {
+        let plan = plan(SOURCE_CHAIN_ID, &[send_eth_log()]).expect("plans");
+        assert!(plan.actions.is_empty());
+        assert_eq!(eth_anomalies(&plan), vec![Observation::SendEthUnpaired]);
+    }
+
+    #[test]
+    fn test_plan_transaction_two_eth_sends_yield_two_sends_without_anomaly() {
+        let [sent, send_eth] = eth_send_pair();
+        let logs = vec![
+            sent.clone(),
+            send_eth.clone(),
+            with_log_index(sent, 3),
+            with_log_index(send_eth, 4),
+        ];
+        let plan = plan(SOURCE_CHAIN_ID, &logs).expect("plans");
+        assert_eq!(sends(&plan).len(), 2);
+        assert!(eth_anomalies(&plan).is_empty());
+    }
+
+    #[test]
+    fn test_plan_transaction_eth_send_to_unconfigured_chain_is_skipped_without_anomaly() {
+        let [sent, send_eth] = eth_send_pair();
+        let unconfigured = word(U256::from(10));
+        let logs = vec![
+            with_topic(sent, 1, unconfigured),
+            with_data_word(send_eth, 1, unconfigured),
+        ];
+        let plan = plan(SOURCE_CHAIN_ID, &logs).expect("plans");
+        assert!(plan.actions.is_empty());
+        assert_eq!(
+            count(
+                &plan,
+                Observation::Skipped(SkipReason::DestinationNotConfigured)
+            ),
+            1
+        );
+        assert!(eth_anomalies(&plan).is_empty());
+    }
+
+    #[test]
+    fn test_plan_transaction_unrecognized_bridge_payload_keeps_send_and_orphans_send_eth() {
+        let [sent, send_eth] = eth_send_pair();
+        // The selector starts the fourth data word: sender, offset, length.
+        let edited = with_data_byte(sent, 96, 0xff);
+        let plan = plan(SOURCE_CHAIN_ID, &[edited, send_eth]).expect("plans");
+        assert_eq!(plan.actions.len(), 1, "the Send action is kept");
+        assert_eq!(
+            eth_anomalies(&plan),
+            vec![
+                Observation::EthPayloadUnrecognized,
+                Observation::SendEthUnpaired
+            ]
+        );
+    }
+
+    #[test]
+    fn test_plan_transaction_relay_fixture_carries_relay_eth() {
+        let plan = plan_of_destination(&relay_logs());
+        let relay_eth = relays(&plan)[0].relay_eth.as_ref().expect("relay_eth");
+        assert_eq!(relay_eth.from, Address::repeat_byte(0x11));
+        assert_eq!(relay_eth.to, Address::repeat_byte(0x22));
+        assert_eq!(relay_eth.amount, U256::from(1_000_000_000_000_000_000_u64));
+        assert_eq!(relay_eth.source, U256::from(SOURCE_CHAIN_ID));
+
+        let without: Vec<Log> = relay_logs()
+            .into_iter()
+            .filter(|log| log.address() != relay_eth_log().address())
+            .collect();
+        let plan = plan_of_destination(&without);
+        assert_eq!(relays(&plan)[0].relay_eth, None);
+    }
+
+    #[test]
+    fn test_plan_transaction_multicall_gives_each_relay_its_own_relay_eth() {
+        let second_amount = word(U256::from(5));
+        let logs = vec![
+            executing_message_log(),
+            relay_eth_log(),
+            relayed_message_log(),
+            with_log_index(executing_message_log(), 4),
+            with_data_word(with_log_index(relay_eth_log(), 5), 0, second_amount),
+            with_log_index(relayed_message_log(), 7),
+        ];
+        let plan = plan_of_destination(&logs);
+        let relays = relays(&plan);
+        assert_eq!(relays.len(), 2);
+        assert_eq!(
+            relays[0].relay_eth.as_ref().map(|relay| relay.amount),
+            Some(U256::from(1_000_000_000_000_000_000_u64))
+        );
+        assert_eq!(
+            relays[1].relay_eth.as_ref().map(|relay| relay.amount),
+            Some(U256::from(5))
+        );
+    }
+
+    #[test]
+    fn test_plan_transaction_relay_eth_does_not_leak_into_the_next_group() {
+        let logs = vec![
+            executing_message_log(),
+            relay_eth_log(),
+            with_log_index(executing_message_log(), 3),
+            with_log_index(relayed_message_log(), 7),
+        ];
+        let plan = plan_of_destination(&logs);
+        assert_eq!(relays(&plan)[0].relay_eth, None);
+    }
+
+    #[test]
+    fn test_plan_transaction_truncated_send_eth_is_an_error_with_no_actions() {
+        let [sent, send_eth] = eth_send_pair();
+        let mut truncated = send_eth;
+        let data = truncated.inner.data.data.slice(..32);
+        truncated.inner.data =
+            alloy::primitives::LogData::new_unchecked(truncated.inner.data.topics().to_vec(), data);
+        let err = plan(SOURCE_CHAIN_ID, &[sent, truncated])
+            .expect_err("a truncated SendETH cannot be decoded");
+        assert!(
+            format!("{err:#}").contains("failed to decode SendETH"),
+            "unexpected error: {err:#}"
+        );
     }
 
     #[test]

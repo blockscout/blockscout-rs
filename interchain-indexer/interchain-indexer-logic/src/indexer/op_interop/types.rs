@@ -64,6 +64,16 @@ pub(crate) struct ExecutingLeg {
     pub(crate) source_timestamp: U256,
 }
 
+/// The destination `RelayETH` log paired with a relay by position. A
+/// diagnostic cross-check input, never an outcome.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RelayEth {
+    pub(crate) from: Address,
+    pub(crate) to: Address,
+    pub(crate) amount: U256,
+    pub(crate) source: U256,
+}
+
 /// The `RelayedMessage` half of a message, observed on the destination chain.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct DestinationLeg {
@@ -76,6 +86,10 @@ pub(crate) struct DestinationLeg {
     /// `None` for a relay with no usable `ExecutingMessage` before it in its
     /// transaction. The relay is the fact; the identifier is an attribute.
     pub(crate) executing: Option<ExecutingLeg>,
+    /// The `RelayETH` of the same relay group, if any. Absent in payloads
+    /// stored before ETH transfers were read.
+    #[serde(default)]
+    pub(crate) relay_eth: Option<RelayEth>,
 }
 
 /// Persisted as JSON in `pending_messages.payload`. Any field added later
@@ -348,7 +362,54 @@ mod tests {
                 source_log_index: U256::from(1),
                 source_timestamp: U256::from(1_794_670_098_u64),
             }),
+            relay_eth: None,
         }
+    }
+
+    /// A payload stored by the previous slice has no `relay_eth` key.
+    #[test]
+    fn test_message_slice_two_payload_deserializes_without_relay_eth() {
+        let hash = format!("0x{}", "ab".repeat(32));
+        let raw = format!(
+            r#"{{
+                "source": null,
+                "destination": {{
+                    "log": {{
+                        "chain_id": 420130020,
+                        "block_number": 100,
+                        "block_hash": "{hash}",
+                        "block_timestamp": "2026-11-16T10:00:00",
+                        "transaction_hash": "{hash}",
+                        "log_index": 3
+                    }},
+                    "source_chain_id": 420130019,
+                    "nonce": "0x7",
+                    "message_hash": "{hash}",
+                    "return_data_hash": "{hash}",
+                    "executing": null
+                }}
+            }}"#
+        );
+        let message: Message = serde_json::from_str(&raw).expect("old payload deserializes");
+        let destination = message.destination.expect("destination present");
+        assert_eq!(destination.relay_eth, None);
+        assert_eq!(destination.source_chain_id, SOURCE_CHAIN_ID);
+    }
+
+    #[test]
+    fn test_message_relay_eth_round_trips_through_json() {
+        let mut destination = destination_leg(MESSAGE_0_HASH, 2, 3);
+        destination.relay_eth = Some(RelayEth {
+            from: Address::repeat_byte(0x11),
+            to: Address::repeat_byte(0x22),
+            amount: U256::MAX,
+            source: U256::from(SOURCE_CHAIN_ID),
+        });
+        let mut message = Message::default();
+        message.apply_destination(destination.clone());
+        let restored: Message =
+            serde_json::from_value(serde_json::to_value(&message).unwrap()).unwrap();
+        assert_eq!(restored.destination, Some(destination));
     }
 
     #[test]

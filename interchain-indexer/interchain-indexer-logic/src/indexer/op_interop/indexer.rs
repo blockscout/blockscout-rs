@@ -15,6 +15,8 @@ use alloy::{
     rpc::types::{Filter, Log},
 };
 use anyhow::{Context, Result, ensure};
+use interchain_indexer_entity::{sea_orm_active_enums::TokenType, tokens};
+use sea_orm::ActiveValue;
 use tokio::task::JoinHandle;
 use tonic::async_trait;
 
@@ -24,6 +26,7 @@ use crate::{
     indexer::{
         failure_ledger::{BlockRange, FailureLedger},
         range_driver::{BatchError, RangeDriver, RangeProcessor},
+        xdai::NATIVE_SENTINEL,
     },
     log_stream::LogBatch,
     message_buffer::MessageBuffer,
@@ -47,8 +50,8 @@ pub struct OpInteropContractConfig {
     pub started_at_block: u64,
 }
 
-/// One chain this bridge indexes: its provider and its two predeploy
-/// entries (`cross_l2_inbox`, `l2_to_l2_messenger`).
+/// One chain this bridge indexes: its provider and its three predeploy
+/// entries (`cross_l2_inbox`, `l2_to_l2_messenger`, `superchain_eth_bridge`).
 #[derive(Clone)]
 pub struct OpInteropChainConfig {
     pub chain_id: i64,
@@ -376,6 +379,9 @@ impl CrosschainIndexer for OpInteropIndexer {
 
         *self.state.write() = CrosschainIndexerState::Running;
 
+        let chain_ids: Vec<i64> = self.chains.iter().map(|chain| chain.chain_id).collect();
+        seed_native_tokens_into(&self.db, self.bridge_id, &chain_ids).await;
+
         let buffer_handle = match self.buffer.clone().start().await {
             Ok(handle) => handle,
             Err(err) => {
@@ -461,6 +467,36 @@ impl CrosschainIndexer for OpInteropIndexer {
     }
 }
 
+/// Seeds the `ETH` / 18 native token row of every chain of the bridge, so that
+/// stats read decimals for the zero-address sentinel the ETH transfers use.
+///
+/// Idempotent, and non-fatal: a failure is logged and the next chain is still
+/// seeded. The seed overwrites name, symbol and decimals of an existing native
+/// row on every start and keeps an existing icon.
+async fn seed_native_tokens_into(db: &InterchainDatabase, bridge_id: i32, chain_ids: &[i64]) {
+    for &chain_id in chain_ids {
+        let seed = tokens::ActiveModel {
+            chain_id: ActiveValue::Set(chain_id),
+            address: ActiveValue::Set(NATIVE_SENTINEL.as_slice().to_vec()),
+            r#type: ActiveValue::Set(TokenType::Native),
+            symbol: ActiveValue::Set(Some("ETH".to_string())),
+            name: ActiveValue::Set(Some("Ether".to_string())),
+            decimals: ActiveValue::Set(Some(18)),
+            ..Default::default()
+        };
+
+        if let Err(err) = db.upsert_token_info(seed).await {
+            tracing::warn!(
+                err = ?err,
+                bridge_id,
+                chain_id,
+                "failed to seed the native ETH token of an OP interop chain; the token row \
+                 and its decimals will be missing until the next successful seed"
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! DB-backed replay tests over the simulated devnet fixtures: log batches
@@ -474,12 +510,15 @@ mod tests {
         rpc::types::Log,
     };
     use interchain_indexer_entity::{
-        bridges, chains, crosschain_messages, op_interop_legs, pending_messages,
+        bridges, chains, crosschain_messages, crosschain_transfers, op_interop_legs,
+        pending_messages,
         sea_orm_active_enums::{BridgeType, MessageStatus},
-        stats_messages,
+        stats_asset_edges, stats_asset_tokens, stats_messages,
     };
     use pretty_assertions::assert_eq;
-    use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
+    use sea_orm::{
+        ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, TransactionTrait,
+    };
     use serde_json::json;
 
     use super::*;
@@ -494,6 +533,7 @@ mod tests {
         },
         log_stream::{ScanDirection, test_support::HeadMockService},
         test_utils::init_db,
+        write_api,
     };
 
     const BRIDGE_ID: i32 = 2004;
@@ -1026,5 +1066,294 @@ mod tests {
         feed(&ctx, DESTINATION, relay_logs()).await;
         buffer.run().await.unwrap();
         assert_eq!(counted(&db).await, Some(1), "a replay does not recount");
+    }
+
+    async fn transfers(db: &InterchainDatabase) -> Vec<crosschain_transfers::Model> {
+        crosschain_transfers::Entity::find()
+            .all(db.db.as_ref())
+            .await
+            .unwrap()
+    }
+
+    fn assert_eth_transfer(transfer: &crosschain_transfers::Model) {
+        let amount: sea_orm::prelude::BigDecimal = "1000000000000000000".parse().unwrap();
+        assert_eq!(transfer.bridge_id, BRIDGE_ID);
+        assert_eq!(transfer.index, 0);
+        assert_eq!(transfer.token_src_chain_id, SOURCE);
+        assert_eq!(transfer.token_dst_chain_id, DESTINATION);
+        assert_eq!(transfer.token_src_address, Some(vec![0; 20]));
+        assert_eq!(transfer.token_dst_address, Some(vec![0; 20]));
+        assert_eq!(transfer.src_amount, Some(amount.clone()));
+        assert_eq!(transfer.dst_amount, Some(amount));
+        assert_eq!(transfer.sender_address, Some(vec![0x11; 20]));
+        assert_eq!(transfer.recipient_address, Some(vec![0x22; 20]));
+        assert_eq!(
+            transfer.asset_linkage,
+            Some(interchain_indexer_entity::sea_orm_active_enums::TransferAssetLinkage::Mirror)
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_replay_eth_transfer_source_then_relay_writes_one_transfer() {
+        let guard = init_db("op_interop_eth_source_then_relay").await;
+        let db = InterchainDatabase::new(guard.client());
+        seed_bridge_and_chains(&db).await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+
+        let rows = transfers(&db).await;
+        assert_eq!(rows.len(), 1, "the transfer exists from the first flush");
+        assert_eth_transfer(&rows[0]);
+        assert_eq!(rows[0].stats_processed, 0);
+
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+
+        let rows = transfers(&db).await;
+        assert_eq!(rows.len(), 1, "the relay adds no second row");
+        assert_eth_transfer(&rows[0]);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_replay_eth_transfer_relay_then_source_writes_one_transfer() {
+        let guard = init_db("op_interop_eth_relay_then_source").await;
+        let db = InterchainDatabase::new(guard.client());
+        seed_bridge_and_chains(&db).await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        assert!(transfers(&db).await.is_empty(), "no row until the source");
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+
+        let rows = transfers(&db).await;
+        assert_eq!(rows.len(), 1);
+        assert_eth_transfer(&rows[0]);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_replay_eth_transfer_survives_restart_between_legs() {
+        for source_first in [true, false] {
+            let guard = init_db(if source_first {
+                "op_interop_eth_restart_source_first"
+            } else {
+                "op_interop_eth_restart_destination_first"
+            })
+            .await;
+            let db = InterchainDatabase::new(guard.client());
+            seed_bridge_and_chains(&db).await;
+
+            let first_buffer = new_buffer(&db, Duration::ZERO);
+            let (first_chain, first_logs, second_chain, second_logs) = if source_first {
+                (SOURCE, send_batch(), DESTINATION, relay_logs())
+            } else {
+                (DESTINATION, relay_logs(), SOURCE, send_batch())
+            };
+            feed(
+                &run_context(&db, first_buffer.clone()),
+                first_chain,
+                first_logs,
+            )
+            .await;
+            first_buffer.run().await.unwrap();
+            drop(first_buffer);
+
+            let second_buffer = new_buffer(&db, Duration::from_secs(60));
+            feed(
+                &run_context(&db, second_buffer.clone()),
+                second_chain,
+                second_logs,
+            )
+            .await;
+            second_buffer.run().await.unwrap();
+
+            let rows = transfers(&db).await;
+            assert_eq!(rows.len(), 1, "source_first = {source_first}");
+            assert_eth_transfer(&rows[0]);
+        }
+    }
+
+    /// The edge of the transfer's asset and its linkage, as database state.
+    async fn assert_counted_once(db: &InterchainDatabase) {
+        let conn = db.db.as_ref();
+        let rows = transfers(db).await;
+        assert_eq!(rows.len(), 1);
+        let transfer = &rows[0];
+        assert_eq!(transfer.stats_processed, 1);
+        let asset_id = transfer
+            .src_stats_asset_id
+            .expect("the source identity resolves");
+        assert_eq!(
+            transfer.dst_stats_asset_id,
+            Some(asset_id),
+            "a mirror transfer is one asset"
+        );
+
+        let mut linked: Vec<(i64, Vec<u8>)> = stats_asset_tokens::Entity::find()
+            .filter(stats_asset_tokens::Column::StatsAssetId.eq(asset_id))
+            .all(conn)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|row| (row.chain_id, row.token_address))
+            .collect();
+        linked.sort();
+        assert_eq!(
+            linked,
+            vec![(SOURCE, vec![0; 20]), (DESTINATION, vec![0; 20])]
+        );
+
+        let edges = stats_asset_edges::Entity::find().all(conn).await.unwrap();
+        assert_eq!(edges.len(), 1, "one edge: {edges:?}");
+        assert_eq!(edges[0].transfers_count, 1);
+        assert_eq!(edges[0].decimals, Some(18));
+        assert_eq!(
+            edges[0].cumulative_amount,
+            "1000000000000000000"
+                .parse::<sea_orm::prelude::BigDecimal>()
+                .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_replay_eth_transfer_stats_counted_once_after_completion() {
+        let guard = init_db("op_interop_eth_stats_once").await;
+        let db = InterchainDatabase::new(guard.client());
+        seed_bridge_and_chains(&db).await;
+        seed_native_tokens_into(&db, BRIDGE_ID, &[SOURCE, DESTINATION]).await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+        assert_eq!(transfers(&db).await[0].stats_processed, 0);
+        assert!(
+            stats_asset_edges::Entity::find()
+                .all(db.db.as_ref())
+                .await
+                .unwrap()
+                .is_empty(),
+            "an initiated transfer is not counted"
+        );
+
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        assert_counted_once(&db).await;
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        assert_counted_once(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_replay_plain_message_writes_no_transfer() {
+        let guard = init_db("op_interop_plain_message_no_transfer").await;
+        let db = InterchainDatabase::new(guard.client());
+        seed_bridge_and_chains(&db).await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed(&ctx, SOURCE, send_calls().remove(1)).await;
+        buffer.run().await.unwrap();
+
+        let rows = messages(&db).await;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].status, MessageStatus::Initiated);
+        assert!(transfers(&db).await.is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_replay_source_block_adds_transfer_to_message_stored_without_one() {
+        let guard = init_db("op_interop_source_block_adds_transfer").await;
+        let db = InterchainDatabase::new(guard.client());
+        seed_bridge_and_chains(&db).await;
+        seed_native_tokens_into(&db, BRIDGE_ID, &[SOURCE, DESTINATION]).await;
+        let buffer = new_buffer(&db, Duration::ZERO);
+        let ctx = run_context(&db, buffer.clone());
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        assert_counted_once(&db).await;
+
+        // What slice 2 left behind: a counted completed message with no
+        // transfer and no edge.
+        let conn = db.db.as_ref();
+        crosschain_transfers::Entity::delete_many()
+            .exec(conn)
+            .await
+            .unwrap();
+        stats_asset_edges::Entity::delete_many()
+            .exec(conn)
+            .await
+            .unwrap();
+        let message_stats = messages(&db).await[0].stats_processed;
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+
+        assert_counted_once(&db).await;
+        assert_eq!(
+            messages(&db).await[0].stats_processed,
+            message_stats,
+            "the message is not counted a second time"
+        );
+    }
+
+    async fn native_token(db: &InterchainDatabase, chain_id: i64) -> Option<tokens::Model> {
+        db.get_token_info(chain_id as u64, NATIVE_SENTINEL.as_slice().to_vec())
+            .await
+            .expect("token lookup succeeds")
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_seed_native_tokens_creates_rows_and_is_idempotent() {
+        const ICON: &str = "https://example.com/eth.png";
+        let guard = init_db("op_interop_seed_native_tokens").await;
+        let db = InterchainDatabase::new(guard.client());
+        seed_bridge_and_chains(&db).await;
+
+        seed_native_tokens_into(&db, BRIDGE_ID, &[SOURCE, DESTINATION]).await;
+        for chain_id in [SOURCE, DESTINATION] {
+            let row = native_token(&db, chain_id)
+                .await
+                .expect("one native row per chain");
+            assert_eq!(row.r#type, TokenType::Native);
+            assert_eq!(row.symbol.as_deref(), Some("ETH"));
+            assert_eq!(row.name.as_deref(), Some("Ether"));
+            assert_eq!(row.decimals, Some(18));
+        }
+
+        let tx = db.db.begin().await.unwrap();
+        write_api::set_token_icon_tx(&tx, SOURCE, NATIVE_SENTINEL.as_slice(), Some(ICON))
+            .await
+            .unwrap()
+            .expect("the seeded native row exists");
+        tx.commit().await.unwrap();
+
+        seed_native_tokens_into(&db, BRIDGE_ID, &[SOURCE, DESTINATION]).await;
+        let row = native_token(&db, SOURCE).await.expect("row survives");
+        assert_eq!(row.token_icon.as_deref(), Some(ICON), "the icon survives");
+        assert_eq!(row.symbol.as_deref(), Some("ETH"));
+        assert_eq!(row.decimals, Some(18));
+        assert_eq!(
+            tokens::Entity::find().count(db.db.as_ref()).await.unwrap(),
+            2,
+            "no duplicate rows"
+        );
     }
 }

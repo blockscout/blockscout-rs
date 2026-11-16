@@ -45,6 +45,22 @@ pub(crate) mod v1 {
             bytes32 indexed messageHash,
             bytes32 returnDataHash
         );
+
+        event SendETH(
+            address indexed from,
+            address indexed to,
+            uint256 amount,
+            uint256 destination
+        );
+
+        event RelayETH(
+            address indexed from,
+            address indexed to,
+            uint256 amount,
+            uint256 source
+        );
+
+        function relayETH(address from, address to, uint256 amount);
     }
 }
 
@@ -202,17 +218,21 @@ impl OpInteropRegistry {
 
 #[cfg(test)]
 mod tests {
-    use alloy::{primitives::address, sol_types::SolEvent};
+    use alloy::{
+        primitives::address,
+        sol_types::{SolCall, SolEvent},
+    };
 
     use super::{
         super::{
             test_fixtures::{
-                DESTINATION_CHAIN_ID, SOURCE_CHAIN_ID, executing_message_log, relayed_message_log,
-                sent_message_logs,
+                DESTINATION_CHAIN_ID, SOURCE_CHAIN_ID, executing_message_log, relay_eth_log,
+                relayed_message_log, send_eth_log, sent_message_logs,
             },
             version::{
-                CROSS_L2_INBOX, EXECUTING_MESSAGE_TOPIC0, L2_TO_L2_MESSENGER,
-                RELAYED_MESSAGE_TOPIC0, SENT_MESSAGE_TOPIC0,
+                CROSS_L2_INBOX, EXECUTING_MESSAGE_TOPIC0, L2_TO_L2_MESSENGER, RELAY_ETH_SELECTOR,
+                RELAY_ETH_TOPIC0, RELAYED_MESSAGE_TOPIC0, SEND_ETH_TOPIC0, SENT_MESSAGE_TOPIC0,
+                SUPERCHAIN_ETH_BRIDGE,
             },
         },
         *,
@@ -231,6 +251,7 @@ mod tests {
         vec![
             contract(CROSS_L2_INBOX, "cross_l2_inbox", 1, 465_679),
             contract(L2_TO_L2_MESSENGER, "l2_to_l2_messenger", 1, 465_679),
+            contract(SUPERCHAIN_ETH_BRIDGE, "superchain_eth_bridge", 1, 465_679),
         ]
     }
 
@@ -253,6 +274,19 @@ mod tests {
         let relayed = relayed_message_log();
         assert_eq!(relayed.topic0(), Some(&RELAYED_MESSAGE_TOPIC0));
         assert_eq!(relayed.address(), L2_TO_L2_MESSENGER);
+        let send_eth = send_eth_log();
+        assert_eq!(send_eth.topic0(), Some(&SEND_ETH_TOPIC0));
+        assert_eq!(send_eth.address(), SUPERCHAIN_ETH_BRIDGE);
+        let relay_eth = relay_eth_log();
+        assert_eq!(relay_eth.topic0(), Some(&RELAY_ETH_TOPIC0));
+        assert_eq!(relay_eth.address(), SUPERCHAIN_ETH_BRIDGE);
+
+        // The selector literal is the head of the fixture's ETH payload.
+        let [eth_message, _] = sent_message_logs();
+        let sent = eth_message
+            .log_decode::<v1::SentMessage>()
+            .expect("fixture SentMessage decodes");
+        assert_eq!(sent.inner.data.message[..4], RELAY_ETH_SELECTOR);
     }
 
     /// The typed declarations used for decoding agree with the literals.
@@ -264,6 +298,17 @@ mod tests {
         );
         assert_eq!(v1::SentMessage::SIGNATURE_HASH, SENT_MESSAGE_TOPIC0);
         assert_eq!(v1::RelayedMessage::SIGNATURE_HASH, RELAYED_MESSAGE_TOPIC0);
+        assert_eq!(v1::SendETH::SIGNATURE_HASH, SEND_ETH_TOPIC0);
+        assert_eq!(v1::RelayETH::SIGNATURE_HASH, RELAY_ETH_TOPIC0);
+        assert_eq!(v1::relayETHCall::SELECTOR, RELAY_ETH_SELECTOR);
+        assert_eq!(
+            v1::SendETH::SIGNATURE,
+            "SendETH(address,address,uint256,uint256)"
+        );
+        assert_eq!(
+            v1::RelayETH::SIGNATURE,
+            "RelayETH(address,address,uint256,uint256)"
+        );
         assert_eq!(
             v1::ExecutingMessage::SIGNATURE,
             "ExecutingMessage(bytes32,(address,uint256,uint256,uint256,uint256))"
@@ -280,13 +325,14 @@ mod tests {
 
     #[test]
     fn test_registry_rejects_unknown_kind() {
-        for unknown in ["superchain_eth_bridge", "l2_to_l2_mesenger"] {
+        for unknown in ["undelivered_message_exporter", "l2_to_l2_mesenger"] {
             let mut contracts = valid_contracts();
             contracts[1].kind = Some(unknown.to_string());
             let message = registry_error(contracts);
             assert!(
                 message.contains("unknown OP interop contract kind")
-                    && message.contains("cross_l2_inbox, l2_to_l2_messenger")
+                    && message
+                        .contains("cross_l2_inbox, l2_to_l2_messenger, superchain_eth_bridge")
                     && message.contains("420130019"),
                 "unexpected error: {message}"
             );
@@ -313,6 +359,17 @@ mod tests {
             "unexpected error: {message}"
         );
 
+        // The bridge kind at the messenger's address.
+        let mut contracts = valid_contracts();
+        contracts[2].address = L2_TO_L2_MESSENGER;
+        let message = registry_error(contracts);
+        assert!(
+            message.contains("superchain_eth_bridge")
+                && message.contains("0x4200000000000000000000000000000000000023")
+                && message.contains("0x4200000000000000000000000000000000000024"),
+            "unexpected error: {message}"
+        );
+
         // The two predeploys swapped: each address is valid, for the other kind.
         let swapped = vec![
             contract(L2_TO_L2_MESSENGER, "cross_l2_inbox", 1, 1),
@@ -334,8 +391,8 @@ mod tests {
     }
 
     #[test]
-    fn test_registry_requires_both_kinds_per_chain() {
-        for missing in [0, 1] {
+    fn test_registry_requires_every_kind_per_chain() {
+        for missing in [0, 1, 2] {
             let mut contracts = valid_contracts();
             let removed = contracts.remove(missing);
             let message = registry_error(contracts);
@@ -347,7 +404,7 @@ mod tests {
         }
         assert!(registry_error(Vec::new()).contains("has no contract of kind"));
 
-        // Both kinds on one chain do not cover another chain.
+        // Every kind on one chain does not cover another chain.
         let complete = valid_contracts();
         let inbox_only = vec![contract(CROSS_L2_INBOX, "cross_l2_inbox", 1, 1)];
         let err = OpInteropRegistry::from_chain_contracts([
@@ -368,11 +425,12 @@ mod tests {
     }
 
     #[test]
-    fn test_registry_filter_covers_both_addresses_and_three_topics() {
+    fn test_registry_filter_covers_three_addresses_and_five_topics() {
         let source = valid_contracts();
         let destination = vec![
             contract(CROSS_L2_INBOX, "cross_l2_inbox", 1, 829_213),
             contract(L2_TO_L2_MESSENGER, "l2_to_l2_messenger", 1, 829_213),
+            contract(SUPERCHAIN_ETH_BRIDGE, "superchain_eth_bridge", 1, 829_213),
         ];
         let registry = OpInteropRegistry::from_chain_contracts([
             (SOURCE_CHAIN_ID as i64, source.as_slice()),
@@ -384,14 +442,17 @@ mod tests {
             let filter = registry
                 .filter_for_chain(chain_id as i64)
                 .expect("filter for a configured chain");
-            assert_eq!(filter.address.len(), 2);
+            assert_eq!(filter.address.len(), 3);
             assert!(filter.address.contains(&CROSS_L2_INBOX));
             assert!(filter.address.contains(&L2_TO_L2_MESSENGER));
-            assert_eq!(filter.topics[0].len(), 3);
+            assert!(filter.address.contains(&SUPERCHAIN_ETH_BRIDGE));
+            assert_eq!(filter.topics[0].len(), 5);
             for topic in [
                 EXECUTING_MESSAGE_TOPIC0,
                 SENT_MESSAGE_TOPIC0,
                 RELAYED_MESSAGE_TOPIC0,
+                SEND_ETH_TOPIC0,
+                RELAY_ETH_TOPIC0,
             ] {
                 assert!(filter.topics[0].contains(&topic));
             }
@@ -421,6 +482,30 @@ mod tests {
                 SOURCE_CHAIN_ID,
                 L2_TO_L2_MESSENGER,
                 &SENT_MESSAGE_TOPIC0,
+                465_678
+            ),
+            LogResolution::WrongVersion
+        ));
+        assert!(matches!(
+            registry.resolve_log(SOURCE_CHAIN_ID, SUPERCHAIN_ETH_BRIDGE, &SEND_ETH_TOPIC0, 465_679),
+            LogResolution::Matched(event, kind)
+                if event.name == "SendETH"
+                    && kind.contract == OpInteropContractKind::SuperchainEthBridge
+        ));
+        assert!(matches!(
+            registry.resolve_log(
+                SOURCE_CHAIN_ID,
+                L2_TO_L2_MESSENGER,
+                &SEND_ETH_TOPIC0,
+                465_679
+            ),
+            LogResolution::NotConfigured
+        ));
+        assert!(matches!(
+            registry.resolve_log(
+                SOURCE_CHAIN_ID,
+                SUPERCHAIN_ETH_BRIDGE,
+                &SEND_ETH_TOPIC0,
                 465_678
             ),
             LogResolution::WrongVersion

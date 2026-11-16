@@ -142,8 +142,8 @@ ledger deliberately has no link to the message table.
 
 ### Neutral
 
-- Expiry and refund events, ETH transfers and pull reads are out of this
-  slice.
+- Expiry and refund events and pull reads are out of this slice. ETH
+  transfers are built in [ADR-019](./019-op-interop-eth-transfer-from-message-payload.md).
 
 ## References
 

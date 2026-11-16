@@ -515,8 +515,8 @@ fn build_xdai_chain_configs(
     chain_configs
 }
 
-/// One `OpInteropChainConfig` per planned chain, carrying both predeploy
-/// entries. `kind` is forwarded raw: the logic crate parses and validates it
+/// One `OpInteropChainConfig` per planned chain, carrying its three
+/// predeploy entries. `kind` is forwarded raw: the logic crate parses and validates it
 /// (and the address and version) when the indexer is constructed.
 fn build_op_interop_chain_configs(
     bridge: &BridgeConfig,
@@ -754,7 +754,7 @@ pub(crate) fn plan_bridge(bridge: &BridgeConfig) -> Vec<ChainPlan<'_>> {
             // chain (`kind` stays unset, like Avalanche), so there is no
             // AMB-style proxy/mediator split to prefer a floor from. OP
             // interop takes the same minimum across the chain's contracts:
-            // both predeploys start at the chain's activation block.
+            // all three predeploys start at the chain's activation block.
             let floor_contracts = match bridge.bridge_type {
                 BridgeType::Amb => contracts
                     .iter()
@@ -1240,14 +1240,21 @@ mod tests {
 
         assert_eq!(configs.len(), 2);
         for config in &configs {
-            assert_eq!(config.contracts.len(), 2);
+            assert_eq!(config.contracts.len(), 3);
             let mut kinds = config
                 .contracts
                 .iter()
                 .map(|contract| contract.kind.clone().expect("kind is forwarded raw"))
                 .collect::<Vec<_>>();
             kinds.sort();
-            assert_eq!(kinds, vec!["cross_l2_inbox", "l2_to_l2_messenger"]);
+            assert_eq!(
+                kinds,
+                vec![
+                    "cross_l2_inbox",
+                    "l2_to_l2_messenger",
+                    "superchain_eth_bridge"
+                ]
+            );
             assert!(
                 config
                     .contracts
@@ -1259,7 +1266,7 @@ mod tests {
                     .contracts
                     .iter()
                     .all(|contract| contract.started_at_block == config.start_block),
-                "both predeploys start at the activation block"
+                "all three predeploys start at the activation block"
             );
         }
         assert_eq!(

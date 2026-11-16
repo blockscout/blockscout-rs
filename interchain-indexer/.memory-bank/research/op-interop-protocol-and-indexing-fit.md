@@ -29,8 +29,10 @@ Dispute Game / super-root proofs, L1 contract upgrades (ETHLockbox, OPCM
 beyond what constrains RPC choice.
 
 Status: **an indexer now exists for messenger messages, confirmed blocks only
-(`interchain-indexer-logic/src/indexer/op_interop/`, ADR-018); ETH transfers,
-expiry/refund events and pull reads are not built.**
+(`interchain-indexer-logic/src/indexer/op_interop/`, ADR-018); ETH transfers
+are built too, derived from the message payload (`eth_transfer.rs`,
+`consolidation.rs`, ADR-019); expiry/refund events and pull reads are not
+built.**
 Interop is **not live on any public network** as of the snapshot date; since
 2026-11-13 it is active on two OP Labs staging devnets (see *Chains, devnets,
 and Base*). Every other status fact below is a snapshot taken **2026-11-11**; protocol facts were read at
@@ -384,6 +386,9 @@ struct Identifier { address origin; uint256 blockNumber; uint256 logIndex; uint2
 4. A target with no code counts as a successful relay and consumes the message.
 
 ### ETH transfer
+
+Built: the transfer row comes from the `SentMessage` payload
+(`op_interop/eth_transfer.rs`); `SendETH` / `RelayETH` are cross-checks (ADR-019).
 
 - **Source** (`sendETH{value}(to, chainId)`): `LiquidityBurned` →
   `SentMessage(dest, target = 0x…24, nonce, sender = 0x…24,

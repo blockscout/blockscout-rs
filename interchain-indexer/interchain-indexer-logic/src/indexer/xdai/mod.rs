@@ -9,3 +9,4 @@ mod version;
 
 pub use indexer::{XDaiChainConfig, XDaiContractConfig, XDaiIndexer};
 pub use settings::XDaiIndexerSettings;
+pub(crate) use types::NATIVE_SENTINEL;

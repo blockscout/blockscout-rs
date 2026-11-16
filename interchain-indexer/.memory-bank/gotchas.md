@@ -2320,6 +2320,13 @@ second bridge's native leg land in the *same* Gnosis-native asset as xDai's,
 even though it no longer also merges with whatever asset sits on the other
 end of either bridge's edge.
 
+OP interop (ADR-019) is the second user of the sentinel: it imports
+`xdai::NATIVE_SENTINEL` (re-exported `pub(crate)` from `xdai/mod.rs`), writes
+it on both ends of every ETH transfer with `mirror` linkage, and seeds one
+`ETH` / 18-decimals native row per chain of the bridge at start. Like the xDai
+seed, it overwrites name, symbol and decimals of an existing native row on
+every start and keeps an existing icon.
+
 ---
 
 ## xDai Destination Events Can Carry Legacy Source Hashes Above The Epoch Floor
@@ -3315,3 +3322,12 @@ destination block and the source block
 both legs the entry consolidates, the one-level metadata merge adds the
 missing `executing_message` key, the ledger upsert adds the missing row, and
 the pending row is removed.
+
+## An OP Interop ETH Transfer Row Exists Only If The Source Block Was Ingested By A Build That Derives It
+
+The transfer is built by `consolidate` from the source leg's payload
+(ADR-019). A message stored before that code shipped has no transfer row, and
+a destination-only replay writes nothing. To add transfers to older messages,
+rescan both chains' ranges; a source-only rescan also works (it upserts the
+transfer and the projection counts it once) but leaves one `pending_messages`
+row per message, as described above.

@@ -6,6 +6,7 @@
 
 mod abi;
 mod consolidation;
+mod eth_transfer;
 mod events;
 pub mod indexer;
 pub(crate) mod metrics;
@@ -29,8 +30,8 @@ pub(crate) mod test_fixtures {
         abi::OpInteropRegistry,
         indexer::OpInteropContractConfig,
         version::{
-            CROSS_L2_INBOX, EXECUTING_MESSAGE_TOPIC0, L2_TO_L2_MESSENGER, RELAYED_MESSAGE_TOPIC0,
-            SENT_MESSAGE_TOPIC0,
+            CROSS_L2_INBOX, EXECUTING_MESSAGE_TOPIC0, L2_TO_L2_MESSENGER, RELAY_ETH_TOPIC0,
+            RELAYED_MESSAGE_TOPIC0, SEND_ETH_TOPIC0, SENT_MESSAGE_TOPIC0, SUPERCHAIN_ETH_BRIDGE,
         },
     };
 
@@ -92,7 +93,17 @@ pub(crate) mod test_fixtures {
         log_with_topic0(relay_logs(), RELAYED_MESSAGE_TOPIC0)
     }
 
-    /// The two contract entries of one chain, as `bridges.json` carries them.
+    /// The `SendETH` log of the send fixture's first call.
+    pub(crate) fn send_eth_log() -> Log {
+        log_with_topic0(send_calls().remove(0), SEND_ETH_TOPIC0)
+    }
+
+    /// The `RelayETH` log of the relay fixture.
+    pub(crate) fn relay_eth_log() -> Log {
+        log_with_topic0(relay_logs(), RELAY_ETH_TOPIC0)
+    }
+
+    /// The three contract entries of one chain, as `bridges.json` carries them.
     pub(crate) fn contracts(started_at_block: u64) -> Vec<OpInteropContractConfig> {
         vec![
             OpInteropContractConfig {
@@ -104,6 +115,12 @@ pub(crate) mod test_fixtures {
             OpInteropContractConfig {
                 address: L2_TO_L2_MESSENGER,
                 kind: Some("l2_to_l2_messenger".to_string()),
+                version: 1,
+                started_at_block,
+            },
+            OpInteropContractConfig {
+                address: SUPERCHAIN_ETH_BRIDGE,
+                kind: Some("superchain_eth_bridge".to_string()),
                 version: 1,
                 started_at_block,
             },

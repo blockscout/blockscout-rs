@@ -56,7 +56,11 @@ pairs each `RelayedMessage` with its `ExecutingMessage` and decides what to
 apply; `dispatch_transaction` then mutates `MessageBuffer` entries keyed by
 the messenger `messageHash`. `Message::consolidate` is infallible. Besides
 `crosschain_messages`, every observed log is written to `op_interop_legs` by
-`flush_to_final_storage`.
+`flush_to_final_storage`. A native ETH transfer through `SuperchainETHBridge`
+is derived from the `SentMessage` payload (`op_interop/eth_transfer.rs`,
+called from `Message::consolidate`); the bridge's `SendETH` / `RelayETH`
+events (third contract kind `superchain_eth_bridge`) are cross-checks only
+(ADR-019).
 
 ### MessageBuffer
 

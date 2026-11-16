@@ -9,7 +9,8 @@ use prometheus::{IntCounterVec, register_int_counter_vec};
 // `protocol = "op_interop"`.
 lazy_static! {
     /// Interop logs decoded, by event. `event` is a closed set:
-    /// `sent_message`, `executing_message`, `relayed_message`.
+    /// `sent_message`, `executing_message`, `relayed_message`, `send_eth`,
+    /// `relay_eth`.
     ///
     /// Counted per processing attempt, so a retried or rescanned block counts
     /// again. On one chain, `relayed_message` and messenger-origin
@@ -55,6 +56,19 @@ lazy_static! {
         &["bridge_id", "chain_id"],
     )
     .unwrap();
+
+    /// kind: unrecognized_payload, send_eth_missing, send_eth_unpaired,
+    /// send_eth_mismatch, relay_eth_missing, relay_eth_mismatch. Zero is the
+    /// expected value. The two relay kinds are counted per consolidation
+    /// attempt; the other four are counted per ingestion of the transaction,
+    /// so a retried or rescanned block counts them again.
+    pub static ref OP_INTEROP_ETH_TRANSFER_ANOMALIES_TOTAL: IntCounterVec =
+        register_int_counter_vec!(
+            "interchain_indexer_op_interop_eth_transfer_anomalies_total",
+            "OP interop ETH transfer payloads or bridge events that disagree with the expected shape",
+            &["bridge_id", "kind"],
+        )
+        .unwrap();
 
     /// Observations that contradict what the buffer already holds. `kind` is
     /// a closed set: `duplicate_leg` (a different log for a side that is
