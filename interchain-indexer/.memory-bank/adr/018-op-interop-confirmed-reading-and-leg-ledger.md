@@ -101,7 +101,10 @@ behind op-supernode), not a property of the dependency set.
 ### Alternative 3: JSON ABI in the config
 
 Rejected: the grammar is small, fixed per revision, and a mistyped ABI would
-index nothing silently. Pinned literals plus a startup check catch it.
+index nothing silently. With pinned literals, a signature string that does not
+hash to its `topic0` literal is a startup error. This checks the code against
+itself, not against the chain: the deployed contract's `version()` is not
+read, so an event changed on chain still shows only as "no events".
 
 ### Alternative 4: A destination-only completed row
 
@@ -120,8 +123,10 @@ ledger deliberately has no link to the message table.
 
 - Nothing written can be retracted by a reorg of an unconfirmed block.
 - No receipt or header RPC load: one `eth_getLogs` per range per chain.
-- Per-leg evidence, with block hashes, is kept even for messages that never
-  complete.
+- Per-leg evidence, with block hashes, is kept for a sent message even if it
+  never completes. A relay seen before its source is not in the ledger yet:
+  ledger rows are written with the message row, so that leg stays in
+  `pending_messages` until the source leg arrives.
 
 ### Negative
 
@@ -130,7 +135,9 @@ ledger deliberately has no link to the message table.
   not the transaction origin: no transaction is fetched.
 - A one-sided replay (retry or rescan of only one chain's block) of an
   already finalized message leaves a row in `pending_messages` that never
-  finalizes. Harmless to the canonical row; accepted.
+  finalizes. Harmless to the canonical row; accepted. A destination-only
+  replay also writes nothing, so repairing a stored message needs a replay of
+  both its source and destination blocks (see `gotchas.md`).
 - Nodes of one RPC pool can disagree about the confirmed head.
 
 ### Neutral

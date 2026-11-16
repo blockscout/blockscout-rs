@@ -3300,3 +3300,18 @@ stale, is offloaded to `pending_messages`. It can never finalize because the
 other leg is not re-read. This is harmless to the canonical row and is not a
 leak to chase. `test_replay_source_only_after_completion_keeps_destination`
 asserts the single leftover row. See ADR-018.
+
+The two sides are not symmetric. A source-only replay reaches the upsert; a
+**destination-only replay writes nothing at all**: `consolidate` returns
+`Ok(None)` for an entry without a source leg, so neither the message row nor
+any `op_interop_legs` row is touched, the rescan reports no failure, and the
+only trace is the leftover `pending_messages` row. So a relay that was stored
+wrongly — typically unpaired, because the `cross_l2_inbox` version window was
+misconfigured and its `ExecutingMessage` resolved `WrongVersion` (a warning,
+not a failed block) — is **not** repaired by rescanning the destination range
+alone. To repair an OP interop message, rescan both of its blocks: the
+destination block and the source block
+(`protocol_metadata.op_interop.source.block_number` of the stored row). With
+both legs the entry consolidates, the one-level metadata merge adds the
+missing `executing_message` key, the ledger upsert adds the missing row, and
+the pending row is removed.
