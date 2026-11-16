@@ -195,6 +195,8 @@ export function handleDataChanged(event: DataChangedEvent): void {
   if (resolver == null) {
     resolver = new ENSv2Resolver(resolverId);
     resolver.address = event.address;
+    resolver.recordBased = false;
+    resolver.attachmentCount = 0;
     resolver.save();
   }
 

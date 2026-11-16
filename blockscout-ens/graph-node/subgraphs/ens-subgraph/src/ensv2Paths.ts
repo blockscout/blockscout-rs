@@ -64,15 +64,29 @@ import {
 } from "./types/RootRegistry/PermissionedRegistry";
 
 
+// Names nested deeper than this below a (de)activated link are left as
+// they are. Guards against registries that (directly or indirectly) link
+// to themselves, whose namehashes would otherwise grow without end.
+const MAX_BACKFILL_DEPTH = 16;
+
+// The append helpers below allocate from a fresh load, for the same reason
+// as appendRegistryNamespaceIndex (ensv2Utils.ts), and sync the caller's
+// snapshot.
 function appendSlotPathIndex(slot: ENSv2NameSlot, path: ENSv2NamePath): void {
-  let index = new ENSv2SlotPathIndex(slotPathIndexId(slot.id, slot.pathCount));
-  index.slot = slot.id;
-  index.index = slot.pathCount;
+  let current = ENSv2NameSlot.load(slot.id);
+  if (current == null) {
+    current = slot;
+  }
+  let next = current.pathCount;
+  let index = new ENSv2SlotPathIndex(slotPathIndexId(current.id, next));
+  index.slot = current.id;
+  index.index = next;
   index.path = path.id;
   index.save();
 
-  slot.pathCount = slot.pathCount + 1;
-  slot.save();
+  current.pathCount = next + 1;
+  current.save();
+  slot.pathCount = next + 1;
 }
 
 // A registration silently resets its slot resolver even when no
@@ -100,16 +114,20 @@ function appendPathNamespaceIndex(
   path: ENSv2NamePath,
   namespace: ENSv2Namespace
 ): void {
-  let index = new ENSv2PathNamespaceIndex(
-    pathNamespaceIndexId(path.id, path.namespaceCount)
-  );
-  index.path = path.id;
-  index.index = path.namespaceCount;
+  let current = ENSv2NamePath.load(path.id);
+  if (current == null) {
+    current = path;
+  }
+  let next = current.namespaceCount;
+  let index = new ENSv2PathNamespaceIndex(pathNamespaceIndexId(current.id, next));
+  index.path = current.id;
+  index.index = next;
   index.namespace = namespace.id;
   index.save();
 
-  path.namespaceCount = path.namespaceCount + 1;
-  path.save();
+  current.namespaceCount = next + 1;
+  current.save();
+  path.namespaceCount = next + 1;
 }
 
 // Reverse of appendPathNamespaceIndex above — lets deactivatePathsForNamespace
@@ -123,16 +141,20 @@ function appendNamespacePathIndex(
   namespace: ENSv2Namespace,
   path: ENSv2NamePath
 ): void {
-  let index = new ENSv2NamespacePathIndex(
-    namespacePathIndexId(namespace.id, namespace.pathCount)
-  );
-  index.namespace = namespace.id;
-  index.index = namespace.pathCount;
+  let current = ENSv2Namespace.load(namespace.id);
+  if (current == null) {
+    current = namespace;
+  }
+  let next = current.pathCount;
+  let index = new ENSv2NamespacePathIndex(namespacePathIndexId(current.id, next));
+  index.namespace = current.id;
+  index.index = next;
   index.path = path.id;
   index.save();
 
-  namespace.pathCount = namespace.pathCount + 1;
-  namespace.save();
+  current.pathCount = next + 1;
+  current.save();
+  namespace.pathCount = next + 1;
 }
 
 // Idempotent: sets active = true whether creating or reactivating. Caller
@@ -274,7 +296,8 @@ export function deactivateNamespacesFromParentSlot(
 // paths — not an unbounded scan over the child registry's slots.
 function deactivatePathsForNamespace(
   namespace: ENSv2Namespace,
-  block: ethereum.Block
+  block: ethereum.Block,
+  depth: i32 = 0
 ): void {
   for (let i = 0; i < namespace.pathCount; i++) {
     let pathIndex = ENSv2NamespacePathIndex.load(namespacePathIndexId(namespace.id, i));
@@ -302,7 +325,41 @@ function deactivatePathsForNamespace(
       if (slot != null) {
         retireProjectedDomain(path, slot, block.timestamp);
       }
+      deactivateDescendantsOfPath(path, block, depth + 1);
     }
+  }
+}
+
+// A path that stops resolving takes every name below it along:
+// getSubregistry() returns zero for an expired or unregistered name, and the
+// names of a superseded subregistry are no longer reachable. Deactivate the
+// namespaces linked below the path and, recursively, their paths. Re-linking
+// (handleSubregistryUpdated) reactivates and backfills them.
+export function deactivateDescendantsOfPath(
+  path: ENSv2NamePath,
+  block: ethereum.Block,
+  depth: i32
+): void {
+  if (depth >= MAX_BACKFILL_DEPTH) {
+    return;
+  }
+  let current = ENSv2NamePath.load(path.id);
+  if (current == null) {
+    return;
+  }
+  for (let i = 0; i < current.namespaceCount; i++) {
+    let index = ENSv2PathNamespaceIndex.load(pathNamespaceIndexId(current.id, i));
+    if (index == null) {
+      continue;
+    }
+    let namespace = ENSv2Namespace.load(index.namespace);
+    if (namespace == null || !namespace.active) {
+      continue;
+    }
+    namespace.active = false;
+    namespace.updatedAtBlock = block.number;
+    namespace.save();
+    deactivatePathsForNamespace(namespace, block, depth);
   }
 }
 
@@ -394,10 +451,6 @@ export function handleSubregistryUpdated(event: SubregistryUpdated): void {
   }
 }
 
-// Names nested deeper than this below a late link are left unprojected.
-// Guards against registries that (directly or indirectly) link to
-// themselves, whose namehashes would otherwise grow without end.
-const MAX_BACKFILL_DEPTH = 16;
 
 // Creates or reactivates the namespace (childRegistry under parentPath).
 // When it was not already active, names registered in childRegistry before

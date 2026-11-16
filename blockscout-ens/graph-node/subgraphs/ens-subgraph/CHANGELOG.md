@@ -3,6 +3,37 @@
 Version labels match the Subgraph Studio deployments of the mainnet subgraph
 `5XqPmWe6gjyrJtFn9cLy237i4cWw2j9HcUJEXsP5qGtH`.
 
+## v2.3.3 (2026-11-16)
+
+Supersedes v2.3.2, which was tagged but not deployed.
+
+### Fixed
+
+- Names below a name that stops resolving stayed live. In the deployed
+  registries `unregister()` sets the name's expiry to now and
+  `getSubregistry()` returns zero for an expired name, so nothing below an
+  unregistered name resolves; nor do the names of a subregistry its parent
+  replaced. Only the first level was deactivated (and on unregister only for
+  the fixed UserRegistry). Deactivating a path now deactivates the
+  namespaces linked below it and their paths, recursively (up to 16 levels),
+  and retires their `Domain` rows. Re-linking restores them through the
+  v2.3.2 backfill. No mainnet name was affected as of block 26,426,095.
+- A PermissionedResolver answers for a node without its own record from its
+  default record (`_recordIds[0]`, the record linked to the root node),
+  including a node unlinked to record 0. The projection ignored it, so
+  `Resolver.addr` and `Domain.resolvedAddress` stayed empty. It now follows
+  the default record, and a change to it reaches every name on that resolver
+  that has no record of its own. Adds `ENSv2Resolver.recordBased`,
+  `ENSv2Resolver.attachmentCount`, `ENSv2ResolverAttachment` and
+  `ENSv2ResolverAttachmentIndex`. Two mainnet names were affected
+  (ethbeggar.eth, walletours.eth).
+- v2.3.2's backfill could allocate a namespace index from a stale registry
+  snapshot when a registry is linked below itself, overwriting indexes and
+  rolling back `namespaceCount`, so later registrations missed names. Index
+  allocation now reads the current counter.
+
+Requires a full re-index.
+
 ## v2.3.2 (2026-11-16)
 
 ### Fixed

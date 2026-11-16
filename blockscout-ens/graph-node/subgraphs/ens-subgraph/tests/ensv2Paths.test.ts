@@ -26,7 +26,7 @@ import {
   handleContenthashUpdated,
   handleLinked,
 } from "../src/ensv2Resolver";
-import { namespaceId, pathNamehash, resolverLinkId } from "../src/ensv2Utils";
+import { namespaceId, pathNamehash, registryNamespaceIndexId, resolverLinkId } from "../src/ensv2Utils";
 import { getOrCreateRegistry } from "../src/ensv2Discovery";
 import { createResolverID, handleAddrChanged } from "../src/resolver";
 import { AddrChanged } from "../src/types/Resolver/Resolver";
@@ -34,6 +34,7 @@ import {
   Domain,
   ENSv2NamePath,
   ENSv2NameSlot,
+  ENSv2Registry,
   Resolver,
 } from "../src/types/schema";
 import {
@@ -1573,11 +1574,15 @@ test("unregister decrements and re-registration restores the legacy parent's sub
   assert.fieldEquals("ENSv2NamePath", pathId, "active", "true");
   assert.fieldEquals("Domain", ethPathId, "subdomainCount", "4");
 
-  // Root-level unregister (no projected Domain) never touches any count.
+  // Unregistering "eth" itself in the RootRegistry makes every name below
+  // it unreachable (getSubregistry returns zero for an unregistered name):
+  // the projected child is deactivated and stops counting. The root-level
+  // "eth" path has no projected Domain of its own.
   handleLabelUnregistered(
     createLabelUnregisteredEvent(ROOT_REGISTRY, slotToken(1))
   );
-  assert.fieldEquals("Domain", ethPathId, "subdomainCount", "4");
+  assert.fieldEquals("ENSv2NamePath", pathId, "active", "false");
+  assert.fieldEquals("Domain", ethPathId, "subdomainCount", "3");
 });
 
 test("never-expiring ENSv2 slots (uint64 max) clamp legacy Domain/Registration expiry to the max supported timestamp, native slot keeps the raw value", () => {
@@ -2003,14 +2008,122 @@ test("unregister on a registry with the fixed UserRegistry implementation clears
   assert.fieldEquals("Domain", yId, "owner", EMPTY);
 });
 
-test("unregister on an older registry implementation keeps resolver, subregistry and the child namespace, as on chain", () => {
+test("unregister on an older registry implementation keeps resolver and subregistry, but the names below stop resolving", () => {
   dataSourceMock.setNetwork("sepolia");
   const PARENT = "0xe1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1";
   const CHILD = "0xe2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2";
 
   let xPath = setupUnregisterScenario(PARENT, CHILD);
   let xSlot = slotIdFor(PARENT, 1);
+  // Stored on chain (and restored by a revive) ...
   assert.fieldEquals("ENSv2NameSlot", xSlot, "subregistry", Address.fromString(CHILD).toHexString());
+  // ... but getSubregistry() returns zero for the unregistered name.
   let ns = namespaceId(Address.fromString(CHILD), xPath).toHexString();
-  assert.fieldEquals("ENSv2Namespace", ns, "active", "true");
+  assert.fieldEquals("ENSv2Namespace", ns, "active", "false");
+  let yId = pathNamehash(xPath, Bytes.fromI32(522)).toHexString();
+  assert.fieldEquals("ENSv2NamePath", yId, "active", "false");
+  assert.fieldEquals("Domain", yId, "owner", EMPTY);
+});
+
+// --- v2.3.3: index allocation under recursion, recursive deactivation ---
+
+test("a self-linking registry reached through a parent name with two paths indexes every namespace it gets", () => {
+  dataSourceMock.setNetwork("sepolia");
+  const SHARED = "0xf9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9";
+  const SELF = "0xfafafafafafafafafafafafafafafafafafafafa";
+  handleLabelRegistered(createLabelRegisteredEvent(SELF, slotToken(1), Bytes.fromI32(631), "a"));
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(SELF, slotToken(1), SELF));
+  // SHARED serves two root names, so its slot "x" has two paths.
+  handleLabelRegistered(createLabelRegisteredEvent(ROOT_REGISTRY, slotToken(1), Bytes.fromI32(632), "b1"));
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(ROOT_REGISTRY, slotToken(1), SHARED));
+  handleLabelRegistered(createLabelRegisteredEvent(ROOT_REGISTRY, slotToken(2), Bytes.fromI32(633), "b2"));
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(ROOT_REGISTRY, slotToken(2), SHARED));
+  handleLabelRegistered(createLabelRegisteredEvent(SHARED, slotToken(1), Bytes.fromI32(634), "x"));
+  assert.fieldEquals("ENSv2NameSlot", slotIdFor(SHARED, 1), "pathCount", "2");
+
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(SHARED, slotToken(1), SELF));
+
+  // Every namespace row is indexed exactly once: the root namespace and
+  // SHARED's two, plus all of SELF's.
+  let self = ENSv2Registry.load(Address.fromString(SELF))!;
+  assert.entityCount("ENSv2Namespace", 3 + self.namespaceCount);
+  assert.entityCount("ENSv2RegistryNamespaceIndex", 3 + self.namespaceCount);
+  for (let i = 0; i < self.namespaceCount; i++) {
+    assert.fieldEquals(
+      "ENSv2RegistryNamespaceIndex",
+      registryNamespaceIndexId(self.id, i).toHexString(),
+      "index",
+      i.toString()
+    );
+  }
+});
+
+test("switching a subregistry retires the old registry's names at every depth, and switching back restores them", () => {
+  dataSourceMock.setNetwork("sepolia");
+  const OLD = "0xf6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6";
+  const OLD_CHILD = "0xf7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7";
+  const EMPTY_REGISTRY = "0xf8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8";
+  let baseHash = Bytes.fromI32(620);
+  let xHash = Bytes.fromI32(621);
+  let yHash = Bytes.fromI32(622);
+  handleLabelRegistered(createLabelRegisteredEvent(ROOT_REGISTRY, slotToken(1), baseHash, "base"));
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(ROOT_REGISTRY, slotToken(1), OLD));
+  handleLabelRegistered(createLabelRegisteredEvent(OLD, slotToken(1), xHash, "x"));
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(OLD, slotToken(1), OLD_CHILD));
+  handleLabelRegistered(createLabelRegisteredEvent(OLD_CHILD, slotToken(1), yHash, "y"));
+
+  let xPath = pathNamehash(rootPath(baseHash), xHash);
+  let yId = pathNamehash(xPath, yHash).toHexString();
+  assert.fieldEquals("Domain", yId, "owner", OWNER.toLowerCase());
+
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(ROOT_REGISTRY, slotToken(1), EMPTY_REGISTRY));
+  assert.fieldEquals("ENSv2NamePath", xPath.toHexString(), "active", "false");
+  assert.fieldEquals("ENSv2NamePath", yId, "active", "false");
+  assert.fieldEquals("Domain", yId, "owner", EMPTY);
+  assert.fieldEquals(
+    "ENSv2Namespace",
+    namespaceId(Address.fromString(OLD_CHILD), xPath).toHexString(),
+    "active",
+    "false"
+  );
+
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(ROOT_REGISTRY, slotToken(1), OLD));
+  assert.fieldEquals("ENSv2NamePath", yId, "active", "true");
+  assert.fieldEquals("Domain", yId, "owner", OWNER.toLowerCase());
+  assert.fieldEquals("Domain", xPath.toHexString(), "subdomainCount", "1");
+});
+
+test("unregistering a name retires every name below it, and re-registering it with its subregistry restores them", () => {
+  dataSourceMock.setNetwork("sepolia");
+  const PARENT = "0xc5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5";
+  const CHILD = "0xc6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6";
+  const GRANDCHILD = "0xc7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7";
+  let baseHash = Bytes.fromI32(640);
+  let xHash = Bytes.fromI32(641);
+  let yHash = Bytes.fromI32(642);
+  let zHash = Bytes.fromI32(643);
+  handleLabelRegistered(createLabelRegisteredEvent(ROOT_REGISTRY, slotToken(1), baseHash, "base"));
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(ROOT_REGISTRY, slotToken(1), PARENT));
+  handleLabelRegistered(createLabelRegisteredEvent(PARENT, slotToken(1), xHash, "x"));
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(PARENT, slotToken(1), CHILD));
+  handleLabelRegistered(createLabelRegisteredEvent(CHILD, slotToken(1), yHash, "y"));
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(CHILD, slotToken(1), GRANDCHILD));
+  handleLabelRegistered(createLabelRegisteredEvent(GRANDCHILD, slotToken(1), zHash, "z"));
+  let xPath = pathNamehash(rootPath(baseHash), xHash);
+  let yPath = pathNamehash(xPath, yHash);
+  let zId = pathNamehash(yPath, zHash).toHexString();
+  assert.fieldEquals("Domain", zId, "name", "z.y.x.base");
+
+  handleLabelUnregistered(createLabelUnregisteredEvent(PARENT, slotToken(1)));
+  assert.fieldEquals("ENSv2NamePath", yPath.toHexString(), "active", "false");
+  assert.fieldEquals("ENSv2NamePath", zId, "active", "false");
+  assert.fieldEquals("Domain", zId, "owner", EMPTY);
+
+  // Re-registration sets the subregistry again (SubregistryUpdated follows
+  // LabelRegistered), which brings back everything below.
+  handleLabelRegistered(createLabelRegisteredEvent(PARENT, slotToken(1), xHash, "x"));
+  handleSubregistryUpdated(createSubregistryUpdatedEvent(PARENT, slotToken(1), CHILD));
+  assert.fieldEquals("ENSv2NamePath", zId, "active", "true");
+  assert.fieldEquals("Domain", zId, "owner", OWNER.toLowerCase());
+  assert.fieldEquals("Domain", yPath.toHexString(), "subdomainCount", "1");
 });

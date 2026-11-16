@@ -683,10 +683,30 @@ type ENSv2NamespaceLink @entity(immutable: false) {
 type ENSv2Resolver @entity(immutable: false) {
   id: Bytes! # resolver address
   address: Bytes!
+  # True once the address has emitted PermissionedResolver (recordId-keyed)
+  # events. Such a resolver answers for a node without its own record from
+  # its default record (the record linked to the root node).
+  recordBased: Boolean!
+  # Number of ENSv2ResolverAttachmentIndex rows: names ever pointed at this
+  # (record-based) resolver, so a default-record change can reach them.
+  attachmentCount: Int!
   slots: [ENSv2NameSlot!]! @derivedFrom(field: "resolver")
   # PermissionedResolver's recordId-keyed model — see ENSv2ResolverRecord below.
   records: [ENSv2ResolverRecord!]! @derivedFrom(field: "resolver")
   links: [ENSv2ResolverLink!]! @derivedFrom(field: "resolver")
+}
+
+type ENSv2ResolverAttachment @entity(immutable: true) {
+  id: Bytes! # resolver + node
+  resolver: ENSv2Resolver!
+  node: Bytes!
+}
+
+type ENSv2ResolverAttachmentIndex @entity(immutable: true) {
+  id: Bytes! # resolver + index
+  resolver: ENSv2Resolver!
+  index: Int!
+  attachment: ENSv2ResolverAttachment!
 }
 
 type ENSv2RoleAssignment @entity(immutable: false) {

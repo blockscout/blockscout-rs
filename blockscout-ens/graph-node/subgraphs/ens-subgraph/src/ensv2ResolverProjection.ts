@@ -4,7 +4,7 @@
 // configured to use the same resolver address.
 import { Address, BigInt, Bytes } from "@graphprotocol/graph-ts";
 import { createResolverID } from "./resolver";
-import { createOrLoadAccount } from "./utils";
+import { concat, createOrLoadAccount, i32ToBytes, ROOT_NODE } from "./utils";
 import {
   resolverAddressIndexId,
   resolverLinkId,
@@ -15,6 +15,8 @@ import {
 import {
   Domain,
   ENSv2Resolver,
+  ENSv2ResolverAttachment,
+  ENSv2ResolverAttachmentIndex,
   ENSv2ResolverAddress,
   ENSv2ResolverAddressIndex,
   ENSv2ResolverLink,
@@ -222,35 +224,123 @@ export function attachDomainResolver(
     legacy.save();
   }
   domain.resolver = legacy.id;
-
-  let link = ENSv2ResolverLink.load(resolverLinkId(resolverAddress, node));
-  if (link == null) {
-    // No ENSv2ResolverLink means this is not a PermissionedResolver record
-    // we project from native entities; it is a classic node-keyed resolver
-    // (PublicResolverV2 and friends) whose records the ENSv1 resolver
-    // handlers in resolver.ts already keep on the legacy Resolver row. Same
-    // behaviour as handleNewResolver in ensRegistry.ts: keep the snapshot
-    // and carry its addr over to the Domain rather than wiping it.
-    domain.resolvedAddress = legacy.addr;
-    domain.save();
-    return;
-  }
   domain.save();
 
-  if (link.active) {
-    let recordId = link.record;
-    if (recordId) {
-      let record = ENSv2ResolverRecord.load(recordId);
+  recordResolverAttachment(resolverAddress, node);
+  if (projectEffectiveRecord(resolverAddress, node)) {
+    return;
+  }
+  // Neither the node nor the resolver's default has a link: this is a
+  // classic node-keyed resolver (PublicResolverV2 and friends) whose records
+  // the ENSv1 resolver handlers in resolver.ts already keep on the legacy
+  // Resolver row. Same behaviour as handleNewResolver in ensRegistry.ts:
+  // keep the snapshot and carry its addr over to the Domain.
+  domain.resolvedAddress = legacy.addr;
+  domain.save();
+}
+
+// Projects the record a PermissionedResolver answers with for `node`, as
+// `_record()` picks it: the node's own linked record, else the default
+// record (linked to the root node), else nothing. Returns false when the
+// address has no link for the node and no default link, i.e. it is not
+// using the recordId model for this node.
+export function projectEffectiveRecord(
+  resolverAddress: Address,
+  node: Bytes,
+): boolean {
+  let resolverId: Bytes = resolverAddress;
+  let own = ENSv2ResolverLink.load(resolverLinkId(resolverId, node));
+  if (own != null && own.active) {
+    let ownRecordId = own.record;
+    if (ownRecordId) {
+      let record = ENSv2ResolverRecord.load(ownRecordId);
       if (record != null) {
         replaceLegacyResolverSnapshot(record, node);
-        return;
+        return true;
       }
     }
   }
+  let fallback: ENSv2ResolverLink | null = null;
+  if (!node.equals(ROOT_NODE)) {
+    fallback = ENSv2ResolverLink.load(resolverLinkId(resolverId, ROOT_NODE));
+  }
+  if (fallback != null && fallback.active) {
+    let fallbackRecordId = fallback.record;
+    if (fallbackRecordId) {
+      let record = ENSv2ResolverRecord.load(fallbackRecordId);
+      if (record != null) {
+        replaceLegacyResolverSnapshot(record, node);
+        return true;
+      }
+    }
+  }
+  if (own == null && fallback == null) {
+    return false;
+  }
   // The link exists but is explicitly inactive (linkToRecord(name, 0)) or
-  // points at nothing: the native side says this name has no record here,
-  // so the legacy projection must say the same.
+  // points at nothing, and there is no default record: the native side says
+  // this name has no record here, so the legacy projection must say the same.
   clearLegacyResolverSnapshot(resolverAddress, node);
+  return true;
+}
+
+// Remembers each name pointed at a record-based resolver, so a change of the
+// resolver's default record reaches the names that rely on it.
+function recordResolverAttachment(resolverAddress: Address, node: Bytes): void {
+  if (node.equals(ROOT_NODE)) {
+    return;
+  }
+  let resolver = ENSv2Resolver.load(resolverAddress);
+  if (resolver == null || !resolver.recordBased) {
+    return;
+  }
+  let id = Bytes.fromByteArray(concat(resolver.id, node));
+  if (ENSv2ResolverAttachment.load(id) != null) {
+    return;
+  }
+  let attachment = new ENSv2ResolverAttachment(id);
+  attachment.resolver = resolver.id;
+  attachment.node = node;
+  attachment.save();
+
+  let index = new ENSv2ResolverAttachmentIndex(
+    Bytes.fromByteArray(concat(resolver.id, i32ToBytes(resolver.attachmentCount))),
+  );
+  index.resolver = resolver.id;
+  index.index = resolver.attachmentCount;
+  index.attachment = attachment.id;
+  index.save();
+  resolver.attachmentCount = resolver.attachmentCount + 1;
+  resolver.save();
+}
+
+// The default record changed (relinked, unlinked or updated): re-project
+// every name on this resolver that has no active record of its own.
+// projectEffectiveRecord only writes through to a Domain that still points
+// at this resolver.
+export function refreshDefaultRecordConsumers(resolverId: Bytes): void {
+  let resolver = ENSv2Resolver.load(resolverId);
+  if (resolver == null) {
+    return;
+  }
+  let resolverAddress = Address.fromBytes(resolver.address);
+  for (let i = 0; i < resolver.attachmentCount; i++) {
+    let index = ENSv2ResolverAttachmentIndex.load(
+      Bytes.fromByteArray(concat(resolver.id, i32ToBytes(i))),
+    );
+    if (index == null) {
+      continue;
+    }
+    let attachment = ENSv2ResolverAttachment.load(index.attachment);
+    if (attachment == null) {
+      continue;
+    }
+    let own = ENSv2ResolverLink.load(resolverLinkId(resolver.id, attachment.node));
+    if (own != null && own.active) {
+      continue;
+    }
+    projectEffectiveRecord(resolverAddress, attachment.node);
+  }
 }
 
 export function replaceLegacyResolverSnapshot(

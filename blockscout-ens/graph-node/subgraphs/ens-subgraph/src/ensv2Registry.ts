@@ -47,7 +47,7 @@ import {
   handleResolverUpdated as handleResolverUpdatedPaths,
   handleSubregistryUpdated as handleSubregistryUpdatedPaths,
   clearProjectedDomainResolversForSlot,
-  deactivateNamespacesFromParentSlot,
+  deactivateDescendantsOfPath,
   materializePathsForSlot,
 } from "./ensv2Paths";
 import {
@@ -286,10 +286,8 @@ export function handleLabelUnregistered(event: LabelUnregistered): void {
   // mechanism already used to materialise them (not an unbounded scan).
   // materializePathsForSlot already reactivates a path on re-registration,
   // so this and that together give the primary case a coherent lifecycle.
-  // Note: this does not reach paths materialised in a CHILD registry
-  // through a namespace this slot's subregistry served — enumerating those
-  // isn't bounded from a slot-scoped index, so that half is tracked
-  // separately rather than attempted here.
+  // Names below the slot are deactivated through the path's namespace index
+  // (deactivateDescendantsOfPath).
   for (let i = 0; i < slot.pathCount; i++) {
     let pathIndex = ENSv2SlotPathIndex.load(slotPathIndexId(slot.id, i));
     if (pathIndex == null) {
@@ -314,6 +312,9 @@ export function handleLabelUnregistered(event: LabelUnregistered): void {
     path.save();
     if (wasActive) {
       retireProjectedDomain(path, slot, event.block.timestamp);
+      // getSubregistry() returns zero for an unregistered (expired) name on
+      // every implementation, so nothing below it resolves any more.
+      deactivateDescendantsOfPath(path, event.block, 0);
     }
   }
 
@@ -339,7 +340,6 @@ export function handleLabelUnregistered(event: LabelUnregistered): void {
         link.active = false;
         link.save();
       }
-      deactivateNamespacesFromParentSlot(slot, previousSubregistry, event.block);
     }
   }
 

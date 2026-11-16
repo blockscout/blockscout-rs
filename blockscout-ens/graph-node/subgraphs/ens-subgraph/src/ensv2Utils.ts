@@ -137,20 +137,29 @@ export function pathNamehash(baseNamehash: Bytes, labelhash: Bytes): Bytes {
 // registry's root namespace is bootstrapped (ensv2Discovery.ts) and when a
 // namespace is created/found via a subregistry link (ensv2Paths.ts). Used to
 // live here to avoid duplication and circular imports.
+// Allocates from a fresh load of the registry: the caller's snapshot can be
+// stale when a recursive backfill has appended to the same registry (a
+// registry linked below itself). The caller's snapshot is synced afterwards.
 export function appendRegistryNamespaceIndex(
   registry: ENSv2Registry,
   namespace: ENSv2Namespace
 ): void {
+  let current = ENSv2Registry.load(registry.id);
+  if (current == null) {
+    current = registry;
+  }
+  let next = current.namespaceCount;
   let index = new ENSv2RegistryNamespaceIndex(
-    registryNamespaceIndexId(registry.id, registry.namespaceCount)
+    registryNamespaceIndexId(current.id, next)
   );
-  index.registry = registry.id;
-  index.index = registry.namespaceCount;
+  index.registry = current.id;
+  index.index = next;
   index.namespace = namespace.id;
   index.save();
 
-  registry.namespaceCount = registry.namespaceCount + 1;
-  registry.save();
+  current.namespaceCount = next + 1;
+  current.save();
+  registry.namespaceCount = next + 1;
 }
 
 // Records a newly created slot on its registry, so a namespace linked after

@@ -1110,3 +1110,92 @@ test("an ENSv1 name selecting a PermissionedResolver whose link was removed gets
   handleNewResolver(createV1NewResolverEvent(node, PERMISSIONED_RESOLVER));
   assert.assertTrue(!Domain.load(node.toHexString())!.resolvedAddress);
 });
+
+// --- v2.3.3: a PermissionedResolver's default record (linked to the root node) ---
+
+const ROOT_DNS_NAME = Bytes.fromHexString("0x00");
+const ROOT_NODE_BYTES = Bytes.fromHexString(
+  "0x0000000000000000000000000000000000000000000000000000000000000000"
+);
+
+function v1NodeOnPermissionedResolver(n: i32): Bytes {
+  let node = Bytes.fromHexString(
+    "0xbbbb0000000000000000000000000000000000000000000000000000000000" +
+      (n < 16 ? "0" : "") +
+      n.toString(16)
+  );
+  seedV1Domain(node);
+  return node;
+}
+
+test("a name with no record of its own resolves through the resolver's default record", () => {
+  handleResolverCreated(createResolverCreatedEvent());
+  let defaultRecord = BigInt.fromI32(90);
+  let a = Address.fromString("0x4444444444444444444444444444444444444401");
+  handleLinked(createLinkedEvent(defaultRecord, ROOT_NODE_BYTES, ROOT_DNS_NAME));
+  handleAddressUpdated(createAddressUpdatedEvent(defaultRecord, BigInt.fromI32(60), a));
+
+  let node = v1NodeOnPermissionedResolver(1);
+  handleNewResolver(createV1NewResolverEvent(node, PERMISSIONED_RESOLVER));
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", a.toHexString());
+
+  // A change to the default record reaches the name.
+  let b = Address.fromString("0x4444444444444444444444444444444444444402");
+  handleAddressUpdated(createAddressUpdatedEvent(defaultRecord, BigInt.fromI32(60), b));
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", b.toHexString());
+});
+
+test("a name's own record wins over the default; unlinking it falls back to the default", () => {
+  handleResolverCreated(createResolverCreatedEvent());
+  let defaultRecord = BigInt.fromI32(91);
+  let ownRecord = BigInt.fromI32(92);
+  let fallback = Address.fromString("0x4444444444444444444444444444444444444403");
+  let own = Address.fromString("0x4444444444444444444444444444444444444404");
+  handleLinked(createLinkedEvent(defaultRecord, ROOT_NODE_BYTES, ROOT_DNS_NAME));
+  handleAddressUpdated(createAddressUpdatedEvent(defaultRecord, BigInt.fromI32(60), fallback));
+
+  let node = v1NodeOnPermissionedResolver(2);
+  handleNewResolver(createV1NewResolverEvent(node, PERMISSIONED_RESOLVER));
+  handleLinked(createLinkedEvent(ownRecord, node, encodeLabel("own")));
+  handleAddressUpdated(createAddressUpdatedEvent(ownRecord, BigInt.fromI32(60), own));
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", own.toHexString());
+
+  // A default-record change does not touch a name with its own record.
+  let other = Address.fromString("0x4444444444444444444444444444444444444405");
+  handleAddressUpdated(createAddressUpdatedEvent(defaultRecord, BigInt.fromI32(60), other));
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", own.toHexString());
+
+  handleLinked(createLinkedEvent(BigInt.zero(), node, encodeLabel("own")));
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", other.toHexString());
+});
+
+test("a default record linked after the name was attached reaches it, and unlinking the default clears it", () => {
+  handleResolverCreated(createResolverCreatedEvent());
+  let node = v1NodeOnPermissionedResolver(3);
+  handleNewResolver(createV1NewResolverEvent(node, PERMISSIONED_RESOLVER));
+  assert.assertTrue(!Domain.load(node.toHexString())!.resolvedAddress);
+
+  let defaultRecord = BigInt.fromI32(93);
+  let a = Address.fromString("0x4444444444444444444444444444444444444406");
+  handleAddressUpdated(createAddressUpdatedEvent(defaultRecord, BigInt.fromI32(60), a));
+  handleLinked(createLinkedEvent(defaultRecord, ROOT_NODE_BYTES, ROOT_DNS_NAME));
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", a.toHexString());
+
+  handleLinked(createLinkedEvent(BigInt.zero(), ROOT_NODE_BYTES, ROOT_DNS_NAME));
+  assert.assertTrue(!Domain.load(node.toHexString())!.resolvedAddress);
+});
+
+test("a name that moved to another resolver is not touched by its old resolver's default record", () => {
+  handleResolverCreated(createResolverCreatedEvent());
+  let defaultRecord = BigInt.fromI32(94);
+  let a = Address.fromString("0x4444444444444444444444444444444444444407");
+  handleLinked(createLinkedEvent(defaultRecord, ROOT_NODE_BYTES, ROOT_DNS_NAME));
+  handleAddressUpdated(createAddressUpdatedEvent(defaultRecord, BigInt.fromI32(60), a));
+  let node = v1NodeOnPermissionedResolver(4);
+  handleNewResolver(createV1NewResolverEvent(node, PERMISSIONED_RESOLVER));
+  handleNewResolver(createV1NewResolverEvent(node, "0x0000000000000000000000000000000000000000"));
+
+  let b = Address.fromString("0x4444444444444444444444444444444444444408");
+  handleAddressUpdated(createAddressUpdatedEvent(defaultRecord, BigInt.fromI32(60), b));
+  assert.assertTrue(!Domain.load(node.toHexString())!.resolvedAddress);
+});

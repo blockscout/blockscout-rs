@@ -17,10 +17,12 @@ import {
   activeRecordMembershipAt,
   appendAddressIndex,
   appendTextIndex,
-  clearLegacyResolverSnapshot,
   deactivateRecordMembership,
+  projectEffectiveRecord,
+  refreshDefaultRecordConsumers,
   replaceLegacyResolverSnapshot,
 } from "./ensv2ResolverProjection";
+import { ROOT_NODE } from "./utils";
 import {
   ENSv2Resolver,
   ENSv2ResolverABI,
@@ -53,6 +55,19 @@ export function getOrCreateResolver(address: Address): ENSv2Resolver {
   if (resolver == null) {
     resolver = new ENSv2Resolver(id);
     resolver.address = address;
+    resolver.recordBased = false;
+    resolver.attachmentCount = 0;
+    resolver.save();
+  }
+  return resolver;
+}
+
+// For the PermissionedResolver handlers: the address emits recordId-keyed
+// events, so it resolves unlinked nodes through its default record.
+function getOrCreateRecordResolver(address: Address): ENSv2Resolver {
+  let resolver = getOrCreateResolver(address);
+  if (!resolver.recordBased) {
+    resolver.recordBased = true;
     resolver.save();
   }
   return resolver;
@@ -112,6 +127,9 @@ function projectRecordToActiveMemberships(
     let membership = activeRecordMembershipAt(record, i);
     if (membership != null) {
       replaceLegacyResolverSnapshot(record, membership.node);
+      if (membership.node.equals(ROOT_NODE)) {
+        refreshDefaultRecordConsumers(record.resolver);
+      }
     }
   }
 }
@@ -119,11 +137,11 @@ function projectRecordToActiveMemberships(
 // Also fires from the implementation constructor, creating an otherwise
 // unused resolver row for the implementation address.
 export function handleResolverCreated(event: ResolverCreated): void {
-  getOrCreateResolver(event.address);
+  getOrCreateRecordResolver(event.address);
 }
 
 export function handleResourceArgument(event: ResourceArgument): void {
-  let resolver = getOrCreateResolver(event.address);
+  let resolver = getOrCreateRecordResolver(event.address);
   let id = resourceId(resolver.id, event.params.resource);
   let argument = ENSv2ResolverResourceArgument.load(id);
   if (argument == null) {
@@ -139,7 +157,7 @@ export function handleResourceArgument(event: ResourceArgument): void {
 }
 
 export function handleLinked(event: Linked): void {
-  let resolver = getOrCreateResolver(event.address);
+  let resolver = getOrCreateRecordResolver(event.address);
   let recordId = event.params.recordId;
   let id = resolverLinkId(resolver.id, event.params.node);
 
@@ -170,7 +188,8 @@ export function handleLinked(event: Linked): void {
     link.transactionID = event.transaction.hash;
     link.logIndex = event.logIndex;
     link.save();
-    clearLegacyResolverSnapshot(resolver.address, event.params.node);
+    // An unlinked node falls back to the default record on chain.
+    projectEffectiveRecord(Address.fromBytes(resolver.address), event.params.node);
   } else {
     let record = getOrCreateRecord(resolver, recordId, event);
     link.record = record.id;
@@ -182,10 +201,13 @@ export function handleLinked(event: Linked): void {
     activateRecordMembership(record, link);
     replaceLegacyResolverSnapshot(record, event.params.node);
   }
+  if (event.params.node.equals(ROOT_NODE)) {
+    refreshDefaultRecordConsumers(resolver.id);
+  }
 }
 
 export function handleContenthashUpdated(event: ContenthashUpdated): void {
-  let resolver = getOrCreateResolver(event.address);
+  let resolver = getOrCreateRecordResolver(event.address);
   let record = getOrCreateRecord(resolver, event.params.recordId, event);
   record.contenthash = event.params.hash;
   record.save();
@@ -193,14 +215,14 @@ export function handleContenthashUpdated(event: ContenthashUpdated): void {
 }
 
 export function handleNameUpdated(event: NameUpdated): void {
-  let resolver = getOrCreateResolver(event.address);
+  let resolver = getOrCreateRecordResolver(event.address);
   let record = getOrCreateRecord(resolver, event.params.recordId, event);
   record.primaryName = event.params.primaryName;
   record.save();
 }
 
 export function handleAddressUpdated(event: AddressUpdated): void {
-  let resolver = getOrCreateResolver(event.address);
+  let resolver = getOrCreateRecordResolver(event.address);
   let record = getOrCreateRecord(resolver, event.params.recordId, event);
   let id = resolverAddressId(record.id, event.params.coinType);
   let entity = ENSv2ResolverAddress.load(id);
@@ -219,7 +241,7 @@ export function handleAddressUpdated(event: AddressUpdated): void {
 }
 
 export function handleTextUpdated(event: TextUpdated): void {
-  let resolver = getOrCreateResolver(event.address);
+  let resolver = getOrCreateRecordResolver(event.address);
   let record = getOrCreateRecord(resolver, event.params.recordId, event);
   let id = resolverTextId(record.id, event.params.keyHash);
   let entity = ENSv2ResolverText.load(id);
@@ -239,7 +261,7 @@ export function handleTextUpdated(event: TextUpdated): void {
 }
 
 export function handleRecordDataUpdated(event: DataUpdated): void {
-  let resolver = getOrCreateResolver(event.address);
+  let resolver = getOrCreateRecordResolver(event.address);
   let record = getOrCreateRecord(resolver, event.params.recordId, event);
   let id = Bytes.fromByteArray(concat(record.id, event.params.keyHash));
   let entity = ENSv2ResolverRecordData.load(id);
@@ -257,7 +279,7 @@ export function handleRecordDataUpdated(event: DataUpdated): void {
 }
 
 export function handleABIUpdated(event: ABIUpdated): void {
-  let resolver = getOrCreateResolver(event.address);
+  let resolver = getOrCreateRecordResolver(event.address);
   let record = getOrCreateRecord(resolver, event.params.recordId, event);
   let id = Bytes.fromByteArray(
     concat(record.id, uint256ToByteArray(event.params.contentType)),
@@ -275,7 +297,7 @@ export function handleABIUpdated(event: ABIUpdated): void {
 }
 
 export function handleInterfaceUpdated(event: InterfaceUpdated): void {
-  let resolver = getOrCreateResolver(event.address);
+  let resolver = getOrCreateRecordResolver(event.address);
   let record = getOrCreateRecord(resolver, event.params.recordId, event);
   let id = Bytes.fromByteArray(concat(record.id, event.params.interfaceId));
   let entity = ENSv2ResolverInterface.load(id);
