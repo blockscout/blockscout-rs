@@ -5,6 +5,7 @@
 import { Address, BigInt, Bytes } from "@graphprotocol/graph-ts";
 import { createResolverID } from "./resolver";
 import { concat, createOrLoadAccount, i32ToBytes, ROOT_NODE } from "./utils";
+import { getEnsV1ResolverAddress } from "./ensv2Constants";
 import {
   resolverAddressIndexId,
   resolverLinkId,
@@ -207,9 +208,26 @@ export function clearDomainResolver(node: Bytes): void {
   domain.save();
 }
 
+// Shared by the ENSv2 registry and PermissionedResolver mappings.
+export function getOrCreateResolver(address: Address): ENSv2Resolver {
+  let id: Bytes = address;
+  let resolver = ENSv2Resolver.load(id);
+  if (resolver == null) {
+    resolver = new ENSv2Resolver(id);
+    resolver.address = address;
+    resolver.recordBased = false;
+    resolver.attachmentCount = 0;
+    resolver.save();
+  }
+  return resolver;
+}
+
+// `fromRegistryV2`: the name selected the resolver in an ENSv2 registry
+// (ResolverUpdated, or the late-link backfill), not through ENSv1 NewResolver.
 export function attachDomainResolver(
   resolverAddress: Address,
   node: Bytes,
+  fromRegistryV2: boolean = false,
 ): void {
   let domain = Domain.load(node.toHexString());
   if (domain == null) {
@@ -226,7 +244,7 @@ export function attachDomainResolver(
   domain.resolver = legacy.id;
   domain.save();
 
-  recordResolverAttachment(resolverAddress, node);
+  recordResolverAttachment(resolverAddress, node, fromRegistryV2);
   if (projectEffectiveRecord(resolverAddress, node)) {
     return;
   }
@@ -284,14 +302,38 @@ export function projectEffectiveRecord(
   return true;
 }
 
-// Remembers each name pointed at a record-based resolver, so a change of the
-// resolver's default record reaches the names that rely on it.
-function recordResolverAttachment(resolverAddress: Address, node: Bytes): void {
+// Remembers the names pointed at a resolver, so a change of a
+// PermissionedResolver's default record reaches the names that rely on it.
+//
+// A name can select a PermissionedResolver's address before the proxy is
+// deployed (the address is counterfactual), and so before it emits anything
+// that marks it record-based. An ENSv2 registry attachment is therefore
+// remembered whatever the resolver turns out to be, except the ENSV1Resolver
+// that names reserved for migration point at. ENSv1 NewResolver attachments
+// are remembered only for a resolver already known to be record-based:
+// remembering every ENSv1 name would index millions of classic-resolver names
+// that can never have a default record.
+function recordResolverAttachment(
+  resolverAddress: Address,
+  node: Bytes,
+  fromRegistryV2: boolean,
+): void {
   if (node.equals(ROOT_NODE)) {
     return;
   }
-  let resolver = ENSv2Resolver.load(resolverAddress);
-  if (resolver == null || !resolver.recordBased) {
+  let resolver: ENSv2Resolver | null = null;
+  if (fromRegistryV2) {
+    if (resolverAddress.equals(getEnsV1ResolverAddress())) {
+      return;
+    }
+    resolver = getOrCreateResolver(resolverAddress);
+  } else {
+    resolver = ENSv2Resolver.load(resolverAddress);
+    if (resolver == null || !resolver.recordBased) {
+      return;
+    }
+  }
+  if (resolver == null) {
     return;
   }
   let id = Bytes.fromByteArray(concat(resolver.id, node));

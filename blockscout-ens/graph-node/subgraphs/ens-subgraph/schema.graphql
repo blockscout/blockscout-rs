@@ -496,7 +496,9 @@ enum ENSv2NameSlotStatus {
 type ENSv2Registry @entity(immutable: false) {
   id: Bytes! # registry address
   address: Bytes!
-  # Used to classify `kind` via a known implementation-address mapping.
+  # The implementation the proxy runs: set from ProxyDeployed, then followed
+  # through ERC1967 Upgraded. Classifies `kind` (on discovery) and selects
+  # implementation-specific behaviour such as unregister clearing.
   implementation: Bytes
   kind: ENSv2RegistryKind!
   canonicalParentRegistry: ENSv2Registry

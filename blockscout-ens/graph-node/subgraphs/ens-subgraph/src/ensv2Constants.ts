@@ -228,10 +228,11 @@ export function getAdditionalUserRegistryImplAddresses(): Address[] {
   return [];
 }
 
-// UserRegistry implementations whose unregister() also clears the slot's
-// resolver and subregistry without emitting events (contracts-v2 #501). The
-// fixed impl cannot be upgraded into from earlier ones (empty upgradeable
-// list), so a registry runs it exactly when its proxy was deployed with it.
+// Registry implementations whose unregister() also clears the slot's
+// resolver and subregistry without emitting events (contracts-v2 #501). A
+// registry runs one when its proxy was deployed with it or upgraded to it
+// in place (handleUpgraded follows ERC1967 Upgraded). The WrapperRegistry
+// implementation with #501 is not deployed yet; add it here when it is.
 export function getUnregisterClearingImplAddresses(): Address[] {
   let network = dataSource.network();
   if (network == "mainnet") {
@@ -279,6 +280,24 @@ export function getWrapperRegistryImplAddress(): Address {
   }
   log.critical(
     "getWrapperRegistryImplAddress: no WrapperRegistry implementation address configured for network '{}'. Refusing to silently return the zero address (which would misclassify every WRAPPER registry as UNKNOWN) — add the real address for this network or fix the manifest's network label.",
+    [network]
+  );
+  return Address.zero();
+}
+
+// ENSV1Resolver: the resolver ENSv2 sets on names reserved for migration. It
+// forwards to the ENSv1 registry and has no records of its own, so names that
+// point at it are never tracked as resolver attachments.
+export function getEnsV1ResolverAddress(): Address {
+  let network = dataSource.network();
+  if (network == "mainnet") {
+    return Address.fromString("0x394d8eb4a4fdf599384deab25f31d111d755c398");
+  }
+  if (network == "sepolia") {
+    return Address.fromString("0x322b7581ca210a69c6d0e0d7c88a7688d2789cb0");
+  }
+  log.critical(
+    "getEnsV1ResolverAddress: no ENSV1Resolver address configured for network '{}'. Add the real address for this network or fix the manifest's network label.",
     [network]
   );
   return Address.zero();

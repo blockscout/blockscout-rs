@@ -10,7 +10,11 @@
 // Registry lifecycle, ownership, namespace, resolver, and role handlers.
 import { Address, BigInt, Bytes, ethereum, log } from "@graphprotocol/graph-ts";
 
-import { getOrCreateRegistry, getOrCreateRootNamespace } from "./ensv2Discovery";
+import {
+  getOrCreateRegistry,
+  getOrCreateRootNamespace,
+  kindForAddress,
+} from "./ensv2Discovery";
 import {
   appendRegistrySlotIndex,
   nameSlotId,
@@ -81,6 +85,7 @@ import {
   TokenResource,
   TransferBatch,
   TransferSingle,
+  Upgraded,
   URIUpdated,
 } from "./types/RootRegistry/PermissionedRegistry";
 
@@ -740,6 +745,30 @@ export function handleURIUpdated(event: URIUpdated): void {
   }
   registry.uri = event.params.uri;
   registry.uriRenderer = event.params.renderer;
+  registry.updatedAtBlock = event.block.number;
+  registry.save();
+}
+
+// ERC1967 Upgraded: a UUPS upgrade of the registry proxy in place
+// (upgradeToAndCall), which keeps the address, storage and every name. Keep
+// `implementation` on the code the proxy now runs, so behaviour that differs
+// between implementations (clearsOnUnregister) follows the upgrade. The proxy
+// constructor emits the same event before VerifiableFactory's ProxyDeployed;
+// that one names the implementation handleProxyDeployed already stored.
+export function handleUpgraded(event: Upgraded): void {
+  bootstrapRegistry(event.address, event.block);
+
+  let registry = ENSv2Registry.load(event.address);
+  if (registry == null) {
+    return;
+  }
+  let implementation = event.params.implementation;
+  registry.implementation = implementation;
+  // A registry keeps its kind across upgrades; only one not yet classified
+  // takes the kind of its new implementation.
+  if (registry.kind == "UNKNOWN") {
+    registry.kind = kindForAddress(event.address, implementation);
+  }
   registry.updatedAtBlock = event.block.number;
   registry.save();
 }

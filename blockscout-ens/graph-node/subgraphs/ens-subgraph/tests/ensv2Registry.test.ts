@@ -1236,3 +1236,33 @@ test("WrapperRegistry initialization accepts zero-sender parent and URI events",
   assert.entityCount("ENSv2RoleAssignment", 0);
   assert.entityCount("ENSv2RoleChange", 0);
 });
+
+// contracts-v2 v1.0.1 (#97340) grants the token's roles before minting it, so
+// a registration now emits LabelRegistered, TokenResource, EACRolesChanged and
+// then the mint's TransferSingle.
+test("registration with the mint after TokenResource sets the holder and writes the mint history", () => {
+  dataSourceMock.setNetwork("sepolia");
+  const REGISTRY = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee01";
+  let registryId = Address.fromString(REGISTRY).toHexString();
+  let tokenId = BigInt.fromI32(1);
+  handleLabelRegistered(createLabelRegisteredEvent(REGISTRY, tokenId, "gina"));
+  handleTokenResource(createTokenResourceEvent(REGISTRY, tokenId, BigInt.fromI32(888)));
+  let mint = createTransferSingleEvent(
+    REGISTRY,
+    tokenId,
+    "0x0000000000000000000000000000000000000000",
+    OWNER
+  );
+  handleTransferSingle(mint);
+
+  let slotId = registryId.concat(bigIntHex32(BigInt.zero()));
+  let tokenEntityId = registryId.concat(bigIntHex32(tokenId));
+  let owner = Address.fromString(OWNER).toHexString();
+  assert.fieldEquals("ENSv2Token", tokenEntityId, "owner", owner);
+  assert.fieldEquals("ENSv2Token", tokenEntityId, "slot", slotId);
+  assert.fieldEquals("ENSv2Token", tokenEntityId, "active", "true");
+  assert.fieldEquals("ENSv2NameSlot", slotId, "owner", owner);
+  assert.fieldEquals("ENSv2NameSlot", slotId, "status", "REGISTERED");
+  let mintHistoryId = "0x".concat(bigIntHex32(mint.block.number)).concat(bigIntHex32(mint.logIndex)).concat(i32Hex4(0));
+  assert.fieldEquals("ENSv2TokenTransferred", mintHistoryId, "slot", slotId);
+});

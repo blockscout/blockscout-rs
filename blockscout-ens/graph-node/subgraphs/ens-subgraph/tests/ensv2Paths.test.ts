@@ -20,6 +20,7 @@ import {
   handleLabelUnregistered,
   handleResolverUpdated,
   handleSubregistryUpdated,
+  handleUpgraded,
 } from "../src/ensv2Registry";
 import {
   handleAddressUpdated,
@@ -48,6 +49,7 @@ import {
   LabelUnregistered,
   ResolverUpdated,
   SubregistryUpdated,
+  Upgraded,
 } from "../src/types/RootRegistry/PermissionedRegistry";
 
 const ROOT_REGISTRY = "0xB458D6a3a77919449d03e7A6903C26827c1eC43f";
@@ -2126,4 +2128,99 @@ test("unregistering a name retires every name below it, and re-registering it wi
   assert.fieldEquals("ENSv2NamePath", zId, "active", "true");
   assert.fieldEquals("Domain", zId, "owner", OWNER.toLowerCase());
   assert.fieldEquals("Domain", yPath.toHexString(), "subdomainCount", "1");
+});
+
+// --- v2.3.4: in-place registry upgrades, attach before a resolver is deployed ---
+
+const createUpgradedEvent = (registryAddress: string, implementation: string): Upgraded => {
+  let mockEvent = newMockEvent();
+  let event = new Upgraded(
+    Address.fromString(registryAddress),
+    mockEvent.logIndex,
+    mockEvent.transactionLogIndex,
+    mockEvent.logType,
+    mockEvent.block,
+    mockEvent.transaction,
+    mockEvent.parameters,
+    mockEvent.receipt
+  );
+  event.parameters = new Array();
+  event.parameters.push(
+    new ethereum.EventParam(
+      "implementation",
+      ethereum.Value.fromAddress(Address.fromString(implementation))
+    )
+  );
+  return event;
+};
+
+test("a registry upgraded in place to the fixed implementation clears resolver and subregistry on unregister", () => {
+  dataSourceMock.setNetwork("sepolia");
+  const PARENT = "0xd3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3";
+  const CHILD = "0xd4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4";
+  const OLD_USER_IMPL = "0x9BD8a88719068D09ecee662f36C0E3856708366a";
+  const FIXED_USER_IMPL = "0x0822d199699f0a9D378617817a1439663234a126";
+  let parent = Address.fromString(PARENT);
+  getOrCreateRegistry(parent, parent, newMockEvent().block, Address.fromString(OLD_USER_IMPL));
+  assert.fieldEquals("ENSv2Registry", PARENT.toLowerCase(), "kind", "USER");
+
+  handleUpgraded(createUpgradedEvent(PARENT, FIXED_USER_IMPL));
+  assert.fieldEquals("ENSv2Registry", PARENT.toLowerCase(), "implementation", FIXED_USER_IMPL.toLowerCase());
+  assert.fieldEquals("ENSv2Registry", PARENT.toLowerCase(), "kind", "USER");
+
+  setupUnregisterScenario(PARENT, CHILD);
+  let xSlot = slotIdFor(PARENT, 1);
+  assert.fieldEquals("ENSv2NameSlot", xSlot, "subregistry", "null");
+  assert.fieldEquals("ENSv2NameSlot", xSlot, "resolver", "null");
+});
+
+test("an upgrade keeps a registry's kind and classifies one that was not yet classified", () => {
+  dataSourceMock.setNetwork("sepolia");
+  const WRAPPER = "0xd5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5";
+  const UNCLASSIFIED = "0xd6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6";
+  const WRAPPER_IMPL = "0xBe768b63E5fBBFBB0Ae97E9064E0002dF8001880";
+  const NEW_IMPL = "0x7777777777777777777777777777777777777701";
+  let wrapper = Address.fromString(WRAPPER);
+  getOrCreateRegistry(wrapper, wrapper, newMockEvent().block, Address.fromString(WRAPPER_IMPL));
+  handleUpgraded(createUpgradedEvent(WRAPPER, NEW_IMPL));
+  assert.fieldEquals("ENSv2Registry", WRAPPER.toLowerCase(), "kind", "WRAPPER");
+  assert.fieldEquals("ENSv2Registry", WRAPPER.toLowerCase(), "implementation", NEW_IMPL.toLowerCase());
+
+  let unclassified = Address.fromString(UNCLASSIFIED);
+  getOrCreateRegistry(unclassified, unclassified, newMockEvent().block);
+  assert.fieldEquals("ENSv2Registry", UNCLASSIFIED.toLowerCase(), "kind", "UNKNOWN");
+  handleUpgraded(createUpgradedEvent(UNCLASSIFIED, WRAPPER_IMPL));
+  assert.fieldEquals("ENSv2Registry", UNCLASSIFIED.toLowerCase(), "kind", "WRAPPER");
+});
+
+test("a name that selects a PermissionedResolver before it is deployed picks up its default record", () => {
+  dataSourceMock.setNetwork("sepolia");
+  const CHILD_REGISTRY = "0x68686868686868686868686868686868686868bb";
+  const COUNTERFACTUAL = "0x4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a";
+  let node = registerChildName(CHILD_REGISTRY, Bytes.fromI32(64), Bytes.fromI32(65));
+
+  // The name points at the address before the resolver has emitted anything.
+  handleResolverUpdated(createResolverUpdatedEvent(CHILD_REGISTRY, slotToken(1), COUNTERFACTUAL));
+  assert.fieldEquals("ENSv2Resolver", COUNTERFACTUAL, "recordBased", "false");
+  assert.fieldEquals("ENSv2Resolver", COUNTERFACTUAL, "attachmentCount", "1");
+  assert.assertTrue(!Domain.load(node.toHexString())!.resolvedAddress);
+
+  // Deployed later; its default record is linked and set.
+  let defaultRecord = BigInt.fromI32(96);
+  let a = Address.fromString("0x4444444444444444444444444444444444444409");
+  handleLinked(
+    createLinkedEvent(COUNTERFACTUAL, defaultRecord, Bytes.fromHexString(ROOT_NAMEHASH), Bytes.fromHexString("0x00"))
+  );
+  handleAddressUpdated(createAddressUpdatedEvent(COUNTERFACTUAL, defaultRecord, BigInt.fromI32(60), a));
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", a.toHexString());
+});
+
+test("names pointed at the ENSV1Resolver are not tracked as resolver attachments", () => {
+  dataSourceMock.setNetwork("sepolia");
+  const CHILD_REGISTRY = "0x69696969696969696969696969696969696969bb";
+  const ENSV1_RESOLVER = "0x322b7581ca210a69c6d0e0d7c88a7688d2789cb0";
+  registerChildName(CHILD_REGISTRY, Bytes.fromI32(66), Bytes.fromI32(67));
+  handleResolverUpdated(createResolverUpdatedEvent(CHILD_REGISTRY, slotToken(1), ENSV1_RESOLVER));
+  assert.fieldEquals("ENSv2Resolver", ENSV1_RESOLVER, "attachmentCount", "0");
+  assert.entityCount("ENSv2ResolverAttachment", 0);
 });

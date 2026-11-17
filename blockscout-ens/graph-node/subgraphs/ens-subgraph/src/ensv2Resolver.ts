@@ -18,6 +18,7 @@ import {
   appendAddressIndex,
   appendTextIndex,
   deactivateRecordMembership,
+  getOrCreateResolver,
   projectEffectiveRecord,
   refreshDefaultRecordConsumers,
   replaceLegacyResolverSnapshot,
@@ -47,20 +48,6 @@ import {
   ResourceArgument,
   TextUpdated,
 } from "./types/PermissionedResolver/PermissionedResolver";
-
-// Shared with ensv2Paths.ts::handleResolverUpdated.
-export function getOrCreateResolver(address: Address): ENSv2Resolver {
-  let id: Bytes = address;
-  let resolver = ENSv2Resolver.load(id);
-  if (resolver == null) {
-    resolver = new ENSv2Resolver(id);
-    resolver.address = address;
-    resolver.recordBased = false;
-    resolver.attachmentCount = 0;
-    resolver.save();
-  }
-  return resolver;
-}
 
 // For the PermissionedResolver handlers: the address emits recordId-keyed
 // events, so it resolves unlinked nodes through its default record.

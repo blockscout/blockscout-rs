@@ -31,10 +31,10 @@ import {
   toSlotId,
 } from "./ensv2Utils";
 import { getOrCreateRegistry } from "./ensv2Discovery";
-import { getOrCreateResolver } from "./ensv2Resolver";
 import {
   attachDomainResolver,
   clearDomainResolver,
+  getOrCreateResolver,
 } from "./ensv2ResolverProjection";
 import {
   adjustParentSubdomainCount,
@@ -529,7 +529,7 @@ function backfillNamespace(
     if (path.domain != null) {
       let resolverAddress = slot.resolverAddress;
       if (resolverAddress) {
-        attachDomainResolver(Address.fromBytes(resolverAddress), path.namehash);
+        attachDomainResolver(Address.fromBytes(resolverAddress), path.namehash, true);
       }
     }
     let subregistry = slot.subregistry;
@@ -735,7 +735,7 @@ export function handleResolverUpdated(event: ResolverUpdated): void {
     if (isZeroAddress(event.params.resolver)) {
       clearDomainResolver(path.namehash);
     } else {
-      attachDomainResolver(event.params.resolver, path.namehash);
+      attachDomainResolver(event.params.resolver, path.namehash, true);
     }
   }
 

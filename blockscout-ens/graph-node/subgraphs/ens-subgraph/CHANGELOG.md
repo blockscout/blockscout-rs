@@ -3,6 +3,37 @@
 Version labels match the Subgraph Studio deployments of the mainnet subgraph
 `5XqPmWe6gjyrJtFn9cLy237i4cWw2j9HcUJEXsP5qGtH`.
 
+## v2.3.4 (2026-11-17)
+
+Supersedes v2.3.3, which was tagged but not deployed.
+
+### Fixed
+
+- A name could select a PermissionedResolver's address before the proxy was
+  deployed. v2.3.3 only remembered names on a resolver it already knew to be
+  record-based, so a default record set after deployment never reached such
+  a name. A name selected through an ENSv2 registry (`ResolverUpdated`, or
+  the late-link backfill) is now remembered whatever the resolver turns out
+  to be, except the ENSV1Resolver that names reserved for migration point
+  at. An ENSv1 name that selects a PermissionedResolver before it is deployed
+  is still not tracked. Two mainnet resolvers were selected before
+  deployment; neither has a default record, so no name was affected.
+- A registry's `implementation` was set only from `ProxyDeployed`. Registries
+  are UUPS proxies, and contracts-v2 v1.0.1 announces a new WrapperRegistry
+  implementation, which existing wrapper registries would receive in place. The registry mapping now handles ERC1967
+  `Upgraded(address)` and keeps `implementation` current, so
+  implementation-specific behaviour (resolver and subregistry clearing on
+  unregister) follows an upgrade. A registry keeps its kind; one not yet
+  classified takes the kind of its new implementation.
+
+### Changed
+
+- Test for contracts-v2 v1.0.1's registration event order (roles granted
+  before the mint: `LabelRegistered`, `TokenResource`, `EACRolesChanged`,
+  `TransferSingle`). The mappings already handled it.
+
+Requires a full re-index.
+
 ## v2.3.3 (2026-11-16)
 
 Supersedes v2.3.2, which was tagged but not deployed.

@@ -386,6 +386,8 @@ dataSources:
           handler: handleENSv2ApprovalForAll
         - event: "URIUpdated(string,address,indexed address)"
           handler: handleURIUpdated
+        - event: "Upgraded(indexed address)"
+          handler: handleUpgraded
 
   - kind: ethereum/contract
     name: ETHRegistry
