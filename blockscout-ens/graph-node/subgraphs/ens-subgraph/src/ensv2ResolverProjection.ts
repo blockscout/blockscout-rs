@@ -271,12 +271,14 @@ export function getOrCreateResolver(address: Address): ENSv2Resolver {
   return resolver;
 }
 
-// `fromRegistryV2`: the name selected the resolver in an ENSv2 registry
-// (ResolverUpdated, or the late-link backfill), not through ENSv1 NewResolver.
+// `rememberAnyResolver`: remember the name for the resolver's default record
+// whatever the resolver turns out to be (recordResolverAttachment). True for
+// an ENSv2 registry (ResolverUpdated, or the late-link backfill) and for an
+// ENSv1 NewResolver from the first ENSv2 block on.
 export function attachDomainResolver(
   resolverAddress: Address,
   node: Bytes,
-  fromRegistryV2: boolean = false,
+  rememberAnyResolver: boolean = false,
 ): void {
   let domain = Domain.load(node.toHexString());
   if (domain == null) {
@@ -294,7 +296,7 @@ export function attachDomainResolver(
   domain.resolver = legacy.id;
   saveCounted(domain, wasCounted);
 
-  recordResolverAttachment(resolverAddress, node, fromRegistryV2);
+  recordResolverAttachment(resolverAddress, node, rememberAnyResolver);
   if (projectEffectiveRecord(resolverAddress, node)) {
     return;
   }
@@ -398,22 +400,25 @@ function defaultRecordIsTrackedFor(resolverAddress: Address, node: Bytes): boole
 //
 // A name can select a PermissionedResolver's address before the proxy is
 // deployed (the address is counterfactual), and so before it emits anything
-// that marks it record-based. An ENSv2 registry attachment is therefore
-// remembered whatever the resolver turns out to be, except the ENSV1Resolver
-// that names reserved for migration point at. ENSv1 NewResolver attachments
-// are remembered only for a resolver already known to be record-based:
-// remembering every ENSv1 name would index millions of classic-resolver names
-// that can never have a default record.
+// that marks it record-based. Such an attachment (`rememberAnyResolver`) is
+// therefore remembered whatever the resolver turns out to be, except the
+// ENSV1Resolver that names reserved for migration point at: every ENSv2
+// registry attachment, and every ENSv1 NewResolver from the first ENSv2
+// block on (getEnsv2FirstBlock; about 12,000 a month on mainnet that do not
+// clear the resolver). Before that block no PermissionedResolver can exist,
+// so an ENSv1 attachment is remembered only for a resolver already known to
+// be record-based: remembering every ENSv1 name since 2017 would index
+// millions of classic-resolver names that can never have a default record.
 function recordResolverAttachment(
   resolverAddress: Address,
   node: Bytes,
-  fromRegistryV2: boolean,
+  rememberAnyResolver: boolean,
 ): void {
   if (node.equals(ROOT_NODE)) {
     return;
   }
   let resolver: ENSv2Resolver | null = null;
-  if (fromRegistryV2) {
+  if (rememberAnyResolver) {
     if (resolverAddress.equals(getEnsV1ResolverAddress())) {
       return;
     }

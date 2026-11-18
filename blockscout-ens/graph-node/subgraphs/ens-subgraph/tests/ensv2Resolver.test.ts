@@ -948,6 +948,55 @@ test("decodeName rejects malformed DNS names instead of aborting", () => {
   assert.stringEquals("foo.eth", fooEth[1]);
 });
 
+// n one-byte labels "a", then the root terminator.
+function oneByteLabels(n: i32): Bytes {
+  let b = new Bytes(2 * n + 1);
+  for (let i = 0; i < n; i++) {
+    b[2 * i] = 1;
+    b[2 * i + 1] = 0x61;
+  }
+  b[2 * n] = 0;
+  return b;
+}
+
+test("decodeName keeps the first label and joins the rest with dots", () => {
+  let decoded = decodeName(
+    Bytes.fromHexString("0x03737562036e6f6f03666f6f0365746800")
+  )!;
+  assert.stringEquals("sub", decoded[0]);
+  assert.stringEquals("sub.noo.foo.eth", decoded[1]);
+  let single = decodeName(Bytes.fromHexString("0x0365746800"))!;
+  assert.stringEquals("eth", single[0]);
+  assert.stringEquals("eth", single[1]);
+  // An invalid label anywhere rejects the whole name.
+  assert.assertNull(decodeName(Bytes.fromHexString("0x03666f6f01" + "2e" + "00")));
+});
+
+// Appending each label to the name so far copied the whole name per label:
+// 16,384 labels took 15 s and 65,536 ran out of memory, which stops a
+// subgraph for good. Collecting the labels and joining once is linear.
+test("decodeName is linear: 65,536 one-byte labels decode", () => {
+  let decoded = decodeName(oneByteLabels(65536))!;
+  assert.i32Equals(65536 * 2 - 1, decoded[1].length);
+  assert.stringEquals("a", decoded[0]);
+});
+
+test("a Linked name longer than 255 bytes is kept raw and not decoded", () => {
+  let recordId = BigInt.fromI32(41);
+  let atLimit = oneByteLabels(127); // 255 bytes
+  let overLimit = oneByteLabels(65536); // 131,073 bytes
+  handleLinked(createLinkedEvent(recordId, Bytes.fromI32(401), atLimit));
+  handleLinked(createLinkedEvent(recordId, Bytes.fromI32(402), overLimit));
+  let resolver = Address.fromString(PERMISSIONED_RESOLVER);
+  let kept = ENSv2ResolverLink.load(resolverLinkId(resolver, Bytes.fromI32(401)))!;
+  assert.i32Equals(255, kept.name.length);
+  assert.i32Equals(253, kept.nameDecoded!.length);
+  let raw = ENSv2ResolverLink.load(resolverLinkId(resolver, Bytes.fromI32(402)))!;
+  assert.i32Equals(131073, raw.name.length);
+  assert.assertTrue(!raw.nameDecoded);
+  assert.assertTrue(raw.active);
+});
+
 test("a Linked event with a malformed name is indexed with no decoded name", () => {
   let node = Bytes.fromI32(301);
   let recordId = BigInt.fromI32(31);
@@ -1051,6 +1100,46 @@ function seedV1Domain(node: Bytes): void {
   domain.resolvedWithWildcard = false; // Blockscout/BENS extension
   domain.save();
 }
+
+// An ENSv1 name selects a PermissionedResolver's address before the resolver
+// has emitted anything (it is deployed later), then the resolver gets a
+// default record. From the first ENSv2 block on the name is remembered for
+// that default record, as an ENSv2 attachment is; before it no
+// PermissionedResolver can exist and the name is not remembered.
+function v1NameSelectsResolverBeforeItEmits(node: Bytes, blockNumber: i32): Address {
+  seedV1Domain(node);
+  let event = createV1NewResolverEvent(node, PERMISSIONED_RESOLVER);
+  event.block.number = BigInt.fromI32(blockNumber);
+  handleNewResolver(event);
+
+  let defaultRecord = BigInt.fromI32(88);
+  let a = Address.fromString("0x33333333333333333333333333333333333333dd");
+  handleLinked(
+    createLinkedEvent(defaultRecord, Bytes.fromHexString(ROOT_NODE_HEX), Bytes.fromHexString("0x00"))
+  );
+  handleAddressUpdated(createAddressUpdatedEvent(defaultRecord, BigInt.fromI32(60), a));
+  return a;
+}
+
+const ROOT_NODE_HEX = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+test("an ENSv1 name that selects a PermissionedResolver before it is deployed picks up its default record", () => {
+  let node = Bytes.fromHexString(
+    "0xaaaa000000000000000000000000000000000000000000000000000000000011"
+  );
+  let a = v1NameSelectsResolverBeforeItEmits(node, 26105299);
+  assert.fieldEquals("ENSv2Resolver", PERMISSIONED_RESOLVER, "attachmentCount", "1");
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", a.toHexString());
+});
+
+test("before the first ENSv2 block an ENSv1 NewResolver is not remembered for a resolver not known to be record-based", () => {
+  let node = Bytes.fromHexString(
+    "0xaaaa000000000000000000000000000000000000000000000000000000000012"
+  );
+  v1NameSelectsResolverBeforeItEmits(node, 26105298);
+  assert.fieldEquals("ENSv2Resolver", PERMISSIONED_RESOLVER, "attachmentCount", "0");
+  assert.assertTrue(!Domain.load(node.toHexString())!.resolvedAddress);
+});
 
 test("an ENSv1 name that selects a PermissionedResolver after its record was linked and set is hydrated from that record", () => {
   let node = Bytes.fromHexString(

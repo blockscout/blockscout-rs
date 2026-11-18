@@ -59,7 +59,16 @@ function getOrCreateRecordResolver(address: Address): ENSv2Resolver {
   return resolver;
 }
 
+// A DNS-encoded name is at most 255 bytes (RFC 1035). Linked can come from
+// any contract, with a name of any length: a longer one is kept as raw bytes
+// (ENSv2ResolverLink.name) and not decoded, so that it costs one store write
+// rather than decoding and storing a string of the same size.
+export const MAX_ENCODED_NAME_BYTES = 255;
+
 function decodedNameOf(buf: Bytes): string | null {
+  if (buf.length > MAX_ENCODED_NAME_BYTES) {
+    return null;
+  }
   let decoded = decodeName(buf);
   if (decoded == null) {
     return null;

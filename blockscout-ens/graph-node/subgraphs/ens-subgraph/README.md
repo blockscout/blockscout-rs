@@ -2,7 +2,7 @@
 
 > forked from [https://github.com/ensdomains/ens-subgraph](https://github.com/ensdomains/ens-subgraph)
 
-This directory is the upstream subgraph at tag `v2.3.5` (commit `91c3215`)
+This directory is the upstream subgraph at tag `v2.3.6` (commit `de079a2`)
 plus the Blockscout/BENS extension fields listed below. It indexes ENSv1
 (registry, BaseRegistrar, controllers, NameWrapper, resolvers) and ENSv2
 (RootRegistry, ETHRegistry, ETHRegistrar, user registries created through
@@ -71,9 +71,9 @@ copy of the manifest, so `subgraph.yaml` stays as committed:
 ```bash
 just init
 just network=mainnet name=ens-subgraph create
-just network=mainnet name=ens-subgraph deploy v2.3.5
+just network=mainnet name=ens-subgraph deploy v2.3.6
 just network=sepolia name=ens-sepolia-subgraph create
-just network=sepolia name=ens-sepolia-subgraph deploy v2.3.5
+just network=sepolia name=ens-sepolia-subgraph deploy v2.3.6
 ```
 
 `graph_node_url` and `ipfs_url` default to a local graph-node; `just

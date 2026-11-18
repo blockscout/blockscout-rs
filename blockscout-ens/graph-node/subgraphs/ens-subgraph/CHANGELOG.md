@@ -3,6 +3,32 @@
 Version labels match the Subgraph Studio deployments of the mainnet subgraph
 `5XqPmWe6gjyrJtFn9cLy237i4cWw2j9HcUJEXsP5qGtH`.
 
+## v2.3.6 (2026-11-18)
+
+Not deployed yet. Includes everything in v2.3.5.
+
+### Fixed
+
+- A single `Linked` event could stop the subgraph for good. `decodeName`
+  appended each label to the name so far, copying the whole name per label,
+  and the PermissionedResolver source that decodes `Linked` names has no
+  address filter: any contract could emit a 131 KB name of 65,536 one-byte
+  labels, which copied about 8 GiB and ran out of memory (16,384 labels took
+  15 s). The decoder now collects the labels and joins them once, which is
+  linear (65,536 labels in under 0.1 s), and a `Linked` name longer than
+  255 bytes, the most a DNS-encoded name can be, is stored raw with no
+  `nameDecoded`. The NameWrapper's `NameWrapped` uses the same decoder.
+  Present since the ENSv2 resolver mappings were added (v2.0.1); v2.3.1, the
+  deployed version, is affected.
+- An ENSv1 name that selected a PermissionedResolver before it was deployed
+  did not get its default record. v2.3.4 remembered such names for ENSv2
+  registry attachments only; an ENSv1 `NewResolver` was remembered only for a
+  resolver already known to be record-based. From the first ENSv2 block on,
+  ENSv1 attachments are now remembered whatever the resolver is (about
+  12,000 a month on mainnet; another 800,000 clear the resolver and are not
+  attachments). No mainnet name is affected today: the only three default
+  records belong to resolvers that no ENSv1-only name points at.
+
 ## v2.3.5 (2026-11-17)
 
 Not deployed yet.

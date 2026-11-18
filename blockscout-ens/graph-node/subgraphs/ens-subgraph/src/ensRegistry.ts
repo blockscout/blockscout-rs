@@ -41,7 +41,7 @@ import {
 } from "./types/schema";
 
 import { processApprovalForAll } from "./accessControl";
-import { isSink } from "./ensv2Constants";
+import { getEnsv2FirstBlock, isSink } from "./ensv2Constants";
 import {
   cutOffLegacyHoldout,
   isDetachedFromEnsv1,
@@ -317,8 +317,15 @@ export function handleNewResolver(event: NewResolverEvent): void {
     // PermissionedResolver has no node-keyed events: its records were set
     // through Linked / *Updated, which only project onto the node while the
     // registry points at that resolver, so the snapshot is rebuilt here from
-    // the linked record.
-    attachDomainResolver(event.params.resolver, node);
+    // the linked record. From the first ENSv2 block on, the name is
+    // remembered for the resolver's default record even if the resolver has
+    // not emitted anything yet (a PermissionedResolver selected before it is
+    // deployed).
+    attachDomainResolver(
+      event.params.resolver,
+      node,
+      event.block.number.ge(getEnsv2FirstBlock()),
+    );
     return;
   }
   domain.resolvedAddress = null;

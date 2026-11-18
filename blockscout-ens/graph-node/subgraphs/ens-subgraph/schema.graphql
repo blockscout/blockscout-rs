@@ -1004,6 +1004,8 @@ type ENSv2ResolverLink @entity(immutable: false) {
   resolver: ENSv2Resolver!
   node: Bytes!
   name: Bytes! # DNS-encoded
+  # Null when the name is malformed, has an invalid label or is longer than
+  # 255 bytes (not decoded).
   nameDecoded: String
   record: ENSv2ResolverRecord
   recordId: BigInt! # always set, including the literal 0 unlink sentinel

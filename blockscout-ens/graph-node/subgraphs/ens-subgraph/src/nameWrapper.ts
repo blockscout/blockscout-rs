@@ -55,20 +55,25 @@ import {
 // root terminator): the PermissionedResolver data source has no address, so
 // any contract can emit a Linked event with arbitrary name bytes, and an
 // out-of-range read here would abort the mapping and halt the subgraph.
+// Decodes a DNS-encoded name into [first label, dotted name], or null when
+// it is malformed or a label is not valid. Linear in the length of the
+// buffer: the labels are collected and joined once at the end. (Appending
+// each label to the name so far copied the whole name per label, so a
+// 131 KB name of 65,536 one-byte labels copied about 8 GiB and could not
+// complete; the PermissionedResolver source that decodes Linked names has
+// no address filter.)
 export function decodeName(buf: Bytes): Array<string> | null {
   if (buf.length == 0) {
     return null;
   }
   let offset = 0;
-  let list = new ByteArray(0);
-  let dot = Bytes.fromHexString("2e");
   let len = buf[offset++];
   let hex = buf.toHexString();
-  let firstLabel = "";
   if (len == 0) {
-    return [firstLabel, "."];
+    return ["", "."];
   }
 
+  let labels = new Array<string>();
   while (len) {
     // The label and the next length byte (or the root terminator) must both
     // fit in the buffer.
@@ -76,22 +81,17 @@ export function decodeName(buf: Bytes): Array<string> | null {
       return null;
     }
     let label = hex.slice((offset + 1) * 2, (offset + 1 + len) * 2);
-    let labelBytes = Bytes.fromHexString(label);
+    let labelString = Bytes.fromHexString(label).toString();
 
-    if (!checkValidLabel(labelBytes.toString())) {
+    if (!checkValidLabel(labelString)) {
       return null;
     }
 
-    if (offset > 1) {
-      list = concat(list, dot);
-    } else {
-      firstLabel = labelBytes.toString();
-    }
-    list = concat(list, labelBytes);
+    labels.push(labelString);
     offset += len;
     len = buf[offset++];
   }
-  return [firstLabel, list.toString()];
+  return [labels[0], labels.join(".")];
 }
 
 const PARENT_CANNOT_CONTROL: i32 = 65536;
