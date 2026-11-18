@@ -447,6 +447,35 @@ dataSources:
         - event: "ProxyDeployed(indexed address,indexed address,uint256,address)"
           handler: handleProxyDeployed
 
+  # Addressless: finds registries that were not deployed through
+  # VerifiableFactory by their first name or parent event. The handlers only
+  # start the ENSv2Registry template for the emitting address; that data
+  # source then handles the event (see ensv2Discovery.ts). startBlock is the
+  # first ENSv2 deployment block (VerifiableFactory).
+  - kind: ethereum/contract
+    name: ENSv2RegistryDiscovery
+    network: mainnet
+    source:
+      abi: PermissionedRegistry
+      startBlock: 26105299
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/ensv2Discovery.ts
+      entities:
+        - ENSv2Registry
+      abis:
+        - name: PermissionedRegistry
+          file: ./abis/v2/PermissionedRegistry.json
+      eventHandlers:
+        - event: "LabelRegistered(indexed uint256,indexed bytes32,string,address,uint64,indexed address)"
+          handler: handleRegistryLabelRegistered
+        - event: "LabelReserved(indexed uint256,indexed bytes32,string,uint64,indexed address)"
+          handler: handleRegistryLabelReserved
+        - event: "ParentUpdated(indexed address,string,indexed address)"
+          handler: handleRegistryParentUpdated
+
   - kind: ethereum/contract
     name: PermissionedResolver
     network: mainnet

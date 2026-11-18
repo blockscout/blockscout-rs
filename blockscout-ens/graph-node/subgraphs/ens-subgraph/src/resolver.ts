@@ -197,6 +197,7 @@ export function handleDataChanged(event: DataChangedEvent): void {
     resolver.address = event.address;
     resolver.recordBased = false;
     resolver.attachmentCount = 0;
+    resolver.legacyProjectionTruncated = false;
     resolver.save();
   }
 

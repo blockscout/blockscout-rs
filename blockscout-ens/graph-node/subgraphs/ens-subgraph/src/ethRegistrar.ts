@@ -174,10 +174,23 @@ export function handleNameRegisteredByLegacyController(
   setNamePreimage(event.params.name, event.params.label, event.params.cost);
 }
 
+// A renewal event with cost 0 is not a payment. ETHRenewerV1 (ENSv2's
+// renewer for names still reserved for migration) takes the payment itself,
+// in an ERC-20 token, renews on the BaseRegistrar, and then calls
+// WrappedEthRegistrarController.renew(label, 0) to bring the NameWrapper
+// expiry up to date (syncWrapper, which anyone may also call for any label).
+// The controller emits NameRenewed with cost 0 for that call. Writing it
+// would set the cost of every name renewed since the ENSv2 launch to zero,
+// so the cost of the last payment in ETH is kept.
 export function handleNameRenewedByLegacyController(
   event: LegacyEthRegistrarController_NameRenewed
 ): void {
-  setNamePreimage(event.params.name, event.params.label, event.params.cost);
+  setNamePreimage(
+    event.params.name,
+    event.params.label,
+    event.params.cost,
+    true
+  );
 }
 
 // Wrapped controller (reuses same renew event as legacy controller)
@@ -210,11 +223,17 @@ export function handleNameRenewedByUnwrappedController(
   setNamePreimage(
     event.params.label,
     event.params.labelhash,
-    event.params.cost
+    event.params.cost,
+    true
   );
 }
 
-function setNamePreimage(name: string, label: Bytes, cost: BigInt): void {
+function setNamePreimage(
+  name: string,
+  label: Bytes,
+  cost: BigInt,
+  isRenewal: boolean = false
+): void {
   if (!checkValidLabel(name)) {
     return;
   }
@@ -234,7 +253,9 @@ function setNamePreimage(name: string, label: Bytes, cost: BigInt): void {
   let registration = Registration.load(Bytes.fromByteArray(label).toHexString());
   if (registration == null) return;
   registration.labelName = name;
-  registration.cost = cost;
+  if (!isRenewal || !cost.isZero()) {
+    registration.cost = cost;
+  }
   registration.save();
 }
 

@@ -42,8 +42,14 @@ import {
 
 import { processApprovalForAll } from "./accessControl";
 import { isSink } from "./ensv2Constants";
-import { isGovernedByEnsv2 } from "./legacyGovernance";
+import {
+  cutOffLegacyHoldout,
+  isDetachedFromEnsv1,
+  isGovernedByEnsv2,
+  isLegacyHoldout,
+} from "./legacyGovernance";
 import { attachDomainResolver } from "./ensv2ResolverProjection";
+import { countsAsChild, noteChildRow, saveCounted } from "./subdomainCount";
 
 const BIG_INT_ZERO = BigInt.fromI32(0);
 
@@ -81,34 +87,11 @@ function makeSubnode(event: NewOwnerEvent): Bytes {
   );
 }
 
-// The `domain.resolver!.split("-")[0] == EMPTY_ADDRESS` disjunct the
-// original ENSv1 subgraph had here is dead code: handleNewResolver (below)
-// is Domain.resolver's only write site, and it sets the field to null
-// exactly when the resolver address is the zero address, never to a
-// zero-address-prefixed id (traced every write site to confirm before
-// leaving it out, not assumed).
-function recurseDomainDelete(domain: Domain): string | null {
-  if (
-    !domain.resolver &&
-    domain.owner == EMPTY_ADDRESS &&
-    domain.subdomainCount == 0
-  ) {
-    const parentDomain = Domain.load(domain.parent!);
-    if (parentDomain != null) {
-      parentDomain.subdomainCount = parentDomain.subdomainCount - 1;
-      parentDomain.save();
-      return recurseDomainDelete(parentDomain);
-    }
-
-    return null;
-  }
-
-  return domain.id;
-}
-
-function saveDomain(domain: Domain): void {
-  recurseDomainDelete(domain);
-  domain.save();
+// Saves an ENSv1 row and keeps its parent's subdomainCount right
+// (subdomainCount.ts). `wasCounted` is countsAsChild(domain) as the row stood
+// before this handler changed it, false for a row created now.
+function saveDomain(domain: Domain, wasCounted: boolean): void {
+  saveCounted(domain, wasCounted);
 }
 
 // A wrapped name's registry owner is the NameWrapper. The registry can move
@@ -204,9 +187,17 @@ function _handleNewOwner(event: NewOwnerEvent, isMigrated: boolean): void {
     domain.subdomainCount = 0;
   }
 
-  if (!domain.parent && parent != null) {
-    parent.subdomainCount = parent.subdomainCount + 1;
+  // The root row exists only in memory until its first child is created.
+  if (
+    parent != null &&
+    event.params.node.equals(ROOT_NODE) &&
+    Domain.load(parent.id) == null
+  ) {
     parent.save();
+  }
+  let wasCounted = !isNewDomain && countsAsChild(domain);
+  if (!domain.parent) {
+    noteChildRow(event.params.node.toHexString());
   }
 
   if (domain.name == null) {
@@ -228,11 +219,19 @@ function _handleNewOwner(event: NewOwnerEvent, isMigrated: boolean): void {
     }
   }
 
+  // Before the owner moves: a name a WrapperRegistry still sends to ENSv1
+  // stops being one when it leaves the NameWrapper or loses its owner
+  // (legacyGovernance.ts rule 3).
+  let wasHoldout = !isNewDomain && isLegacyHoldout(domain, event.block);
+
   applyRegistryOwner(domain, event.params.node, event.params.owner, isNewDomain);
   domain.parent = event.params.node.toHexString();
   domain.labelhash = event.params.label;
   domain.isMigrated = isMigrated;
-  saveDomain(domain);
+  saveDomain(domain, wasCounted);
+  if (wasHoldout) {
+    cutOffLegacyHoldout(subnode, event.block);
+  }
 
   domainEvent.save();
 }
@@ -264,8 +263,13 @@ export function handleTransfer(event: TransferEvent): void {
   let parentNode = domain.parent
     ? Bytes.fromHexString(domain.parent!)
     : ROOT_NODE;
+  let wasHoldout = isLegacyHoldout(domain, event.block);
+  let wasCounted = countsAsChild(domain);
   applyRegistryOwner(domain, parentNode, event.params.owner, false);
-  saveDomain(domain);
+  saveDomain(domain, wasCounted);
+  if (wasHoldout) {
+    cutOffLegacyHoldout(node, event.block);
+  }
 }
 
 // Handler for NewResolver events
@@ -288,8 +292,12 @@ export function handleNewResolver(event: NewResolverEvent): void {
   domainEvent.resolver = id ? id : EMPTY_ADDRESS;
   domainEvent.save();
 
-  // A live ENSv2 name takes its resolver from ENSv2 (legacyGovernance.ts).
-  if (isGovernedByEnsv2(node, event.block.number)) {
+  // A live ENSv2 name takes its resolver from ENSv2, and an ENSv1 name below
+  // an ENSv2 name takes none (legacyGovernance.ts rules 1 and 3).
+  if (
+    isGovernedByEnsv2(node, event.block.number) ||
+    isDetachedFromEnsv1(node, event.block)
+  ) {
     return;
   }
   let domain = getDomain(node);
@@ -299,10 +307,11 @@ export function handleNewResolver(event: NewResolverEvent): void {
     ]);
     return;
   }
+  let wasCounted = countsAsChild(domain);
   domain.resolver = id;
 
   if (id) {
-    saveDomain(domain);
+    saveDomain(domain, wasCounted);
     // Same attach as an ENSv2 ResolverUpdated. A classic resolver keeps its
     // legacy Resolver row and carries its addr over (a new row has none). A
     // PermissionedResolver has no node-keyed events: its records were set
@@ -313,7 +322,7 @@ export function handleNewResolver(event: NewResolverEvent): void {
     return;
   }
   domain.resolvedAddress = null;
-  saveDomain(domain);
+  saveDomain(domain, wasCounted);
 }
 
 // Handler for NewTTL events

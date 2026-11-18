@@ -555,6 +555,56 @@ test("wrapped-unlocked migration (no WrappedDomain) behaves the same as unwrappe
   assert.notInStore("WrappedDomain", domainId);
 });
 
+// Registration.cost is what was last paid in ETH to an ENSv1 controller. A
+// migration continues that registration; a native registration starts a new
+// one, paid for through ETHRegistrar (ENSv2Registration.base/premium).
+test("a migration keeps the ENSv1 registration's cost, a native registration over a lapsed one drops it", () => {
+  dataSourceMock.setNetwork("sepolia");
+  let ethBaseNamehash = setupEthNamespace();
+
+  let migratedHash = Bytes.fromI32(301);
+  let nativeHash = Bytes.fromI32(302);
+  let hashes = [migratedHash, nativeHash];
+  for (let i = 0; i < hashes.length; i++) {
+    let domainId = pathNamehash(ethBaseNamehash, hashes[i]).toHexString();
+    let domain = new Domain(domainId);
+    domain.storedOffchain = false; // Blockscout/BENS extension
+    domain.resolvedWithWildcard = false; // Blockscout/BENS extension
+    domain.owner = GRAVEYARD;
+    domain.registrant = GRAVEYARD;
+    domain.isMigrated = true;
+    domain.subdomainCount = 0;
+    domain.createdAt = BigInt.fromI32(0);
+    domain.save();
+
+    let registration = new Registration(hashes[i].toHexString());
+    registration.domain = domainId;
+    registration.registrationDate = BigInt.fromI32(0);
+    registration.expiryDate = BigInt.fromI32(1000000000);
+    registration.registrant = GRAVEYARD;
+    registration.cost = BigInt.fromI32(1234);
+    registration.save();
+  }
+
+  handleLabelRegistered(
+    createLabelRegisteredEvent(
+      ETH_REGISTRY,
+      slotToken(11),
+      migratedHash,
+      "costmigrated",
+      OWNER,
+      UNLOCKED_MIGRATION_CONTROLLER
+    )
+  );
+  handleLabelRegistered(
+    createLabelRegisteredEvent(ETH_REGISTRY, slotToken(12), nativeHash, "costnative", OWNER)
+  );
+
+  assert.fieldEquals("Registration", migratedHash.toHexString(), "cost", "1234");
+  let nativeCost = Registration.load(nativeHash.toHexString())!.cost;
+  assert.assertTrue(!nativeCost);
+});
+
 test("wrapped-locked migration retires the v1 wrapper state, hands owner and registrant to the ENSv2 owner, and a post-migration transfer keeps tracking it", () => {
   dataSourceMock.setNetwork("sepolia");
   let ethBaseNamehash = setupEthNamespace();

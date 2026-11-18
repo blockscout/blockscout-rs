@@ -24,71 +24,56 @@ import {
   ETH_NODE,
 } from "./utils";
 import { getEthRegistryAddress, getV2GracePeriod } from "./ensv2Constants";
-import {
-  pathNamehash,
-  registryNamespaceIndexId,
-  slotPathIndexId,
-} from "./ensv2Utils";
+import { namespaceId, pathNamehash, slotPathIndexId } from "./ensv2Utils";
 import {
   Domain,
   ENSv2NamePath,
   ENSv2NameSlot,
   ENSv2Namespace,
-  ENSv2Registry,
-  ENSv2RegistryNamespaceIndex,
   ENSv2SlotPathIndex,
   Registration,
   WrappedDomain,
 } from "./types/schema";
 import { syncRegistrationFromSlot } from "./ensv2Registrar";
+import { isLockedInEnsv1, voidLegacySubtree } from "./legacyGovernance";
+import {
+  addToSubdomainCount,
+  countsAsChild,
+  noteChildRow,
+  saveCounted,
+} from "./subdomainCount";
 
 // Recovers a slot's namehash (Domain.id) without a ENSv2NamePath in hand —
-// needed at transfer time, when only the slot is available.
-// Read-only mirror of materializePathsForSlot's namespace loop; ENSv2NameSlot
+// needed at transfer time, when only the slot is available. ENSv2NameSlot
 // deliberately has no direct Domain/namehash field of its own, only
 // labelhash, so this has to be recomputed rather than stored.
+//
+// Only the genuine "eth" namespace can be the canonical parent: setSubregistry
+// has no on-chain restriction on which registry a caller points their own
+// name at, so the slot's registry may be linked under other names too. A
+// namespace id is its registry followed by its base namehash, which makes
+// the "eth" one a direct lookup.
 export function getEthDomainId(slot: ENSv2NameSlot): string | null {
-  let registry = ENSv2Registry.load(slot.registry);
-  if (registry == null) {
+  let namespace = ENSv2Namespace.load(namespaceId(slot.registry, ETH_NODE));
+  if (namespace == null || !namespace.active) {
     return null;
   }
-  for (let i = 0; i < registry.namespaceCount; i++) {
-    let index = ENSv2RegistryNamespaceIndex.load(
-      registryNamespaceIndexId(registry.id, i)
-    );
-    if (index == null) {
-      continue;
-    }
-    let namespace = ENSv2Namespace.load(index.namespace);
-    if (namespace == null || !namespace.active) {
-      continue;
-    }
-    // Only the genuine "eth" namespace can be the canonical parent —
-    // without this check, any active namespace whose namehash happens to
-    // resolve ETHRegistry as a subregistry would match, and setSubregistry
-    // has no on-chain restriction on which registry a caller points their
-    // own subregistry at. Filtering on baseNamehash makes
-    // this deterministic instead of "whichever link was indexed first."
-    if (!namespace.baseNamehash.equals(ETH_NODE)) {
-      continue;
-    }
-    let pathId = pathNamehash(namespace.baseNamehash, slot.labelhash);
-    let path = ENSv2NamePath.load(pathId);
-    // Nullable Bytes require a truthy check before dereferencing.
-    if (path != null) {
-      let domainId = path.domain;
-      if (domainId) {
-        return domainId;
-      }
+  let path = ENSv2NamePath.load(pathNamehash(ETH_NODE, slot.labelhash));
+  // Nullable Bytes require a truthy check before dereferencing.
+  if (path != null) {
+    let domainId = path.domain;
+    if (domainId) {
+      return domainId;
     }
   }
   return null;
 }
 
 // True when `path` is the canonical <label>.eth path of an ETHRegistry slot,
-// the only path the legacy Registration belongs to.
-function isCanonicalEthPath(slot: ENSv2NameSlot, path: ENSv2NamePath): boolean {
-  if (!slot.registry.equals(getEthRegistryAddress())) {
+// the only path the legacy Registration belongs to. A path's registry and
+// labelhash are its slot's.
+function isCanonicalEthPath(path: ENSv2NamePath): boolean {
+  if (!path.registry.equals(getEthRegistryAddress())) {
     return false;
   }
   let namespace = ENSv2Namespace.load(path.namespace);
@@ -130,10 +115,14 @@ export function syncProjectedHolder(slot: ENSv2NameSlot, ownerId: string): void 
     if (domain == null) {
       continue;
     }
+    // A registry never mints to the zero address, but a contract that only
+    // emits the events can register a name to it; the row then starts
+    // counting as its parent's child here.
+    let wasCounted = countsAsChild(domain);
     domain.owner = ownerId;
     domain.registrant = ownerId;
-    domain.save();
-    if (isCanonicalEthPath(slot, path)) {
+    saveCounted(domain, wasCounted);
+    if (isCanonicalEthPath(path)) {
       let registration = Registration.load(slot.labelhash.toHexString());
       if (registration != null) {
         registration.registrant = ownerId;
@@ -172,7 +161,7 @@ export function syncProjectedExpiry(slot: ENSv2NameSlot, expiry: BigInt): void {
       ? clampLegacyExpiry(expiry.plus(getV2GracePeriod()))
       : clampLegacyExpiry(expiry);
     domain.save();
-    if (isCanonicalEthPath(slot, path)) {
+    if (isCanonicalEthPath(path)) {
       let registration = Registration.load(slot.labelhash.toHexString());
       if (registration != null) {
         registration.expiryDate = clampLegacyExpiry(expiry);
@@ -184,23 +173,32 @@ export function syncProjectedExpiry(slot: ENSv2NameSlot, expiry: BigInt): void {
 
 // The name stopped existing in ENSv2 (LabelUnregistered, or its namespace was
 // unlinked): apply the ENSv1 deletion convention so the row stops reading as
-// live. The caller has already taken the path out of its parent's
-// subdomainCount (adjustParentSubdomainCount), so this saves without
-// re-running the ENSv1 delete recursion. A canonical .eth Registration keeps
-// its (required) registrant and ends now.
+// live. A canonical .eth Registration keeps its (required) registrant and
+// ends now.
+//
+// Returns the id of the parent Domain when the row stopped counting as its
+// child (subdomainCount.ts), for the caller to take it off the parent's
+// subdomainCount: one addToSubdomainCount per name, or one per run of
+// siblings when everything below a link is retired. Returns null when the
+// path has no row, or the row has no parent, or it still has children of its
+// own that count: it then stops counting when the last of them does.
+//
+// Takes nothing but the path: retiring everything below a link runs this
+// once per name, and each entity loaded stays in the handler's memory until
+// the handler ends.
 export function retireProjectedDomain(
   path: ENSv2NamePath,
-  slot: ENSv2NameSlot,
   timestamp: BigInt
-): void {
+): string | null {
   let domainId = path.domain;
   if (!domainId) {
-    return;
+    return null;
   }
   let domain = Domain.load(domainId!);
   if (domain == null) {
-    return;
+    return null;
   }
+  let wasCounted = countsAsChild(domain);
   domain.owner = EMPTY_ADDRESS;
   domain.registrant = null;
   domain.wrappedOwner = null;
@@ -209,28 +207,31 @@ export function retireProjectedDomain(
   domain.resolvedAddress = null;
   domain.expiryDate = timestamp;
   domain.save();
+  let stoppedCounting = wasCounted && !countsAsChild(domain);
   if (WrappedDomain.load(domain.id) != null) {
     store.remove("WrappedDomain", domain.id);
   }
-  if (isCanonicalEthPath(slot, path)) {
-    let registration = Registration.load(slot.labelhash.toHexString());
+  if (isCanonicalEthPath(path)) {
+    let registration = Registration.load(path.labelhash.toHexString());
     if (registration != null) {
       registration.expiryDate = timestamp;
       registration.save();
     }
   }
+  // A locked migration kept its emancipated ENSv1 subnames
+  // (legacyGovernance.ts rule 3). Its WrapperRegistry is unreachable now, so
+  // they go too. A no-op for every other name, which is already marked.
+  voidLegacySubtree(path, false, timestamp);
+  return stoppedCounting ? domain.parent : null;
 }
 
 // Link a projected Domain to its projected parent when one exists. Root
 // Registry paths deliberately have no legacy Domain projection, so a child
 // such as foo.eth must fall back to the existing ENSv1 Domain("eth") row.
 // The fallback is conditional: never create a legacy parent just to support
-// a bounded ENSv2 projection.
-function linkProjectedDomainToParent(
-  domain: Domain,
-  path: ENSv2NamePath,
-  isNewDomain: boolean
-): void {
+// a bounded ENSv2 projection. Only sets the link: the caller counts the row
+// in the parent when the projection makes it start counting.
+function linkProjectedDomainToParent(domain: Domain, path: ENSv2NamePath): void {
   let parentPathId = path.parent;
   if (!parentPathId) {
     return;
@@ -244,65 +245,14 @@ function linkProjectedDomainToParent(
   let projectedParentId = parentPath.domain;
   if (projectedParentId) {
     domain.parent = projectedParentId;
-
-    // A Domain row created by an ENSv1 handler has already been counted by
-    // that handler. Only a newly-created compatibility row contributes a new
-    // direct child, and therefore increments the parent's count.
-    if (isNewDomain) {
-      let parentDomain = Domain.load(projectedParentId);
-      if (parentDomain != null) {
-        parentDomain.subdomainCount = parentDomain.subdomainCount + 1;
-        parentDomain.save();
-      }
-    }
     return;
   }
 
   // RootRegistry paths are native-only, but their namehash IDs are the same
   // IDs used by the legacy root-label Domain rows (eth, reverse).
-  let legacyParent = Domain.load(parentPath.id.toHexString());
-  if (legacyParent == null) {
-    return;
+  if (Domain.load(parentPath.id.toHexString()) != null) {
+    domain.parent = parentPath.id.toHexString();
   }
-
-  domain.parent = legacyParent.id;
-  if (isNewDomain) {
-    legacyParent.subdomainCount = legacyParent.subdomainCount + 1;
-    legacyParent.save();
-  }
-}
-
-// ENSv1 only counts a child in Domain.subdomainCount while it is live
-// (recurseDomainDelete decrements when the registry owner is cleared). The
-// ENSv2 analogue of that liveness is the projected path's `active` flag, so
-// callers invoke this on an active-flag transition: -1 when a projected path
-// is deactivated (LabelUnregistered, namespace unlink), +1 when a previously
-// deactivated path is reactivated by a re-registration. Creation is counted
-// separately by linkProjectedDomainToParent. Root paths have no Domain
-// projection and are ignored.
-export function adjustParentSubdomainCount(
-  path: ENSv2NamePath,
-  delta: i32
-): void {
-  let domainId = path.domain;
-  if (domainId == null) {
-    return;
-  }
-  let domain = Domain.load(domainId!);
-  if (domain == null) {
-    return;
-  }
-  let parentId = domain.parent;
-  if (parentId == null) {
-    return;
-  }
-  let parent = Domain.load(parentId!);
-  if (parent == null) {
-    return;
-  }
-  let next = parent.subdomainCount + delta;
-  parent.subdomainCount = next < 0 ? 0 : next;
-  parent.save();
 }
 
 function syncEthRegistration(
@@ -322,6 +272,9 @@ function syncEthRegistration(
   // a lapsed ENSv1 Registration row.
   if (isNewRegistration || !isV1Migration) {
     registration.registrationDate = event.block.timestamp;
+    // What was paid for the lapsed ENSv1 registration says nothing about
+    // this one, which is paid for through ETHRegistrar (ENSv2Registration).
+    registration.cost = null;
   }
   registration.domain = path.id.toHexString();
   let slotExpiryDate = slot.expiryDate;
@@ -342,8 +295,7 @@ export function projectPathToDomain(
   path: ENSv2NamePath,
   slot: ENSv2NameSlot,
   event: ethereum.Event,
-  isV1Migration: boolean,
-  pathReactivated: boolean
+  isV1Migration: boolean
 ): void {
   let ownerId = slot.owner;
   if (ownerId == null) {
@@ -357,25 +309,25 @@ export function projectPathToDomain(
 
   let domain = Domain.load(path.id.toHexString());
   let isNewDomain = domain == null;
-  // An existing row in the ENSv1 deleted state (owner zero address, no
-  // resolver, no children) is no longer counted in its parent's
-  // subdomainCount (ensRegistry.recurseDomainDelete, or retireProjectedDomain
-  // before a path reactivation). Reviving it counts it again, unless the
-  // path reactivation in materializePathsForSlot already did.
-  let countsAsNewChild = isNewDomain;
   if (domain == null) {
     domain = new Domain(path.id.toHexString());
     domain.storedOffchain = false; // Blockscout/BENS extension
     domain.resolvedWithWildcard = false; // Blockscout/BENS extension
     domain.createdAt = event.block.timestamp;
     domain.subdomainCount = 0;
-  } else if (
-    !pathReactivated &&
-    domain.owner == EMPTY_ADDRESS &&
-    !domain.resolver &&
-    domain.subdomainCount == 0
-  ) {
-    countsAsNewChild = true;
+  }
+  // A new row, one ENSv1 left in its deleted state and one this projection
+  // retired earlier are not counted in the parent's subdomainCount; a live
+  // ENSv1 row is. Compared again after the save below (subdomainCount.ts).
+  let wasCounted = !isNewDomain && countsAsChild(domain);
+
+  // Read before the projection drops the name's NameWrapper state below. A
+  // migration of a locked name puts a WrapperRegistry under it, which keeps
+  // sending its emancipated ENSv1 subnames to ENSv1 (legacyGovernance.ts
+  // rule 3).
+  let lockedMigration = false;
+  if (isV1Migration && !isNewDomain) {
+    lockedMigration = isLockedInEnsv1(domain.id);
   }
 
   domain.name = path.name;
@@ -397,7 +349,11 @@ export function projectPathToDomain(
   // syncProjectedToken writes through.
   domain.registryToken = slot.currentToken;
 
-  linkProjectedDomainToParent(domain, path, countsAsNewChild);
+  let hadParent = !isNewDomain && domain.parent != null;
+  linkProjectedDomainToParent(domain, path);
+  if (!hadParent && domain.parent) {
+    noteChildRow(domain.parent!);
+  }
 
   // v2GracePeriod is ETHRegistrar/ETHRenewerV1-specific policy — only
   // applied for real .eth registrations, where Domain.expiryDate has always
@@ -436,8 +392,20 @@ export function projectPathToDomain(
     domain.expiryDate = null;
   }
   domain.save();
+  let isCounted = countsAsChild(domain);
+  if (wasCounted != isCounted) {
+    addToSubdomainCount(domain.parent!, isCounted ? 1 : -1);
+  }
 
+  // The ENSv1 names below a name that is live in ENSv2 stop resolving
+  // through ENSv1 (legacyGovernance.ts rule 3). A row created just now has
+  // none.
   path.domain = domain.id;
+  if (isNewDomain) {
+    path.legacySubtreeVoided = true;
+  } else {
+    voidLegacySubtree(path, lockedMigration, event.block.timestamp);
+  }
   path.save();
 
   if (isEth) {

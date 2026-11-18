@@ -1207,4 +1207,51 @@ describe("BaseRegistrar's own NameRenewed/Transfer, and LegacyEthRegistrarContro
       fetchedRegistration.cost!.equals(BigInt.fromString("2000000000"))
     );
   });
+
+  // ETHRenewerV1 renews on the BaseRegistrar itself and then calls
+  // WrappedEthRegistrarController.renew(label, 0) to sync the NameWrapper,
+  // which emits NameRenewed with cost 0 (and anyone can call syncWrapper for
+  // any label). That is not a payment: the cost of the last one stays.
+  test("a renewal event with cost 0 does not overwrite the cost", () => {
+    const labelhash =
+      "0xc4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4";
+    const label = "syncwrapper";
+
+    handleNewOwner(
+      createNewOwnerEvent(ETH_NODE.toHexString(), labelhash, DEFAULT_OWNER)
+    );
+    handleNameRegistered(
+      createNameRegisteredEventForBaseRegistrar(
+        BigInt.fromUnsignedBytes(
+          Bytes.fromUint8Array(Bytes.fromHexString(labelhash).reverse())
+        ).toString(),
+        DEFAULT_OWNER,
+        "1610000000"
+      )
+    );
+    handleNameRegisteredByLegacyController(
+      createLegacyNameRegisteredEvent(
+        label,
+        labelhash,
+        DEFAULT_OWNER,
+        "1000000000",
+        "1610000000"
+      )
+    );
+
+    handleNameRenewedByLegacyController(
+      createLegacyNameRenewedEvent(label, labelhash, "0", "1620000000")
+    );
+    let registration = Registration.load(labelhash)!;
+    assert.assertTrue(registration.cost!.equals(BigInt.fromString("1000000000")));
+    assert.assertTrue(registration.labelName == label);
+
+    // A paid renewal still replaces it.
+    handleNameRenewedByLegacyController(
+      createLegacyNameRenewedEvent(label, labelhash, "3000000000", "1630000000")
+    );
+    assert.assertTrue(
+      Registration.load(labelhash)!.cost!.equals(BigInt.fromString("3000000000"))
+    );
+  });
 });

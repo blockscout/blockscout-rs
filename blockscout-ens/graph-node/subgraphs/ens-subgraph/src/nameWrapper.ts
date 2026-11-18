@@ -38,7 +38,11 @@ import {
   uint256ToByteArray,
 } from "./utils";
 import { isSink } from "./ensv2Constants";
-import { isGovernedByEnsv2 } from "./legacyGovernance";
+import {
+  cutOffLegacyHoldout,
+  isGovernedByEnsv2,
+  isLegacyHoldout,
+} from "./legacyGovernance";
 
 // NameWrapper events never write the holder of a name live in ENSv2, and a
 // wrapper token handed to a sink never becomes its wrapped owner
@@ -172,6 +176,10 @@ export function handleNameUnwrapped(event: NameUnwrappedEvent): void {
   }
 
   let domain = createOrLoadDomain(node);
+  // Normally false already: the registry Transfer that precedes
+  // NameUnwrapped detached the wrapped state and cut the name off there
+  // (ensRegistry.ts, legacyGovernance.ts rule 3).
+  let wasHoldout = isLegacyHoldout(domain, event.block);
   domain.wrappedOwner = null;
   // Nullable-Bytes comparison against a real value (not null) hits the same
   // compileBinaryOverload crash as comparing against null (AssemblyScript
@@ -197,6 +205,9 @@ export function handleNameUnwrapped(event: NameUnwrappedEvent): void {
   // detached the wrapped state (ensRegistry.detachWrappedStateIfLeftWrapper).
   if (WrappedDomain.load(node.toHexString()) != null) {
     store.remove("WrappedDomain", node.toHexString());
+  }
+  if (wasHoldout) {
+    cutOffLegacyHoldout(node, event.block);
   }
 }
 

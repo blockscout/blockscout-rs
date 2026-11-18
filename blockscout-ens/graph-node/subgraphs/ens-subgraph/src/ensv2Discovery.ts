@@ -1,5 +1,16 @@
-// Registry discovery via VerifiableFactory.ProxyDeployed and shared registry
-// and root-namespace creation helpers.
+// Registry discovery and shared registry and root-namespace creation helpers.
+//
+// A registry's own events are indexed once it has a data source
+// (ENSv2Registry.indexed). The RootRegistry and ETHRegistry are static data
+// sources. Every other registry gets a dynamic one from whichever of these
+// comes first (startIndexingRegistry):
+//   - VerifiableFactory.ProxyDeployed (handleProxyDeployed),
+//   - its own first LabelRegistered, LabelReserved or ParentUpdated, seen by
+//     the addressless ENSv2RegistryDiscovery source. This is what covers
+//     registries that were not deployed through the factory.
+// An address that is only named by another registry (as a subregistry or a
+// parent) gets a row and no data source: any address can be named, at the
+// cost of one event, and a data source is kept for the life of the subgraph.
 import { Address, Bytes, ethereum } from "@graphprotocol/graph-ts";
 
 import { ROOT_NODE } from "./utils";
@@ -13,6 +24,11 @@ import {
   isUserRegistryImpl,
 } from "./ensv2Constants";
 import { ENSv2HCA, ENSv2Namespace, ENSv2Registry } from "./types/schema";
+import {
+  LabelRegistered,
+  LabelReserved,
+  ParentUpdated,
+} from "./types/RootRegistry/PermissionedRegistry";
 import { ProxyDeployed } from "./types/VerifiableFactory/VerifiableFactory";
 import { ENSv2Registry as ENSv2RegistryTemplate } from "./types/templates";
 
@@ -27,12 +43,10 @@ import { ENSv2Registry as ENSv2RegistryTemplate } from "./types/templates";
 //
 // `implementation` is only ever available at the one call site that has it
 // (handleProxyDeployed, from the ProxyDeployed event itself) — every other
-// call site passes null, which is fine: a real deployed registry's
-// ProxyDeployed event is always indexed before anything else could
-// reference its address (the address can't be referenced on-chain before
-// the proxy exists), so by the time any other call site runs, the row
-// already exists with its real classification and this function never
-// actually reruns for it.
+// call site passes null. A registry deployed through the factory normally
+// has its row before anything else references it; one referenced first (the
+// address is counterfactual) is classified when ProxyDeployed arrives, and
+// one that was never deployed through the factory stays UNKNOWN.
 export function kindForAddress(
   address: Address,
   implementation: Bytes | null = null
@@ -67,6 +81,10 @@ export function getOrCreateRegistry(
     registry.kind = kindForAddress(address, implementation);
     registry.implementation = implementation;
     registry.namespaceCount = 0;
+    registry.materializedNamespaces = new Array<Bytes>();
+    registry.canonicalMaterializations = 0;
+    registry.aliasMaterializations = 0;
+    registry.indexed = isStaticRegistry(address);
     registry.slotCount = 0;
     registry.discoveredAt = block.timestamp;
     registry.createdAtBlock = block.number;
@@ -74,6 +92,50 @@ export function getOrCreateRegistry(
     registry.save();
   }
   return registry;
+}
+
+// The RootRegistry and ETHRegistry are static data sources in the manifest.
+function isStaticRegistry(address: Address): boolean {
+  return (
+    address.equals(getRootRegistryAddress()) ||
+    address.equals(getEthRegistryAddress())
+  );
+}
+
+// Makes sure the registry's own events are indexed: creates its row if it
+// has none and, the first time, its dynamic data source. A data source
+// created in a block also receives that block's earlier events, so the event
+// that led here reaches the registry mapping too.
+function startIndexingRegistry(
+  address: Address,
+  block: ethereum.Block,
+  implementation: Bytes | null = null
+): ENSv2Registry {
+  let registry = getOrCreateRegistry(address, address, block, implementation);
+  if (!registry.indexed) {
+    ENSv2RegistryTemplate.create(address);
+    registry.indexed = true;
+    registry.save();
+  }
+  return registry;
+}
+
+// ENSv2RegistryDiscovery: an addressless data source for the events a
+// registry emits before or when its first name exists. The handlers only
+// make sure the emitting registry is indexed; the registry's own data source
+// handles the event itself. A registry that declares its parent or registers
+// names before any parent links it is picked up here, so its declaration and
+// those names are known when the link arrives.
+export function handleRegistryLabelRegistered(event: LabelRegistered): void {
+  startIndexingRegistry(event.address, event.block);
+}
+
+export function handleRegistryLabelReserved(event: LabelReserved): void {
+  startIndexingRegistry(event.address, event.block);
+}
+
+export function handleRegistryParentUpdated(event: ParentUpdated): void {
+  startIndexingRegistry(event.address, event.block);
 }
 
 export function getOrCreateRootNamespace(
@@ -89,17 +151,26 @@ export function getOrCreateRootNamespace(
     // Root has no name; leave the nullable field unset.
     namespace.baseNamehash = rootNamehash;
     namespace.active = true;
+    namespace.materialized = true;
+    namespace.backfilled = true;
+    namespace.backfillCursor = 0;
+    namespace.backfillQueued = false;
+    namespace.canonical = true;
     namespace.pathCount = 0;
     namespace.createdAt = block.timestamp;
     namespace.createdAtBlock = block.number;
     namespace.updatedAtBlock = block.number;
     namespace.save();
 
-    // materializePathsForSlot enumerates namespaces strictly via
-    // ENSv2RegistryNamespaceIndex (bounded by namespaceCount), so a counter
-    // increment must always have a matching index row.
+    // materializePathsForSlot projects a registration under the registry's
+    // materializedNamespaces; the index row keeps every namespace enumerable.
     let registry = ENSv2Registry.load(rootRegistryId)!;
     appendRegistryNamespaceIndex(registry, namespace);
+    registry = ENSv2Registry.load(rootRegistryId)!;
+    let materialized = registry.materializedNamespaces;
+    materialized.push(namespace.id);
+    registry.materializedNamespaces = materialized;
+    registry.save();
   }
   return namespace;
 }
@@ -108,6 +179,10 @@ export function getOrCreateRootNamespace(
 // events are covered by the addressless PermissionedResolver source, while
 // HCAs have their own entity; only registry implementations create dynamic
 // registry sources and ENSv2Registry rows.
+//
+// A proxy that emitted a name or parent event before this event was
+// processed is already indexed (see the file header); one that was only
+// named by another registry has a row and is started here.
 export function handleProxyDeployed(event: ProxyDeployed): void {
   let implementation = event.params.implementation;
   if (implementation.equals(getPermissionedResolverImplAddress())) {
@@ -126,17 +201,15 @@ export function handleProxyDeployed(event: ProxyDeployed): void {
     return;
   }
 
-  ENSv2RegistryTemplate.create(event.params.proxyAddress);
-  let registry = getOrCreateRegistry(
-    event.params.proxyAddress,
+  let registry = startIndexingRegistry(
     event.params.proxyAddress,
     event.block,
     implementation
   );
   // Also populate an existing row if another event referenced the address
-  // before ProxyDeployed was processed (SubregistryUpdated/ParentUpdated
-  // from a data source whose start block precedes the factory's, or a
-  // testnet redeploy). Such a row was created without an implementation and
+  // before ProxyDeployed was processed (a SubregistryUpdated or ParentUpdated
+  // naming the counterfactual address, or a testnet redeploy). Such a row
+  // was created without an implementation and
   // therefore classified UNKNOWN; now that the implementation is known,
   // classify it the same way a fresh row would be. A row that already has a
   // definite kind is left alone.

@@ -14,14 +14,13 @@ import { decodeName } from "./nameWrapper";
 import { processEACRolesChanged } from "./ensv2Roles";
 import {
   activateRecordMembership,
-  activeRecordMembershipAt,
   appendAddressIndex,
   appendTextIndex,
   deactivateRecordMembership,
   getOrCreateResolver,
   projectEffectiveRecord,
+  projectRecordToActiveMemberships,
   refreshDefaultRecordConsumers,
-  replaceLegacyResolverSnapshot,
 } from "./ensv2ResolverProjection";
 import { ROOT_NODE } from "./utils";
 import {
@@ -107,20 +106,6 @@ function getOrCreateRecord(
   return record;
 }
 
-function projectRecordToActiveMemberships(
-  record: ENSv2ResolverRecord,
-): void {
-  for (let i = 0; i < record.linkIndexCount; i++) {
-    let membership = activeRecordMembershipAt(record, i);
-    if (membership != null) {
-      replaceLegacyResolverSnapshot(record, membership.node);
-      if (membership.node.equals(ROOT_NODE)) {
-        refreshDefaultRecordConsumers(record.resolver);
-      }
-    }
-  }
-}
-
 // Also fires from the implementation constructor, creating an otherwise
 // unused resolver row for the implementation address.
 export function handleResolverCreated(event: ResolverCreated): void {
@@ -186,7 +171,9 @@ export function handleLinked(event: Linked): void {
     link.logIndex = event.logIndex;
     link.save();
     activateRecordMembership(record, link);
-    replaceLegacyResolverSnapshot(record, event.params.node);
+    // Projects the record if this link is one its updates reach, and leaves
+    // the name without a snapshot otherwise.
+    projectEffectiveRecord(Address.fromBytes(resolver.address), event.params.node);
   }
   if (event.params.node.equals(ROOT_NODE)) {
     refreshDefaultRecordConsumers(resolver.id);

@@ -18,6 +18,7 @@ import {
   handleResolverCreated,
   handleTextUpdated,
 } from "../src/ensv2Resolver";
+import { MAX_LEGACY_FANOUT } from "../src/ensv2ResolverProjection";
 import { createResolverID, handleAddrChanged } from "../src/resolver";
 import { handleNewResolver } from "../src/ensRegistry";
 import { NewResolver } from "../src/types/ENSRegistry/EnsRegistry";
@@ -1040,6 +1041,8 @@ function seedV1Domain(node: Bytes): void {
   let owner = new Account(DOMAIN_OWNER);
   owner.save();
   let domain = new Domain(node.toHexString());
+  domain.storedOffchain = false; // Blockscout/BENS extension
+  domain.resolvedWithWildcard = false; // Blockscout/BENS extension
   domain.subdomainCount = 0;
   domain.isMigrated = true;
   domain.createdAt = BigInt.zero();
@@ -1143,6 +1146,73 @@ test("a name with no record of its own resolves through the resolver's default r
   let b = Address.fromString("0x4444444444444444444444444444444444444402");
   handleAddressUpdated(createAddressUpdatedEvent(defaultRecord, BigInt.fromI32(60), b));
   assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", b.toHexString());
+});
+
+// Whether a record is the resolver's default is read from the root link,
+// not from the record's first MAX_LEGACY_FANOUT links: the names relying on
+// the default were given its snapshot and must follow its updates.
+test("a record linked to the root node after MAX_LEGACY_FANOUT other nodes still carries its updates to the names relying on it", () => {
+  handleResolverCreated(createResolverCreatedEvent());
+  let record = BigInt.fromI32(91);
+  for (let n = 0; n < MAX_LEGACY_FANOUT; n++) {
+    let explicit = Bytes.fromHexString(
+      "0xcccc0000000000000000000000000000000000000000000000000000000000" +
+        (n < 16 ? "0" : "") +
+        n.toString(16)
+    );
+    handleLinked(createLinkedEvent(record, explicit, ROOT_DNS_NAME));
+  }
+  handleLinked(createLinkedEvent(record, ROOT_NODE_BYTES, ROOT_DNS_NAME));
+  let a = Address.fromString("0x4444444444444444444444444444444444444401");
+  handleAddressUpdated(createAddressUpdatedEvent(record, BigInt.fromI32(60), a));
+
+  let node = v1NodeOnPermissionedResolver(1);
+  handleNewResolver(createV1NewResolverEvent(node, PERMISSIONED_RESOLVER));
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", a.toHexString());
+
+  // Used to stay at the first address.
+  let b = Address.fromString("0x4444444444444444444444444444444444444402");
+  handleAddressUpdated(createAddressUpdatedEvent(record, BigInt.fromI32(60), b));
+  assert.fieldEquals("Domain", node.toHexString(), "resolvedAddress", b.toHexString());
+});
+
+// One event refreshes a bounded number of names (v2.3.5). A name it cannot
+// reach is never given the record, so it shows no address, not an old one.
+test("the first MAX_LEGACY_FANOUT names pointed at a resolver follow its default record; a name beyond that gets no address", () => {
+  handleResolverCreated(createResolverCreatedEvent());
+  let defaultRecord = BigInt.fromI32(90);
+  let a = Address.fromString("0x4444444444444444444444444444444444444401");
+  handleLinked(createLinkedEvent(defaultRecord, ROOT_NODE_BYTES, ROOT_DNS_NAME));
+  handleAddressUpdated(createAddressUpdatedEvent(defaultRecord, BigInt.fromI32(60), a));
+
+  let nodes = new Array<Bytes>();
+  for (let n = 1; n <= MAX_LEGACY_FANOUT + 1; n++) {
+    let node = v1NodeOnPermissionedResolver(n);
+    handleNewResolver(createV1NewResolverEvent(node, PERMISSIONED_RESOLVER));
+    nodes.push(node);
+  }
+  let last = nodes[MAX_LEGACY_FANOUT];
+  assert.fieldEquals("Domain", nodes[MAX_LEGACY_FANOUT - 1].toHexString(), "resolvedAddress", a.toHexString());
+  assert.fieldEquals("Domain", last.toHexString(), "resolvedAddress", "null");
+  assert.fieldEquals("ENSv2Resolver", PERMISSIONED_RESOLVER, "attachmentCount", (MAX_LEGACY_FANOUT + 1).toString());
+  assert.fieldEquals("ENSv2Resolver", PERMISSIONED_RESOLVER, "legacyProjectionTruncated", "true");
+
+  let b = Address.fromString("0x4444444444444444444444444444444444444402");
+  handleAddressUpdated(createAddressUpdatedEvent(defaultRecord, BigInt.fromI32(60), b));
+
+  assert.fieldEquals("Domain", nodes[0].toHexString(), "resolvedAddress", b.toHexString());
+  assert.fieldEquals("Domain", nodes[MAX_LEGACY_FANOUT - 1].toHexString(), "resolvedAddress", b.toHexString());
+  assert.fieldEquals("Domain", last.toHexString(), "resolvedAddress", "null");
+
+  // Its own record, linked among the first of that record, is tracked.
+  let ownRecord = BigInt.fromI32(91);
+  let c = Address.fromString("0x4444444444444444444444444444444444444403");
+  handleAddressUpdated(createAddressUpdatedEvent(ownRecord, BigInt.fromI32(60), c));
+  handleLinked(createLinkedEvent(ownRecord, last, ROOT_DNS_NAME));
+  assert.fieldEquals("Domain", last.toHexString(), "resolvedAddress", c.toHexString());
+  // Unlinked again, it is back on the default record it cannot follow.
+  handleLinked(createLinkedEvent(BigInt.zero(), last, ROOT_DNS_NAME));
+  assert.fieldEquals("Domain", last.toHexString(), "resolvedAddress", "null");
 });
 
 test("a name's own record wins over the default; unlinking it falls back to the default", () => {

@@ -47,6 +47,9 @@
       "address": "0x77510ba162dfea3d8989e3f0928a691b345730d2",
       "startBlock": 26105299
     },
+    "ENSv2RegistryDiscovery": {
+      "startBlock": 26105299
+    },
     "PermissionedResolver": {
       "startBlock": 26105631
     },
@@ -101,6 +104,9 @@
     },
     "VerifiableFactory": {
       "address": "0xDa70306C98E97eCe36F997a21368e53298572991",
+      "startBlock": 11820318
+    },
+    "ENSv2RegistryDiscovery": {
       "startBlock": 11820318
     },
     "PermissionedResolver": {

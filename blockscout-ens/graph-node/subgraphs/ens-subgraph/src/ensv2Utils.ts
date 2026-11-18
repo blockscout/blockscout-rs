@@ -7,7 +7,7 @@
 // component is either fixed-width already or made fixed-width via
 // uint256ToByteArray (32-byte big-endian BigInt) / i32ToBytes (4-byte
 // big-endian counter), so no delimiter is needed.
-import { Address, BigInt, Bytes, crypto } from "@graphprotocol/graph-ts";
+import { Address, BigInt, ByteArray, Bytes, crypto } from "@graphprotocol/graph-ts";
 import { concat, i32ToBytes, uint256ToByteArray } from "./utils";
 import {
   ENSv2Namespace,
@@ -163,9 +163,11 @@ export function appendRegistryNamespaceIndex(
 }
 
 // Records a newly created slot on its registry, so a namespace linked after
-// the slot was registered can still find it (ensv2Paths.backfillNamespace).
-// Loads the registry fresh: callers may hold an older snapshot of it.
+// the slot was registered can still find it (ensv2Paths.backfillNamespace),
+// and the position on the slot. Call before the slot's first save. Loads the
+// registry fresh: callers may hold an older snapshot of it.
 export function appendRegistrySlotIndex(slot: ENSv2NameSlot): void {
+  slot.registryIndex = 0;
   let registry = ENSv2Registry.load(slot.registry);
   if (registry == null) {
     return;
@@ -177,7 +179,19 @@ export function appendRegistrySlotIndex(slot: ENSv2NameSlot): void {
   index.index = registry.slotCount;
   index.slot = slot.id;
   index.save();
+  slot.registryIndex = registry.slotCount;
 
   registry.slotCount = registry.slotCount + 1;
   registry.save();
+}
+
+// The id of the slot a label occupies in a registry: the registry address
+// followed by the labelhash with its low 32 bits (the token version) cleared,
+// which is what nameSlotId(registry, toSlotId(tokenId)) produces.
+export function slotEntityIdForLabelhash(registryId: Bytes, labelhash: Bytes): Bytes {
+  let slotId = new ByteArray(32);
+  for (let i = 0; i < 28; i++) {
+    slotId[i] = labelhash[i];
+  }
+  return Bytes.fromByteArray(concat(registryId, slotId));
 }
