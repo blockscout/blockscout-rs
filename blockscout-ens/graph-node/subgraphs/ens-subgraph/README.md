@@ -69,7 +69,8 @@ the ENSv2 constants in `src/ensv2Constants.ts` and deploys from a temporary
 copy of the manifest, so `subgraph.yaml` stays as committed:
 
 ```bash
-just init
+just init      # yarn install
+just codegen   # generates src/types (gitignored), which the build needs
 just network=mainnet name=ens-subgraph create
 just network=mainnet name=ens-subgraph deploy v2.3.6
 just network=sepolia name=ens-sepolia-subgraph create
