@@ -54,6 +54,17 @@ ownership rules of its own. Specific to this subgraph:
   whether or not it has synced. Deploy the new subgraph version, wait until it
   is fully synced, then start BENS with `"ensv2": true`. Any BENS restart while
   the new deployment is still syncing serves its partial data.
+- **Enable `ensv2` only against the new schema, and on the first start
+  against it.** With `"ensv2": true` against a schema from the old subgraph,
+  ENS name lookups fail (`column "registry_token" does not exist`). The
+  `addr_reverse_names` view is created once per schema
+  (`CREATE MATERIALIZED VIEW IF NOT EXISTS`), and refreshes keep its
+  definition: a view first created with `ensv2` off stays v1-only after the
+  flag is turned on, and ENSIP-19 default primary names do not show. To
+  recover, drop it in the subgraph's schema and restart BENS, which creates
+  it again with the current flag:
+  `DROP MATERIALIZED VIEW sgdN.addr_reverse_names CASCADE;` (`sgdN` is the
+  deployment's schema; `CASCADE` also drops its unique index).
 - **ENSIP-19 default primary names.** The ENSv2 app sets a primary name on the
   `DefaultReverseRegistrar` instead of the v1 `addr.reverse` resolver. The
   subgraph indexes them as `ENSv2PrimaryName`, with a Blockscout extension

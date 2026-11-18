@@ -55,18 +55,37 @@ To upgrade to a newer upstream tag, replace the directory with the new tree
 - **An RPC that serves `eth_getLogs` without an address filter.** The
   `Resolver` data source is addressless. Public gateways rate-limit or refuse
   those calls; a keyed node is needed for a full sync.
+- **Yarn 4 through Corepack.** `package.json` pins Yarn 4 (`packageManager`).
+  Run `corepack enable` once (it ships with Node.js 18+) so that `yarn`
+  resolves to that version; a global Yarn classic without the Corepack shim
+  can refuse to run in this directory, which stops both the commands below
+  and the deployer's `yarn install`.
 
 ## Deploy
 
-Through the deployer (uses `networks.json` for the per-network addresses and
-start blocks):
+From this directory, with `just deploy`. It runs `yarn deploy:<network>`
+(`scripts/run-network-command.mjs`), which checks `networks.json` against
+the ENSv2 constants in `src/ensv2Constants.ts` and deploys from a temporary
+copy of the manifest, so `subgraph.yaml` stays as committed:
 
 ```bash
-just deploy-subgraph ens          # mainnet,  subgraph name ens-subgraph
-just deploy-subgraph ens-sepolia  # sepolia,  subgraph name ens-sepolia-subgraph
+just init
+just network=mainnet name=ens-subgraph create
+just network=mainnet name=ens-subgraph deploy v2.3.5
+just network=sepolia name=ens-sepolia-subgraph create
+just network=sepolia name=ens-sepolia-subgraph deploy v2.3.5
 ```
 
-Or directly: `just network=sepolia name=ens-sepolia-subgraph deploy v2.3.5`.
+`graph_node_url` and `ipfs_url` default to a local graph-node; `just
+deploy-remote` uses Blockscout's IPFS node. The subgraph name must be the
+one the BENS config reads: `bens-server/config/staging.json` reads the
+Sepolia subgraph as `ens-subgraph`, so for that environment deploy with
+`network=sepolia name=ens-subgraph`.
+
+The shared deployer (`just deploy-subgraph ens` / `ens-sepolia` from
+`blockscout-ens`) also works, but it runs a bare `graph deploy --network`:
+it skips that check and leaves `subgraph.yaml` rewritten with the network's
+addresses and start blocks (restore it with `git checkout subgraph.yaml`).
 
 ## BENS configuration
 
