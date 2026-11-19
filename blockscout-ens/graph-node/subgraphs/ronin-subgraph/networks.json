@@ -1,0 +1,40 @@
+{
+  "ronin-mainnet": {
+    "RNSUnified": {
+      "address": "0x67C409DaB0EE741A1B1Be874bd1333234cfDBF44",
+      "startBlock": 55577501
+    },
+    "RNSUnifiedBackfill": {
+      "address": "0x67C409DaB0EE741A1B1Be874bd1333234cfDBF44",
+      "startBlock": 55577501,
+      "endBlock": 55578500
+    },
+    "PublicResolver": {
+      "address": "0xadb077d236d9E81fB24b96AE9cb8089aB9942d48",
+      "startBlock": 55577501
+    },
+    "RONRegistrarController": {
+      "address": "0x662852853614cbBb5D04BF2E29955b97E3C50B69",
+      "startBlock": 55577501
+    }
+  },
+  "ronin-saigon": {
+    "RNSUnified": {
+      "address": "0xf0c99c9677EDa0D13291C093b27E6512E4ACdF83",
+      "startBlock": 45528551
+    },
+    "RNSUnifiedBackfill": {
+      "address": "0xf0c99c9677EDa0D13291C093b27E6512E4ACdF83",
+      "startBlock": 45528551,
+      "endBlock": 45529550
+    },
+    "PublicResolver": {
+      "address": "0x803c459dCB8771e5354D1fC567Ecc6885A9fd5E6",
+      "startBlock": 45528551
+    },
+    "RONRegistrarController": {
+      "address": "0x512699B52ac2dC2b2aD505d9f29DcDad078FA799",
+      "startBlock": 45528551
+    }
+  }
+}

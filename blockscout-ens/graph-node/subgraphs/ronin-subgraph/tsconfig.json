@@ -1,0 +1,10 @@
+{
+  "extends": "assemblyscript/std/assembly",
+  "include": [
+    "node_modules/@graphprotocol/graph-ts/index.ts",
+    "node_modules/@graphprotocol/graph-ts/helper-functions.ts",
+    "node_modules/@graphprotocol/graph-ts/global/global.ts",
+    "src/**/*.ts",
+    "tests/**/*.ts"
+  ]
+}
