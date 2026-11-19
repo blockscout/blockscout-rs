@@ -194,6 +194,45 @@ docs still describe them.
     `eth_getBlockReceipts`, `eth_simulateV1` and the `safe` / `finalized` tags
     available. Observed lag: `safe` 3 to 6 minutes, `finalized` 21 to 30
     minutes.
+- **[V] Update 2026-11-18:** a second OP Labs pair carries real traffic,
+  `interop-demo-0` (chain 420120232, 2 s blocks,
+  `https://interop-demo-0.optimism.io`) and `interop-demo-1` (420120233, 1 s
+  blocks, `https://interop-demo-1.optimism.io`), both op-reth v2.9.0-rc.1,
+  same genesis timestamp. Config set `config/op-interop/*-demo.json`, bridge
+  `2005`. Checked 2026-11-18 against every log at `0x42…22`–`0x42…25` from
+  activation to head (archive state and logs available):
+  - Activation is one bundled upgrade at 2026-09-11 17:00:00 UTC, blocks
+    32376 and 64752 (first block where the EIP-1967 implementation slot of
+    each interop proxy is non-zero). Most `0x42…` predeploys are upgraded in
+    the same block; `ETHLiquidity` emits `LiquidityFunded`; the messenger
+    emits no `Initialized`.
+  - Older predeploys than sepolia-devnet-4/5: `version()` is `CrossL2Inbox`
+    1.0.2, `L2ToL2CrossDomainMessenger` 1.3.1, `SuperchainETHBridge` 1.0.1,
+    `ETHLiquidity` 1.1.0, at the same implementation addresses on both
+    chains. Their event `topic0`s are exactly grammar `version` 1, and
+    `RelayedMessage` carries `returnDataHash`.
+  - Traffic up to 2026-11-18: 3624 `SentMessage` (439 demo-0 → demo-1,
+    3185 demo-1 → demo-0), 3318 relayed, 306 unrelayed; 2626 are
+    `relayETH` (`0x4f0edcc9`) to `SuperchainETHBridge`. For all 3318 relayed
+    messages the `message_hash` derivation equals the `RelayedMessage`
+    `messageHash` (with matching source, destination and nonce) and the
+    `SentMessage` payload hash equals an `ExecutingMessage` `msgHash`.
+    `ExecutingMessage` origins name only the peer chain, so the dependency
+    set is exactly this pair.
+  - 8 `ExecutingMessage`s are pull reads (origin is not the messenger), so
+    the messenger indexer ignores them by design (`foreign_origin`). Six of
+    them (demo-0 2934707/2934755/2934771, demo-1 5869389/5869500/5869526) are
+    an EOA calling `0x…22` `validateMessage` (`0xab4d6f75`) directly, each
+    reading the first log (`logIndex` 0, `topic0` `0x538c7f96…`, 2 topics,
+    10 data bytes) of a freshly deployed contract on the peer chain
+    (demo-1 5869408/5869506/5869535, demo-0 2934692/2934748/2934761). All
+    six share one `msgHash` (`0x8966c409…`), which confirms that a pull read
+    can be keyed neither by `msgHash` nor by payload. The source logs are
+    plain contract events, invisible to a source-side scan without the
+    destination's `Identifier`.
+  - RPC: `eth_getLogs` up to 100000 blocks; ~2.5 calls per second drew no
+    HTTP 429 (no burst test). Lag at check time: `safe` ~250 blocks (~8 min)
+    on demo-0, `finalized` ~790 blocks (~26 min).
 - **[V]** Explorers for the first pairs are Blockscout instances:
   `explorer.optimism.io`, `testnet-explorer.optimism.io`,
   `unichain.blockscout.com`, `unichain-sepolia.blockscout.com`.

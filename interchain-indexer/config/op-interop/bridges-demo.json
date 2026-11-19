@@ -1,0 +1,56 @@
+[
+  {
+    "bridge_id": 2005,
+    "name": "OP Interop (interop-demo-0/1)",
+    "type": "op_interop",
+    "indexer_type": "op_interop",
+    "enabled": true,
+    "api_url": null,
+    "ui_url": null,
+    "docs_url": "https://specs.optimism.io/interop/messaging.html",
+    "contracts": [
+      {
+        "chain_id": 420120232,
+        "address": "0x4200000000000000000000000000000000000022",
+        "version": 1,
+        "started_at_block": 32376,
+        "kind": "cross_l2_inbox"
+      },
+      {
+        "chain_id": 420120232,
+        "address": "0x4200000000000000000000000000000000000023",
+        "version": 1,
+        "started_at_block": 32376,
+        "kind": "l2_to_l2_messenger"
+      },
+      {
+        "chain_id": 420120232,
+        "address": "0x4200000000000000000000000000000000000024",
+        "version": 1,
+        "started_at_block": 32376,
+        "kind": "superchain_eth_bridge"
+      },
+      {
+        "chain_id": 420120233,
+        "address": "0x4200000000000000000000000000000000000022",
+        "version": 1,
+        "started_at_block": 64752,
+        "kind": "cross_l2_inbox"
+      },
+      {
+        "chain_id": 420120233,
+        "address": "0x4200000000000000000000000000000000000023",
+        "version": 1,
+        "started_at_block": 64752,
+        "kind": "l2_to_l2_messenger"
+      },
+      {
+        "chain_id": 420120233,
+        "address": "0x4200000000000000000000000000000000000024",
+        "version": 1,
+        "started_at_block": 64752,
+        "kind": "superchain_eth_bridge"
+      }
+    ]
+  }
+]

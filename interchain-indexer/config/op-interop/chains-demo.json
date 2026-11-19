@@ -1,0 +1,28 @@
+[
+  {
+    "chain_id": 420120232,
+    "name": "OP Interop Demo 0",
+    "icon": "",
+    "rpcs": [
+      {
+        "optimism": {
+          "url": "https://interop-demo-0.optimism.io",
+          "max_rps": 2
+        }
+      }
+    ]
+  },
+  {
+    "chain_id": 420120233,
+    "name": "OP Interop Demo 1",
+    "icon": "",
+    "rpcs": [
+      {
+        "optimism": {
+          "url": "https://interop-demo-1.optimism.io",
+          "max_rps": 2
+        }
+      }
+    ]
+  }
+]
