@@ -1,8 +1,9 @@
 # Graph cli generated
 src/types
 build/
+.subgraph.*.yaml
 .DS_STORE
-data
+
 # Logs
 logs
 *.log
@@ -31,6 +32,9 @@ coverage
 # Grunt intermediate storage (http://gruntjs.com/creating-plugins#storing-task-files)
 .grunt
 
+# yarn > 1.x
+.yarn
+
 # Bower dependency directory (https://bower.io/)
 bower_components
 
@@ -41,6 +45,7 @@ bower_components
 build/Release
 
 # Dependency directories
+node_modules/
 jspm_packages/
 dist/
 
@@ -73,3 +78,4 @@ typings/
 .idea
 
 /tests/.bin
+/tests/.latest.json
