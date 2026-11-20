@@ -359,6 +359,11 @@ async fn process_abi_data(
         .await
         .context("Insert event descriptions into database")?;
 
+    let functions = abi.functions.into_values().flatten().collect();
+    db::eth_bytecode_db::insert_function_descriptions(db_client, functions)
+        .await
+        .context("Insert function descriptions into database")?;
+
     Ok(())
 }
 

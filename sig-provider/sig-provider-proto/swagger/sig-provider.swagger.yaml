@@ -83,6 +83,34 @@ paths:
           type: string
       tags:
         - AbiService
+  /api/v1/abi/functions:batch-get:
+    post:
+      summary: |-
+        Looks up functions by their 4-byte selectors. As there is no input data
+        to decode, `value` of the returned arguments is always empty.
+      operationId: AbiService_BatchGetFunctionAbis
+      responses:
+        "200":
+          description: |-
+            Contains one response per requested selector, in the order of the request.
+            A response contains several abis if the selector matches several signatures.
+          schema:
+            type: array
+            items:
+              type: object
+              $ref: '#/definitions/v1GetFunctionAbiResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1BatchGetFunctionAbisRequest'
+      tags:
+        - AbiService
   /api/v1/signatures:
     post:
       operationId: SignatureService_CreateSignatures
@@ -198,6 +226,27 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1GetEventAbiResponse'
+  v1BatchGetFunctionAbisRequest:
+    type: object
+    properties:
+      selectors:
+        type: array
+        items:
+          type: string
+        description: |-
+          4-byte function selectors as hex strings, ex. `0xa9059cbb`.
+          A maximum of 100 selectors can be requested in a batch.
+  v1BatchGetFunctionAbisResponse:
+    type: object
+    properties:
+      responses:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1GetFunctionAbiResponse'
+        description: |-
+          Contains one response per requested selector, in the order of the request.
+          A response contains several abis if the selector matches several signatures.
   v1CreateSignaturesRequest:
     type: object
     properties:

@@ -29,6 +29,14 @@ http:
       post: /api/v2/event-descriptions:batch-search
       body: "*"
 
+    - selector: blockscout.ethBytecodeDb.v2.Database.SearchFunctionDescriptions
+      post: /api/v2/function-descriptions:search
+      body: "*"
+
+    - selector: blockscout.ethBytecodeDb.v2.Database.BatchSearchFunctionDescriptions
+      post: /api/v2/function-descriptions:batch-search
+      body: "*"
+
     - selector: blockscout.ethBytecodeDb.v2.Database.GetAllianceStats
       get: /api/v2/alliance/stats
 
