@@ -1,0 +1,26 @@
+{
+  "name": "@blockscout/zetachain-cctx-types",
+  "version": "0.0.1",
+  "description": "TypeScript definitions for Zetachain Cctx microservice",
+  "main": "./dist/zetachain-cctx-proto/proto/v1/zetachain-cctx.js",
+  "types": "./dist/zetachain-cctx-proto/proto/v1/zetachain-cctx.d.ts",
+  "scripts": {
+    "build": "npm run compile:proto && npm run compile:ts",
+    "compile:proto": "mkdir -p ./dist && protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_opt=snakeToCamel=false --ts_proto_opt=exportCommonSymbols=false --ts_proto_opt=stringEnums=true --ts_proto_opt=onlyTypes=true --ts_proto_opt=emitImportedFiles=false --proto_path=../ --proto_path=../../proto/ --ts_proto_out=./dist ../zetachain-cctx-proto/proto/v1/zetachain-cctx.proto",
+    "compile:ts": "tsc --declaration ./dist/zetachain-cctx-proto/proto/v1/zetachain-cctx.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blockscout/blockscout-rs.git",
+    "directory": "zetachain-cctx/types"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/blockscout/blockscout-rs/issues"
+  },
+  "homepage": "https://github.com/blockscout/blockscout-rs#readme",
+  "devDependencies": {
+    "ts-proto": "1.176.2",
+    "typescript": "5.4.5"
+  }
+}
