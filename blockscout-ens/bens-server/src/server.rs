@@ -126,6 +126,10 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
                     tld_list: p.tld_list,
                     subgraph_name: p.subgraph_name,
                     address_resolve_technique: p.address_resolve_technique,
+                    forward_resolution_grace_period_seconds: p
+                        .forward_resolution_grace_period_seconds,
+                    primary_name_record_requires_active_owner: p
+                        .primary_name_record_requires_active_owner,
                     meta: p.meta.0,
                     protocol_specific: p.protocol_specific.0,
                 },
