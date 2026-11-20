@@ -141,6 +141,31 @@ export function handleTextChanged(event: TextChangedEvent): void {
   resolverEvent.save();
 }
 
+export function handleTextChangedWithValue(event: TextChanged1Event): void {
+  let resolver = getOrCreateResolver(event.params.node, event.address);
+
+  let key = event.params.key;
+  if (resolver.texts == null) {
+    resolver.texts = [key];
+    resolver.save();
+  } else {
+    let texts = resolver.texts!;
+    if (!texts.includes(key)) {
+      texts.push(key);
+      resolver.texts = texts;
+      resolver.save();
+    }
+  }
+
+  let resolverEvent = new TextChanged(createEventID(event));
+  resolverEvent.resolver = createResolverID(event.params.node, event.address);
+  resolverEvent.blockNumber = event.block.number.toI32();
+  resolverEvent.transactionID = event.transaction.hash;
+  resolverEvent.key = event.params.key;
+  resolverEvent.value = event.params.value;
+  resolverEvent.save();
+}
+
 export function handleContentHashChanged(event: ContenthashChangedEvent): void {
   let resolver = getOrCreateResolver(event.params.node, event.address);
   resolver.contentHash = event.params.hash;
