@@ -349,7 +349,8 @@
         "subgraph_name": "ronin-name-service-subgraph",
         "address_resolve_technique": "primary_name_record",
         "specific": {
-          "type": "ens_like"
+          "type": "ens_like",
+          "native_token_contract": "0x67C409DaB0EE741A1B1Be874bd1333234cfDBF44"
         },
         "meta": {
           "short_name": "RNS",
@@ -366,7 +367,8 @@
         "subgraph_name": "ronin-name-service-saigon-subgraph",
         "address_resolve_technique": "primary_name_record",
         "specific": {
-          "type": "ens_like"
+          "type": "ens_like",
+          "native_token_contract": "0xf0c99c9677EDa0D13291C093b27E6512E4ACdF83"
         },
         "meta": {
           "short_name": "RNS",

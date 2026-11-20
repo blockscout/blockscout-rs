@@ -13,7 +13,8 @@ etn-subgraph, plus `BackfillState`.
   emits `RecordUpdated(node, indicator, record)`; the indicator bits say which
   fields changed. Only `mint()` carries the label, so names are never hashed and
   no rainbow table is needed. Only second-level names and `<addr>.addr.reverse`
-  nodes can be minted.
+  nodes can be minted. The subgraph stores the token id in `Domain.tokenId`,
+  which BENS uses for the NFT link instead of the ENS labelhash.
 - `PublicResolver.setAddr` always reverts and `addr(node)` returns
   `RNSUnified.ownerOf(node)`, so `AddrChanged` is never emitted. Here
   `Domain.resolvedAddress` is the NFT owner of a name that has a resolver.
@@ -61,10 +62,6 @@ and is not meant for production use.
   name at its next event only.
 - Names created before the L2 genesis have the genesis time as `createdAt` and
   no registration until their next renewal.
-- BENS `ens_like` protocols derive the NFT token id from the labelhash, but an
-  RNS token id is the namehash, so the BENS config sets no
-  `native_token_contract`. `Domain.tokenId` is filled; reading it for
-  `ens_like`, as `infinity_name` already does, would enable the NFT link.
 
 ## Files
 
