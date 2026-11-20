@@ -144,6 +144,16 @@
       "subgraph_path": "../subgraphs/etn-subgraph",
       "subgraph_name": "etn-subgraph",
       "network": "electroneum-mainnet"
+    },
+    "ronin-name-service": {
+      "subgraph_path": "../subgraphs/ronin-subgraph",
+      "subgraph_name": "ronin-name-service-subgraph",
+      "network": "ronin-mainnet"
+    },
+    "ronin-name-service-saigon": {
+      "subgraph_path": "../subgraphs/ronin-subgraph",
+      "subgraph_name": "ronin-name-service-saigon-subgraph",
+      "network": "ronin-saigon"
     }
   }
 }

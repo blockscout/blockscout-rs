@@ -50,12 +50,19 @@ fn extract_tokens_for_ens_like(
         // native NFT exists only if domain is second level (like abc.eth and not abc.abc.eth)
         // and if tld is native (like .eth and not .xyz)
         if is_second_level_domain && is_native_domain {
-            let labelhash = domain
-                .labelhash
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("no labelhash in database"))?;
-
-            let id = token_id(&hex::encode(labelhash))?;
+            // A subgraph that knows the ERC-721 token id stores it in `Domain.tokenId`
+            // (Ronin Name Service, where it is the namehash). Otherwise the id follows
+            // the ENS BaseRegistrar: the labelhash of the second-level label.
+            let id = match &domain.token_id {
+                Some(id) => id.clone(),
+                None => {
+                    let labelhash = domain
+                        .labelhash
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("no labelhash in database"))?;
+                    token_id(&hex::encode(labelhash))?
+                }
+            };
             tokens.push(DomainToken {
                 id,
                 contract,
@@ -141,6 +148,14 @@ mod tests {
             owner: owner.to_string(),
             wrapped_owner: maybe_wrapped_owner.map(str::to_string),
             ..Default::default()
+        }
+    }
+
+    #[inline]
+    fn with_token_id(domain: DetailedDomain, token_id: &str) -> DetailedDomain {
+        DetailedDomain {
+            token_id: Some(token_id.to_string()),
+            ..domain
         }
     }
 
@@ -231,7 +246,28 @@ mod tests {
                 domain("levvv.xyz", "0x0200", "0x0100", owner, None),
                 addr(native_contract),
                 vec![],
-            )
+            ),
+            // The subgraph stores the token id (RNS: the namehash, here 0x0200),
+            // so it wins over the labelhash (0x0100)
+            (
+                with_token_id(domain("levvv.eth", "0x0200", "0x0100", owner, None), "512"),
+                addr(native_contract),
+                vec![DomainToken {
+                    id: "512".to_string(),
+                    contract: Address::from_str(native_contract)
+                        .expect("invalid native_contract provided"),
+                    _type: DomainTokenType::Native,
+                }],
+            ),
+            // A stored token id does not give a third level domain a native token
+            (
+                with_token_id(
+                    domain("this-is-third-level-domain.levvv.eth", "0x0200", "0x0100", owner, None),
+                    "512",
+                ),
+                addr(native_contract),
+                vec![],
+            ),
         ] {
             let mut protocol = Protocol::default();
             protocol.info.tld_list = nonempty![Tld::new("eth")];
