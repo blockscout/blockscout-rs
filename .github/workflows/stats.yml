@@ -44,7 +44,7 @@ jobs:
       JOBS: 2
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup
         uses: ./.github/actions/setup
@@ -52,7 +52,9 @@ jobs:
           working-directory: stats
 
       - name: Free disk space
-        uses: jlumbroso/free-disk-space@main
+        # Pinned to an immutable commit SHA: floating branch refs (e.g. @main)
+        # can be silently retargeted and execute attacker-controlled code in CI.
+        uses: jlumbroso/free-disk-space@36e9a5af4eddb91fc11aec4c6f6f79b3cc0cb523 # @main as of audit
         with:
           tool-cache: false
           android: true
@@ -64,7 +66,9 @@ jobs:
 
       - name: Set Swap Space
         id: swapfile
-        uses: pierotofy/set-swap-space@master
+        # Pinned to an immutable commit SHA: floating branch refs (e.g. @master)
+        # can be silently retargeted and execute attacker-controlled code in CI.
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # @master as of audit
         with:
           swap-size-gb: 14
 
