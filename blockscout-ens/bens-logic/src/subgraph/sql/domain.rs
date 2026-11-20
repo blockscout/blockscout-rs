@@ -73,6 +73,8 @@ mod sql_gen {
 // values with "timestamp out of range" (22008), failing the whole query for
 // every domain it scans. Values past 9999-12-31T23:59:59Z (253402300799) are
 // therefore clamped in filters and returned as NULL ("no expiry").
+// ensdomains/ens-subgraph 2.1.1+ clamps never-expiring names to exactly
+// 253402300799 on `expiry_date`, so that value itself is "no expiry" too.
 const DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE: &str = r#"
 vid,
 block_range,
@@ -93,10 +95,25 @@ to_timestamp(created_at) as registration_date,
 owner,
 registrant,
 wrapped_owner,
-CASE WHEN expiry_date <= 253402300799 THEN to_timestamp(expiry_date) END as expiry_date,
+CASE WHEN expiry_date < 253402300799 THEN to_timestamp(expiry_date) END as expiry_date,
 COALESCE(to_timestamp(LEAST(expiry_date, 253402300799)) < now(), false) AS is_expired,
 token_id::text as token_id
 "#;
+
+// The detailed select of a protocol indexed by ensdomains/ens-subgraph 2.3+
+// adds `Domain.registryToken`, the ENSv2 token of a name live in ENSv2, so
+// the token links point at it rather than at the retired ENSv1 BaseRegistrar
+// / NameWrapper tokens. The column exists only in that schema.
+fn detailed_domain_select_clause(protocol: &Protocol) -> String {
+    if protocol.info.protocol_specific.ensv2() {
+        format!(
+            "{DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE},\n\
+             encode(registry_token, 'hex') as ensv2_registry_token"
+        )
+    } else {
+        DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE.to_string()
+    }
+}
 
 const DOMAIN_DEFAULT_SELECT_CLAUSE: &str = r#"
 vid,
@@ -110,7 +127,7 @@ owner,
 wrapped_owner,
 stored_offchain,
 resolved_with_wildcard,
-CASE WHEN expiry_date <= 253402300799 THEN to_timestamp(expiry_date) END as expiry_date,
+CASE WHEN expiry_date < 253402300799 THEN to_timestamp(expiry_date) END as expiry_date,
 COALESCE(to_timestamp(LEAST(expiry_date, 253402300799)) < now(), false) AS is_expired
 "#;
 
@@ -151,10 +168,12 @@ pub async fn get_domain(
     };
     let schema = &domain_name.deployed_protocol.protocol.subgraph_schema;
     let protocol_slug = &domain_name.deployed_protocol.protocol.info.slug;
+    let detailed_select_clause =
+        detailed_domain_select_clause(domain_name.deployed_protocol.protocol);
     let maybe_domain = sqlx::query_as(&format!(
         r#"
         SELECT
-            {DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE},
+            {detailed_select_clause},
             '{schema}' as schema_name,
             '{protocol_slug}' as protocol_slug,
             COALESCE(
@@ -372,6 +391,47 @@ fn gen_sql_select_domains_by_address(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocols::{EnsLikeProtocol, ProtocolSpecific};
+
+    #[test]
+    fn expiry_sentinel_is_reported_as_never() {
+        for clause in [
+            DETAILED_DOMAIN_DEFAULT_SELECT_CLAUSE,
+            DOMAIN_DEFAULT_SELECT_CLAUSE,
+        ] {
+            assert!(
+                clause.contains(
+                    "CASE WHEN expiry_date < 253402300799 THEN to_timestamp(expiry_date) END as expiry_date"
+                ),
+                "{clause}"
+            );
+        }
+    }
+
+    #[test]
+    fn ensv2_registry_token_only_with_ensv2() {
+        let mut protocol = Protocol {
+            subgraph_schema: "sgd1".to_string(),
+            ..Default::default()
+        };
+        let plain = detailed_domain_select_clause(&protocol);
+        assert!(!plain.contains("registry_token"), "{plain}");
+
+        protocol.info.protocol_specific = ProtocolSpecific::EnsLike(EnsLikeProtocol {
+            ensv2: true,
+            ..Default::default()
+        });
+        let v2 = detailed_domain_select_clause(&protocol);
+        assert!(
+            v2.contains("encode(registry_token, 'hex') as ensv2_registry_token"),
+            "{v2}"
+        );
+        // A plain column of the domain row: no join over the ENSv2 entities.
+        assert!(!v2.contains("en_sv_2"), "{v2}");
+        // The owned-by filter and the list select stay upstream's.
+        let list = sql_gen::domain_select(&protocol).to_string(PostgresQueryBuilder);
+        assert!(!list.contains("en_sv_2"), "{list}");
+    }
 
     fn address_filter_sql(resolved_to: bool, owned_by: bool) -> String {
         let protocol = Protocol {
