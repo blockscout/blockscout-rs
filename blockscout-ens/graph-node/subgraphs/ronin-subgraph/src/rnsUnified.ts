@@ -25,6 +25,7 @@ import {
 } from "./domain";
 import {
   createEventID,
+  createSubEventID,
   EMPTY_ADDRESS,
   EXPIRY_FIELD,
   hasField,
@@ -73,7 +74,7 @@ export function handleRecordUpdated(event: RecordUpdatedEvent): void {
   if (hasField(indicator, RESOLVER_FIELD)) {
     setResolver(domain, record.mut.resolver);
     if (!isMint || domain.resolver !== null) {
-      let newResolver = new NewResolver(createEventID(event));
+      let newResolver = new NewResolver(createSubEventID(event, "resolver"));
       newResolver.blockNumber = event.block.number.toI32();
       newResolver.transactionID = event.transaction.hash;
       newResolver.domain = domain.id;
@@ -87,7 +88,7 @@ export function handleRecordUpdated(event: RecordUpdatedEvent): void {
     domain.expiryDate = record.mut.expiry;
     refreshFromChain(domain, node, event.address);
     if (!isMint) {
-      let extended = new ExpiryExtended(createEventID(event));
+      let extended = new ExpiryExtended(createSubEventID(event, "expiry"));
       extended.blockNumber = event.block.number.toI32();
       extended.transactionID = event.transaction.hash;
       extended.domain = domain.id;

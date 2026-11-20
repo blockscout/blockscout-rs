@@ -39,6 +39,13 @@ export function createEventID(event: ethereum.Event): string {
     .concat(event.logIndex.toString());
 }
 
+// One RecordUpdated log can record several DomainEvent entities (NewOwner,
+// NewResolver, ExpiryExtended). graph-node requires an id to be unique across
+// every type that implements the same interface, so the extra ones get a suffix.
+export function createSubEventID(event: ethereum.Event, kind: string): string {
+  return createEventID(event).concat("-").concat(kind);
+}
+
 export function concat(a: ByteArray, b: ByteArray): ByteArray {
   let out = new Uint8Array(a.length + b.length);
   for (let i = 0; i < a.length; i++) {

@@ -25,6 +25,7 @@ import {
   REGISTRY,
   RESERVED,
   RESOLVER,
+  RESOLVER_BIT,
   RON,
   USER_FIELDS,
   address,
@@ -78,6 +79,27 @@ describe("RNSUnified", () => {
     assert.entityCount("NewResolver", 1);
     // The mint's own ERC-721 Transfer comes before the record and is skipped.
     assert.entityCount("Transfer", 0);
+  });
+
+  // graph-node rejects two DomainEvent entities with the same id, even of
+  // different types (seen on mainnet at block 63794124); matchstick does not.
+  test("events from one RecordUpdated log get distinct ids", () => {
+    mockRecord(DUKE, 2, RON, "duke", RESOLVER, ALICE, EXPIRY);
+    handleTransfer(transferEvent(0, ALICE, DUKE));
+    let mint = mintEvent(DUKE, 2, RON, "duke", RESOLVER, ALICE, EXPIRY);
+    handleRecordUpdated(mint);
+    let mintId = mint.block.number.toString() + "-" + mint.logIndex.toString();
+    assert.fieldEquals("NewOwner", mintId, "domain", DUKE);
+    assert.fieldEquals("NewResolver", mintId + "-resolver", "domain", DUKE);
+    assert.notInStore("NewResolver", mintId);
+
+    mockRecord(DUKE, 2, RON, "duke", OTHER_RESOLVER, ALICE, LATER);
+    let update = updateEvent(DUKE, RESOLVER_BIT.bitOr(EXPIRY_BIT), OTHER_RESOLVER, ALICE, LATER);
+    handleRecordUpdated(update);
+    let updateId = update.block.number.toString() + "-" + update.logIndex.toString();
+    assert.fieldEquals("NewResolver", updateId + "-resolver", "domain", DUKE);
+    assert.fieldEquals("ExpiryExtended", updateId + "-expiry", "expiryDate", LATER.toString());
+    assert.notInStore("ExpiryExtended", updateId);
   });
 
   test("a transfer moves the owner, the resolved address and the registrant", () => {
