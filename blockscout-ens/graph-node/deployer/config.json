@@ -10,11 +10,6 @@
         "subgraph_name": "ens-sepolia-subgraph",
         "network": "sepolia"
     },
-    "base-name-service": {
-        "subgraph_path": "../subgraphs/bns-subgraph",
-        "subgraph_name": "base-name-service-subgraph",
-        "network": "base-mainnet"
-    },
     "genome": {
         "subgraph_path": "../subgraphs/genome-subgraph",
         "subgraph_name": "genome-subgraph",
@@ -50,16 +45,6 @@
         "subgraph_name": "lightlink-subgraph",
         "network": "lightlink-phoenix"
     },
-    "zns": {
-        "subgraph_path": "../subgraphs/zns-subgraph",
-        "subgraph_name": "zns-subgraph",
-        "network": "polygon-mainnet"
-    },
-    "zns-blast": {
-        "subgraph_path": "../subgraphs/zns-subgraph",
-        "subgraph_name": "zns-blast-subgraph",
-        "network": "blast-mainnet"
-    },
     "d3-connect-shib": {
         "subgraph_path": "../subgraphs/d3-connect-subgraph",
         "subgraph_name": "d3-connect-shib-subgraph",
@@ -79,11 +64,6 @@
         "subgraph_path": "../subgraphs/d3-connect-subgraph",
         "subgraph_name": "d3-connect-shib-testnet-subgraph",
         "network": "shibarium-testnet"
-    },
-    "zns-ink": {
-        "subgraph_path": "../subgraphs/zns-subgraph",
-        "subgraph_name": "zns-ink-subgraph",
-        "network": "ink-mainnet"
     },
     "story": {
         "subgraph_path": "../subgraphs/story-subgraph",
@@ -124,11 +104,6 @@
       "subgraph_path": "../subgraphs/taiko-subgraph",
       "subgraph_name": "taiko-subgraph",
       "network": "taiko-mainnet"
-    },
-    "zns-unichain": {
-      "subgraph_path": "../subgraphs/zns-subgraph",
-      "subgraph_name": "zns-unichain-subgraph",
-      "network": "unichain-mainnet"
     },
     "infinityname-base": {
       "subgraph_path": "../subgraphs/infinityname-subgraph",

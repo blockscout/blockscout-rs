@@ -107,12 +107,6 @@ provider = [
 shard = "primary"
 
 
-[chains.unichain-mainnet]
-provider = [
-    { label = "unichain-mainnet", url = "https://rpc.poolz.finance/unichain", features = [] }
-]
-shard = "primary"
-
 [chains."base-mainnet"]
 shard = "primary"
 [[chains."base-mainnet".provider]]

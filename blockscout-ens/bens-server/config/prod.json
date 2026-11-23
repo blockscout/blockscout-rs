@@ -48,14 +48,6 @@
         ],
         "rpc_url": "https://www.shibrpc.com"
       },
-      "137": {
-        "blockscout": {
-          "url": "https://polygon.blockscout.com"
-        },
-        "use_protocols": [
-          "zns"
-        ]
-      },
       "157": {
         "blockscout": {
           "url": "https://puppyscan.shib.io/"
@@ -126,7 +118,7 @@
           "url": "https://base.blockscout.com"
         },
         "use_protocols": [
-          "base-name-service", "ens", "infinityname-base"
+          "ens", "infinityname-base"
         ]
       },
       "33111": {
@@ -187,20 +179,12 @@
           "ens-sepolia"
         ]
       },
-      "81457": {
-        "blockscout": {
-          "url": "https://blast.blockscout.com/"
-        },
-        "use_protocols": [
-          "zns-blast"
-        ]
-      },
       "57073": {
         "blockscout": {
           "url": "https://explorer.inkonchain.com/"
         },
         "use_protocols": [
-          "ens", "zns-ink"
+          "ens"
         ]
       },
       "80094": {
@@ -216,8 +200,7 @@
           "url": "https://unichain.blockscout.com"
         },
         "use_protocols": [
-          "ens",
-          "zns-unichain"
+          "ens"
         ]
       },
       "1301": {
@@ -428,25 +411,6 @@
           "docs_url": "https://dev.rootstock.io/rif/rns/"
         }
       },
-      "base-name-service": {
-        "tld_list": [
-          "base"
-        ],
-        "network_id": 8453,
-        "subgraph_name": "base-name-service-subgraph",
-        "address_resolve_technique": "reverse_registry",
-        "specific": {
-          "type": "ens_like",
-          "native_token_contract": "0xaCe5602d169Edeb874bfE584a651801B8ac67093"
-        },
-        "meta": {
-          "short_name": "BNS",
-          "title": "Base Name Service",
-          "description": "Base Name Service (BNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
-          "icon_url": "https://i.imgur.com/2ZZT3zl.png",
-          "docs_url": "https://basename.gitbook.io/bns-docs"
-        }
-      },
       "mode": {
         "tld_list": [
           "mode"
@@ -503,74 +467,6 @@
           "description": "LightLink Name Service (LNS) is a decentralized naming service, which allows users to have a readable domain name for their addresses.",
           "icon_url": "https://i.imgur.com/GvsaOIH.png",
           "docs_url": "https://space.id/tld/9"
-        }
-      },
-      "zns": {
-        "tld_list": [
-          "poly"
-        ],
-        "network_id": 137,
-        "subgraph_name": "zns-subgraph",
-        "address_resolve_technique": "all_domains",
-        "specific": {
-          "type": "ens_like"
-        },
-        "meta": {
-          "short_name": "ZNS",
-          "title": "ZNS Connect Domains",
-          "description": "ZNS is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
-          "icon_url": "https://i.imgur.com/Vx1jUlA.png",
-          "docs_url": "https://docs.znsconnect.io/"
-        }
-      },
-      "zns-blast": {
-        "tld_list": [
-          "blast"
-        ],
-        "network_id": 81457,
-        "subgraph_name": "zns-blast-subgraph",
-        "address_resolve_technique": "all_domains",
-        "specific": {
-          "type": "ens_like"
-        },
-        "meta": {
-          "short_name": "ZNS",
-          "title": "ZNS Connect Domains",
-          "description": "ZNS is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
-          "icon_url": "https://i.imgur.com/Vx1jUlA.png",
-          "docs_url": "https://docs.znsconnect.io/"
-        }
-      },
-      "zns-ink": {
-        "tld_list": ["ink"],
-        "network_id": 57073,
-        "subgraph_name": "zns-ink-subgraph",
-        "address_resolve_technique": "all_domains",
-        "specific": {
-          "type": "ens_like"
-        },
-        "meta": {
-          "short_name": "ZNS",
-          "title": "ZNS Connect Domains",
-          "description": "ZNS is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
-          "icon_url": "https://i.imgur.com/Vx1jUlA.png",
-          "docs_url": "https://docs.znsconnect.io/"
-        }
-      },
-      "zns-unichain": {
-        "tld_list": ["defi"],
-        "network_id": 130,
-        "subgraph_name": "zns-unichain-subgraph",
-        "address_resolve_technique": "all_domains",
-        "specific": {
-          "type": "ens_like"
-        },
-        "meta": {
-          "short_name": "ZNS",
-          "title": "ZNS Connect Domains",
-          "description": "ZNS is a decentralized naming system designed to simplify Web3 by offering user-friendly and memorable domain names",
-          "icon_url": "https://i.imgur.com/Vx1jUlA.png",
-          "docs_url": "https://docs.znsconnect.io/"
         }
       },
       "d3-connect-shib": {
