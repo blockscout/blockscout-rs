@@ -119,7 +119,7 @@ impl Default for VerifierSettings {
             images: Vec::new(),
             max_concurrent_verifications: NonZeroUsize::new(2).expect("non-zero"),
             max_queued_verifications: 4,
-            queue_timeout_seconds: 300,
+            queue_timeout_seconds: 60,
             allow_private_rpc_endpoints: false,
             rpc_timeout_seconds: 15,
             job: JobSettings::default(),
