@@ -448,7 +448,7 @@ definitions:
         type: boolean
       v06:
         $ref: '#/definitions/v1EntryPointIndexerStatus'
-      v07_v08:
+      v07_v09:
         $ref: '#/definitions/v1EntryPointIndexerStatus'
   v1ListAccountsResponse:
     type: object
