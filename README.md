@@ -30,9 +30,6 @@
 <a href="https://github.com/blockscout/blockscout-rs/actions/workflows/visualizer.yml">
    <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/visualizer.yml?branch=main&label=visualizer&logo=github&style=flat-square"><!--
 --></a>
-<a href="https://github.com/blockscout/blockscout-rs/actions/workflows/multichain-search.yml">
-   <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/multichain-search.yml?branch=main&label=multichain-search&logo=github&style=flat-square"><!--
---></a>
 <a href="https://github.com/blockscout/blockscout-rs/actions/workflows/libs.yml">
    <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/libs.yml?branch=main&label=libs&logo=github&style=flat-square"><!--
 --></a>
