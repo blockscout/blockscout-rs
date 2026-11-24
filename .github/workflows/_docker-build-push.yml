@@ -51,9 +51,9 @@ jobs:
       tag-value: ${{ steps.regex.outputs.group2 }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions-ecosystem/action-regex-match@v2
+      - uses: actions-ecosystem/action-regex-match@9e6c4fb3d5e898f505be7a1fb6e7b0a278f6665b # v2
         id: regex
         with:
           text: ${{ github.ref }}
@@ -82,12 +82,14 @@ jobs:
 
       - name: Extract metadata for Docker
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.IMAGE_NAME }}
 
       - name: Setup repo
-        uses: blockscout/actions/.github/actions/setup-multiarch-buildx@main
+        # Pinned to an immutable commit SHA: floating branch refs (e.g. @main)
+        # can be silently retargeted and execute attacker-controlled code in CI.
+        uses: blockscout/actions/.github/actions/setup-multiarch-buildx@e91d205298a5788dd72ce1f4c4c1c19257f08c4f # @main as of audit
         id: setup
         with:
           docker-image: ${{ env.IMAGE_NAME }}
@@ -98,7 +100,7 @@ jobs:
           docker-arm-host-key: ${{ secrets.ARM_RUNNER_KEY }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ${{ inputs.docker-context-path || format('{0}/', inputs.service-name) }}
           file: ${{ inputs.dockerfile-path || format('{0}/Dockerfile', inputs.service-name) }}
