@@ -1,0 +1,96 @@
+# BENS SQL-readable columns mirror the current blockscout-rs Domain/Account/Resolver/Registration schema.
+# Domain.id is an adapter lookup ID (ENS-style namehash of the full name), NOT a V2 token ID.
+type Domain @entity(immutable: false) {
+  id: ID!
+  name: String
+  labelName: String
+  labelhash: Bytes
+  parent: Domain
+  subdomains: [Domain!]! @derivedFrom(field: "parent")
+  subdomainCount: Int!
+  resolvedAddress: Account
+  resolver: Resolver
+  ttl: BigInt
+  isMigrated: Boolean!
+  createdAt: BigInt!
+  owner: Account!
+  registrant: Account
+  wrappedOwner: Account
+  expiryDate: BigInt
+  storedOffchain: Boolean!
+  resolvedWithWildcard: Boolean!
+  tokenId: BigInt
+  graceEndsAt: BigInt
+  finalizedAt: BigInt
+  registration: Registration @derivedFrom(field: "domain")
+  events: [DomainEvent!]! @derivedFrom(field: "domain")
+}
+
+type Account @entity(immutable: false) { id: ID! }
+
+type Registration @entity(immutable: false) {
+  id: ID!
+  domain: Domain!
+  registrationDate: BigInt!
+  expiryDate: BigInt!
+  cost: BigInt
+  registrant: Account!
+  labelName: String
+  freeClaimed: Boolean!
+  events: [RegistrationEvent!]! @derivedFrom(field: "registration")
+}
+
+type Resolver @entity(immutable: false) {
+  id: ID!
+  domain: Domain
+  address: Bytes!
+  addr: Account
+  contentHash: Bytes
+  texts: [String!]
+  coinTypes: [BigInt!]
+  events: [ResolverEvent!]! @derivedFrom(field: "resolver")
+}
+
+# BENS' primary_name_record technique reads these exact snake_case columns.
+type PrimaryNameRecord @entity(immutable: false) {
+  id: ID!
+  resolved_address: String!
+  domain_id: String
+  domain_name: String
+}
+
+type TokenIdToDomain @entity(immutable: false) { id: ID!, domain: Domain! }
+
+interface DomainEvent { id: ID!, domain: Domain!, blockNumber: Int!, transactionID: Bytes! }
+interface ResolverEvent { id: ID!, resolver: Resolver!, blockNumber: Int!, transactionID: Bytes! }
+interface RegistrationEvent { id: ID!, registration: Registration!, blockNumber: Int!, transactionID: Bytes! }
+
+type Transfer implements DomainEvent @entity(immutable: false) { id: ID!, domain: Domain!, blockNumber: Int!, transactionID: Bytes!, owner: Account! }
+type NewOwner implements DomainEvent @entity(immutable: false) { id: ID!, domain: Domain!, blockNumber: Int!, transactionID: Bytes!, parentDomain: Domain!, owner: Account! }
+type NewResolver implements DomainEvent @entity(immutable: false) { id: ID!, domain: Domain!, blockNumber: Int!, transactionID: Bytes!, resolver: Resolver! }
+type NewTTL implements DomainEvent @entity(immutable: false) { id: ID!, domain: Domain!, blockNumber: Int!, transactionID: Bytes!, ttl: BigInt! }
+type WrappedTransfer implements DomainEvent @entity(immutable: false) { id: ID!, domain: Domain!, blockNumber: Int!, transactionID: Bytes!, owner: Account! }
+type NameWrapped implements DomainEvent @entity(immutable: false) { id: ID!, domain: Domain!, blockNumber: Int!, transactionID: Bytes!, name: String, fuses: Int!, owner: Account!, expiryDate: BigInt! }
+type NameUnwrapped implements DomainEvent @entity(immutable: false) { id: ID!, domain: Domain!, blockNumber: Int!, transactionID: Bytes!, owner: Account! }
+type FusesSet implements DomainEvent @entity(immutable: false) { id: ID!, domain: Domain!, blockNumber: Int!, transactionID: Bytes!, fuses: Int! }
+type ExpiryExtended implements DomainEvent @entity(immutable: false) { id: ID!, domain: Domain!, blockNumber: Int!, transactionID: Bytes!, expiryDate: BigInt! }
+
+type AddrChanged implements ResolverEvent @entity(immutable: false) { id: ID!, resolver: Resolver!, blockNumber: Int!, transactionID: Bytes!, addr: Account! }
+type MulticoinAddrChanged implements ResolverEvent @entity(immutable: false) { id: ID!, resolver: Resolver!, blockNumber: Int!, transactionID: Bytes!, coinType: BigInt!, addr: Bytes! }
+type NameChanged implements ResolverEvent @entity(immutable: false) { id: ID!, resolver: Resolver!, blockNumber: Int!, transactionID: Bytes!, name: String! }
+type AbiChanged implements ResolverEvent @entity(immutable: false) { id: ID!, resolver: Resolver!, blockNumber: Int!, transactionID: Bytes!, contentType: BigInt! }
+type PubkeyChanged implements ResolverEvent @entity(immutable: false) { id: ID!, resolver: Resolver!, blockNumber: Int!, transactionID: Bytes!, x: Bytes!, y: Bytes! }
+type TextChanged implements ResolverEvent @entity(immutable: false) { id: ID!, resolver: Resolver!, blockNumber: Int!, transactionID: Bytes!, key: String!, value: String }
+type ContenthashChanged implements ResolverEvent @entity(immutable: false) { id: ID!, resolver: Resolver!, blockNumber: Int!, transactionID: Bytes!, hash: Bytes! }
+type InterfaceChanged implements ResolverEvent @entity(immutable: false) { id: ID!, resolver: Resolver!, blockNumber: Int!, transactionID: Bytes!, interfaceID: Bytes!, implementer: Bytes! }
+type AuthorisationChanged implements ResolverEvent @entity(immutable: false) { id: ID!, resolver: Resolver!, blockNumber: Int!, transactionID: Bytes!, owner: Bytes!, target: Bytes!, isAuthorized: Boolean! }
+type VersionChanged implements ResolverEvent @entity(immutable: false) { id: ID!, resolver: Resolver!, blockNumber: Int!, transactionID: Bytes!, version: BigInt! }
+
+type NameRegistered implements RegistrationEvent @entity(immutable: false) { id: ID!, registration: Registration!, blockNumber: Int!, transactionID: Bytes!, registrant: Account!, expiryDate: BigInt! }
+type NameRenewed implements RegistrationEvent @entity(immutable: false) { id: ID!, registration: Registration!, blockNumber: Int!, transactionID: Bytes!, expiryDate: BigInt! }
+type NameTransferred implements RegistrationEvent @entity(immutable: false) { id: ID!, registration: Registration!, blockNumber: Int!, transactionID: Bytes!, newOwner: Account! }
+
+# Rensa-specific audit events; BENS ignores these additional tables.
+type FreeClaimIndexed @entity(immutable: true) { id: ID!, domain: Domain!, claimant: Account!, freeClaimsUsed: BigInt!, blockNumber: Int!, transactionID: Bytes! }
+type ExpiryFinalizedIndexed @entity(immutable: true) { id: ID!, domain: Domain!, previousOwner: Account!, expiryDate: BigInt!, blockNumber: Int!, transactionID: Bytes! }
+type PrimaryChangedIndexed @entity(immutable: true) { id: ID!, domain: Domain!, account: Account!, isSet: Boolean!, blockNumber: Int!, transactionID: Bytes! }

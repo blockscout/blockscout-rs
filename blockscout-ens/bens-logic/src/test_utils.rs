@@ -2,7 +2,7 @@
 
 use crate::{
     blockscout::BlockscoutClient,
-    protocols::{EnsLikeProtocol, Network, ProtocolInfo, ProtocolSpecific, Tld},
+    protocols::{DomainName, EnsLikeProtocol, Network, ProtocolInfo, ProtocolSpecific, Tld},
     subgraph::SubgraphReader,
 };
 use alloy::{
@@ -166,6 +166,29 @@ pub async fn mocked_networks_and_protocols(
     ]);
 
     (networks, protocols)
+}
+
+/// Insert a current `.rns` row into the existing Graph-node SQL fixture.
+/// The ID is the full-name hash used by BENS, not the Rensa NFT token ID.
+pub async fn insert_rensa_fixture_domain(pool: &PgPool, owner: &str) -> String {
+    let id = DomainName::new("rensa.rns", None, None)
+        .expect("valid fixture name")
+        .id()
+        .to_owned();
+    sqlx::query(
+        "INSERT INTO sgd1.domain \
+         (vid, block_range, id, name, label_name, subdomain_count, resolved_address, \
+          is_migrated, created_at, owner, registrant, expiry_date, stored_offchain, resolved_with_wildcard) \
+         VALUES ((SELECT max(vid) + 1 FROM sgd1.domain), '[70985779,)', $1, 'rensa.rns', \
+         'rensa', 0, $2, false, floor(extract(epoch from now())), $2, $2, \
+         floor(extract(epoch from now())) + 600, false, false)",
+    )
+    .bind(&id)
+    .bind(owner)
+    .execute(pool)
+    .await
+    .expect("insert Rensa SQL fixture");
+    id
 }
 
 pub async fn mocked_reader(pool: PgPool) -> SubgraphReader {
