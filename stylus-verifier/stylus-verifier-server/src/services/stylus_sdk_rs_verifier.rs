@@ -109,6 +109,10 @@ fn process_error(error: stylus_sdk_rs::Error) -> Result<Response<VerifyResponse>
         stylus_sdk_rs::Error::BadRequest(_) => {
             return Err(Status::invalid_argument(error.to_string()));
         }
+        // 429 over HTTP.
+        stylus_sdk_rs::Error::Busy(_) => {
+            return Err(Status::resource_exhausted(error.to_string()));
+        }
         // The cause can name the Docker host; it is logged and kept out of the response.
         stylus_sdk_rs::Error::Internal(_) => {
             tracing::error!(err = error.to_string(), "internal error");

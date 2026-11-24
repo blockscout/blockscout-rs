@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
+mod admission;
 mod deployment;
 mod job;
 pub mod stylus_sdk_rs;

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use crate::{
+    admission::Admission,
     deployment,
     job::{self, clone_exit, JobSettings},
 };
@@ -21,7 +22,6 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
-use tokio::sync::Semaphore;
 use url::Url;
 
 /// Name of the toolchain file used to specify the Rust toolchain version for a project.
@@ -73,6 +73,9 @@ pub enum Error {
     InvalidToolchain(String),
     #[error("{0}")]
     BadRequest(String),
+    /// Every build slot is taken and the queue is full, or no slot became free in time.
+    #[error("{0}")]
+    Busy(String),
     #[error("{0:#?}")]
     Internal(#[from] anyhow::Error),
 }
@@ -96,8 +99,13 @@ pub struct VerifierSettings {
     /// hold the list as a JSON string.
     #[serde_as(as = "PickFirst<(_, JsonString)>")]
     pub images: Vec<ToolImage>,
-    /// Builds are heavy; requests beyond this wait.
+    /// Builds are heavy; requests beyond this wait in a queue.
     pub max_concurrent_verifications: NonZeroUsize,
+    /// Requests that may wait for a build slot; any more are rejected at once. 0 rejects every
+    /// request that finds all slots taken.
+    pub max_queued_verifications: usize,
+    /// How long a queued request waits for a build slot before it is rejected.
+    pub queue_timeout_seconds: u64,
     /// For local chains in development. Leave off in production: the endpoint comes from the
     /// request.
     pub allow_private_rpc_endpoints: bool,
@@ -110,6 +118,8 @@ impl Default for VerifierSettings {
         Self {
             images: Vec::new(),
             max_concurrent_verifications: NonZeroUsize::new(2).expect("non-zero"),
+            max_queued_verifications: 4,
+            queue_timeout_seconds: 60,
             allow_private_rpc_endpoints: false,
             rpc_timeout_seconds: 15,
             job: JobSettings::default(),
@@ -122,7 +132,7 @@ impl Default for VerifierSettings {
 pub struct Verifier {
     executor: DockerCompilerExecutor,
     settings: VerifierSettings,
-    admission: Semaphore,
+    admission: Admission,
 }
 
 impl Verifier {
@@ -146,7 +156,11 @@ impl Verifier {
             );
         }
         Ok(Self {
-            admission: Semaphore::new(settings.max_concurrent_verifications.get()),
+            admission: Admission::new(
+                settings.max_concurrent_verifications.get(),
+                settings.max_queued_verifications,
+                Duration::from_secs(settings.queue_timeout_seconds),
+            ),
             executor,
             settings,
         })
@@ -186,11 +200,11 @@ impl Verifier {
             )));
         }
 
-        let _permit = self
+        let _slot = self
             .admission
-            .acquire()
+            .enter()
             .await
-            .context("verification admission is closed")?;
+            .map_err(|rejected| Error::Busy(rejected.to_string()))?;
         let deployment = deployment::fetch(
             &request.rpc_endpoint,
             &request.deployment_transaction,
