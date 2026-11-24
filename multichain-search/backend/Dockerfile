@@ -1,4 +1,4 @@
-FROM lukemathwalker/cargo-chef:0.1.62-rust-1.72-buster as chef
+FROM ghcr.io/blockscout/services-base:latest as chef
 WORKDIR /app
 
 FROM chef AS plan
@@ -13,7 +13,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cargo build --release
 
-FROM gcr.io/distroless/cc
+FROM gcr.io/distroless/cc-debian13
 
 ENV RUST_LOG="info"
 
