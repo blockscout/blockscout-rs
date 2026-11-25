@@ -507,8 +507,6 @@ impl RuntimeSetup {
             Arc::new(FilecoinChainFeesGroup),
             Arc::new(FilecoinChainFees24hGroup),
             // multichain: singletons
-            Arc::new(TotalInteropMessagesGroup),
-            Arc::new(TotalInteropTransfersGroup),
             Arc::new(TotalMultichainAddressesGroup),
             Arc::new(TotalMultichainTxnsGroup),
             Arc::new(YesterdayTxnsMultichainGroup),

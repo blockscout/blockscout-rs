@@ -4,24 +4,11 @@
 
 use std::str::FromStr;
 
-use chrono::{NaiveDate, NaiveDateTime};
-use multichain_aggregator_entity::{
-    addresses, block_ranges, chains, counters_global_imported, interop_messages,
-    interop_messages_transfers,
-};
+use chrono::NaiveDate;
+use multichain_aggregator_entity::{block_ranges, chains, counters_global_imported};
 use sea_orm::{ActiveValue::NotSet, DatabaseConnection, EntityTrait, Set};
 
 pub async fn fill_mock_multichain_data(multichain: &DatabaseConnection, max_date: NaiveDate) {
-    let accounts = mock_addresses();
-    let (messages, transfers) = mock_interop_messages_with_transfers(&accounts, max_date);
-    interop_messages::Entity::insert_many(messages.clone())
-        .exec(multichain)
-        .await
-        .unwrap();
-    interop_messages_transfers::Entity::insert_many(transfers.clone())
-        .exec(multichain)
-        .await
-        .unwrap();
     let chains = mock_chains();
     chains::Entity::insert_many(chains)
         .exec(multichain)
@@ -37,106 +24,6 @@ pub async fn fill_mock_multichain_data(multichain: &DatabaseConnection, max_date
         .exec(multichain)
         .await
         .unwrap();
-}
-
-fn mock_addresses() -> Vec<addresses::ActiveModel> {
-    (0..3).map(mock_address).collect()
-}
-
-fn mock_address(seed: i64) -> addresses::ActiveModel {
-    let mut hash = seed.to_le_bytes().to_vec();
-    hash.extend(std::iter::repeat_n(0, 32 - hash.len()));
-    addresses::ActiveModel {
-        hash: Set(hash),
-        chain_id: Set(1),
-        ens_name: Set(None),
-        contract_name: Set(None),
-        token_name: Set(None),
-        token_type: Set(None),
-        is_contract: Set(false),
-        is_verified_contract: Set(false),
-        is_token: Set(false),
-        created_at: Set(Default::default()),
-        updated_at: Set(Default::default()),
-    }
-}
-
-fn mock_interop_messages_with_transfers(
-    accounts: &[addresses::ActiveModel],
-    max_date: NaiveDate,
-) -> (
-    Vec<interop_messages::ActiveModel>,
-    Vec<interop_messages_transfers::ActiveModel>,
-) {
-    let messages: Vec<interop_messages::ActiveModel> = vec![
-        "2022-11-09T23:59:59",
-        "2022-11-10T00:00:00",
-        "2022-11-10T12:00:00",
-        "2022-11-15T12:00:00",
-        "2022-11-16T12:00:00",
-        "2022-11-18T12:00:00",
-    ]
-    .into_iter()
-    .map(|val| NaiveDateTime::from_str(val).unwrap())
-    .filter(|ts| ts.date() <= max_date)
-    .enumerate()
-    .map(|(i, ts)| mock_interop_message(i, ts, 1, (i as i64 % 3) + 1, accounts))
-    .collect();
-
-    // link the first 3 messages with transfers
-    let transfers: Vec<interop_messages_transfers::ActiveModel> = messages
-        .iter()
-        .take(3)
-        .enumerate()
-        .map(|(i, _)| mock_interop_message_transfer(i as i64 + 1, accounts))
-        .collect();
-
-    (messages, transfers)
-}
-
-fn mock_interop_message(
-    index: usize,
-    ts: NaiveDateTime,
-    init_chain_id: i64,
-    relay_chain_id: i64,
-    accounts: &[addresses::ActiveModel],
-) -> interop_messages::ActiveModel {
-    let account_index = index % accounts.len();
-    let from_address_hash = accounts[account_index].hash.as_ref().to_vec();
-    let account_index = (account_index + 1) % accounts.len();
-    let to_address_hash = accounts[account_index].hash.as_ref().to_vec();
-
-    interop_messages::ActiveModel {
-        id: Set(index as i64 + 1),
-        sender_address_hash: Set(Some(from_address_hash)),
-        target_address_hash: Set(Some(to_address_hash)),
-        nonce: Set(index as i64),
-        init_chain_id: Set(init_chain_id),
-        init_transaction_hash: Set(None),
-        timestamp: Set(Some(ts)),
-        relay_chain_id: Set(relay_chain_id),
-        relay_transaction_hash: Set(None),
-        payload: Set(None),
-        failed: Set(None),
-        created_at: Set(Default::default()),
-        updated_at: Set(Default::default()),
-    }
-}
-
-fn mock_interop_message_transfer(
-    interop_message_id: i64,
-    accounts: &[addresses::ActiveModel],
-) -> interop_messages_transfers::ActiveModel {
-    let from_index = (interop_message_id as usize) % accounts.len();
-    let to_index = (from_index + 1) % accounts.len();
-
-    interop_messages_transfers::ActiveModel {
-        interop_message_id: Set(interop_message_id),
-        token_address_hash: Set(Some(vec![0u8; 20])),
-        from_address_hash: Set(accounts[from_index].hash.as_ref().to_vec()),
-        to_address_hash: Set(accounts[to_index].hash.as_ref().to_vec()),
-        amount: Set("1".parse().unwrap()),
-    }
 }
 
 fn mock_chains() -> Vec<chains::ActiveModel> {

@@ -47,17 +47,13 @@ struct MinTimestamp {
     min_timestamp: Option<NaiveDateTime>,
 }
 
-// Fetching the earliest import date for the cluster’s counters or interop messages.
+// Fetching the earliest import date for the cluster’s counters.
 pub async fn get_min_date_multichain(
     multichain: &DatabaseConnection,
 ) -> Result<NaiveDateTime, DbErr> {
     let query = r#"
-        SELECT MIN(dt) as min_timestamp
-        FROM (
-            SELECT date::timestamp as dt FROM counters_global_imported
-            UNION ALL
-            SELECT timestamp as dt FROM interop_messages
-        ) t
+        SELECT MIN(date)::timestamp as min_timestamp
+        FROM counters_global_imported
     "#;
 
     let result = MinTimestamp::find_by_statement(Statement::from_string(
