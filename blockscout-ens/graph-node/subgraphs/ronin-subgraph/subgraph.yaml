@@ -1,0 +1,141 @@
+specVersion: 0.0.9
+description: Ronin Name Service (.ron) for Blockscout BENS
+repository: https://github.com/blockscout/blockscout-rs
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: RNSUnified
+    network: ronin-mainnet
+    source:
+      abi: RNSUnified
+      address: "0x67C409DaB0EE741A1B1Be874bd1333234cfDBF44"
+      startBlock: 55577501
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      file: ./src/rnsUnified.ts
+      entities:
+        - Account
+        - Domain
+        - ExpiryExtended
+        - NewOwner
+        - NewResolver
+        - NameTransferred
+        - PrimaryNameRecord
+        - Registration
+        - Resolver
+        - Transfer
+      abis:
+        - name: RNSUnified
+          file: ./abis/RNSUnified.json
+        - name: PublicResolver
+          file: ./abis/PublicResolver.json
+      eventHandlers:
+        - event: RecordUpdated(indexed
+            uint256,uint256,((uint8,uint256,string),(address,address,uint64,bool)))
+          handler: handleRecordUpdated
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleTransfer
+  - kind: ethereum/contract
+    name: RNSUnifiedBackfill
+    network: ronin-mainnet
+    source:
+      abi: RNSUnified
+      address: "0x67C409DaB0EE741A1B1Be874bd1333234cfDBF44"
+      startBlock: 55577501
+      endBlock: 55578500
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      file: ./src/backfill.ts
+      entities:
+        - Account
+        - BackfillState
+        - Domain
+        - PrimaryNameRecord
+        - Resolver
+      abis:
+        - name: RNSUnified
+          file: ./abis/RNSUnified.json
+        - name: PublicResolver
+          file: ./abis/PublicResolver.json
+      blockHandlers:
+        - handler: handleBackfillBlock
+          filter:
+            kind: polling
+            every: 1
+  - kind: ethereum/contract
+    name: PublicResolver
+    network: ronin-mainnet
+    source:
+      abi: PublicResolver
+      address: "0xadb077d236d9E81fB24b96AE9cb8089aB9942d48"
+      startBlock: 55577501
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      file: ./src/resolver.ts
+      entities:
+        - AbiChanged
+        - AuthorisationChanged
+        - ContenthashChanged
+        - Domain
+        - InterfaceChanged
+        - NameChanged
+        - PrimaryNameRecord
+        - PubkeyChanged
+        - Resolver
+        - TextChanged
+        - VersionChanged
+      abis:
+        - name: PublicResolver
+          file: ./abis/PublicResolver.json
+        - name: RNSUnified
+          file: ./abis/RNSUnified.json
+      eventHandlers:
+        - event: ABIChanged(indexed bytes32,indexed uint256)
+          handler: handleABIChanged
+        - event: Approved(address,indexed bytes32,indexed address,indexed bool)
+          handler: handleApproved
+        - event: ContentHashChanged(indexed bytes32,bytes)
+          handler: handleContentHashChanged
+        - event: InterfaceChanged(indexed bytes32,indexed bytes4,address)
+          handler: handleInterfaceChanged
+        - event: NameChanged(indexed bytes32,string)
+          handler: handleNameChanged
+        - event: PubkeyChanged(indexed bytes32,bytes32,bytes32)
+          handler: handlePubkeyChanged
+        - event: TextChanged(indexed bytes32,indexed string,string,string)
+          handler: handleTextChanged
+        - event: VersionChanged(indexed bytes32,uint64)
+          handler: handleVersionChanged
+  - kind: ethereum/contract
+    name: RONRegistrarController
+    network: ronin-mainnet
+    source:
+      abi: RONRegistrarController
+      address: "0x662852853614cbBb5D04BF2E29955b97E3C50B69"
+      startBlock: 55577501
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      file: ./src/registrarController.ts
+      entities:
+        - Account
+        - NameRegistered
+        - NameRenewed
+        - Registration
+      abis:
+        - name: RONRegistrarController
+          file: ./abis/RONRegistrarController.json
+      eventHandlers:
+        - event: NameRegistered(string,indexed uint256,indexed
+            address,uint256,uint256,uint64)
+          handler: handleNameRegistered
+        - event: NameRenewed(string,indexed uint256,uint256,uint64)
+          handler: handleNameRenewed
