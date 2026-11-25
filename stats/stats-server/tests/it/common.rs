@@ -88,10 +88,7 @@ pub async fn wait_for_subset_to_update(base: &Url, subset: ChartSubset) {
             ChartSubset::ZetachainCctxDependent => statuses.zetachain_cctx_dependent_status(),
             ChartSubset::AllCharts => statuses.all_status(),
         };
-        if matching_status == proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate {
-            return true;
-        }
-        false
+        matching_status == proto_v1::ChartSubsetUpdateStatus::CompletedInitialUpdate
     })
     .await
     .expect("Did not reach required indexing status in time");
