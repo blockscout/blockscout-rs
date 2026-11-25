@@ -10,7 +10,6 @@ actix-prost = { workspace = true }
 actix-prost-macros = { workspace = true }
 prost = { workspace = true }
 prost-wkt = { workspace = true }
-prost-wkt-types = { workspace = true }
 serde = { workspace = true }
 serde_with = { workspace = true }
 tonic = { workspace = true }

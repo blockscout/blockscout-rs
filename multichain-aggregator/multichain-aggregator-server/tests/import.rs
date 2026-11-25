@@ -50,7 +50,7 @@ async fn prepare_import_fn(
 
 #[tokio::test]
 #[ignore = "Needs database to run"]
-async fn test_import_interop_messages() {
+async fn test_import_ignores_legacy_interop_messages() {
     let db = database!(Migrator);
     let base = init_server(db.db_url()).await;
 
@@ -58,14 +58,8 @@ async fn test_import_interop_messages() {
 
     let token_address_hash = Address::repeat_byte(1);
 
-    let get_token = || async {
-        entity::tokens::Entity::find_by_id((token_address_hash.clone().to_vec(), 1))
-            .one(db.client().as_ref())
-            .await
-            .unwrap()
-            .unwrap()
-    };
-
+    // Instances that still send `interop_messages` must not get their
+    // whole batch rejected; the field is ignored and the rest is imported.
     import(json!({
         "tokens": [
             {
@@ -75,14 +69,7 @@ async fn test_import_interop_messages() {
                     "token_type": "ERC-20",
                 }
             }
-        ]
-    }))
-    .await;
-
-    let token = get_token().await;
-    assert_eq!(token.token_type, TokenType::Erc20);
-
-    import(json!({
+        ],
         "interop_messages": [
             {
                 "init": {
@@ -99,13 +86,17 @@ async fn test_import_interop_messages() {
                     "transfer_to_address_hash": Address::random(),
                     "transfer_amount": "1"
                 },
-        }
+            }
         ]
     }))
     .await;
 
-    let token = get_token().await;
-    assert_eq!(token.token_type, TokenType::Erc7802);
+    let token = entity::tokens::Entity::find_by_id((token_address_hash.to_vec(), 1))
+        .one(db.client().as_ref())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(token.token_type, TokenType::Erc20);
 }
 
 #[tokio::test]

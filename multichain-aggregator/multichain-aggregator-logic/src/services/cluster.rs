@@ -1,17 +1,14 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use crate::{
-    clients::{
-        bens::{
-            get_address_multichain, get_protocols, lookup_address_multichain,
-            lookup_domain_name_multichain,
-        },
-        blockscout,
+    clients::bens::{
+        get_address_multichain, get_protocols, lookup_address_multichain,
+        lookup_domain_name_multichain,
     },
     error::{ParseError, ServiceError},
     repository::{
         address_token_balances::{self, ListAddressTokensPageToken, ListTokenHoldersPageToken},
-        addresses, block_ranges, chains, hashes, interop_message_transfers, interop_messages,
+        addresses, block_ranges, chains, hashes,
         tokens::{self, ListClusterTokensPageToken, ListTokenUpdatesPageToken},
     },
     services::{
@@ -33,22 +30,18 @@ use crate::{
         dapp::MarketplaceDapp,
         domains::{Domain, DomainInfo, ProtocolInfo},
         hashes::{Hash, HashType},
-        interop_messages::{ExtendedInteropMessage, MessageDirection},
         order_direction::OrderDirection,
         portfolio::AddressPortfolio,
         search_results::{QuickSearchResult, Redirect},
         tokens::{AggregatedToken, TokenListUpdate, TokenType},
     },
 };
-use alloy_primitives::{Address as AddressAlloy, TxHash};
+use alloy_primitives::Address as AddressAlloy;
 use api_client_framework::HttpApiClient;
 use bens_proto::blockscout::bens::v1 as bens_proto;
 use itertools::Itertools;
 use regex::Regex;
-use sea_orm::{
-    DatabaseConnection,
-    prelude::{BigDecimal, DateTime},
-};
+use sea_orm::{DatabaseConnection, prelude::BigDecimal};
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, HashMap, HashSet},
@@ -231,98 +224,6 @@ impl Cluster {
         Ok(metrics)
     }
 
-    pub async fn get_interop_message(
-        &self,
-        init_chain_id: ChainId,
-        nonce: i64,
-    ) -> Result<ExtendedInteropMessage, ServiceError> {
-        self.validate_chain_id(init_chain_id)?;
-
-        let message = interop_messages::get(&self.db, init_chain_id, nonce)
-            .await?
-            .ok_or_else(|| {
-                ServiceError::NotFound(format!(
-                    "interop message: init_chain_id={init_chain_id}, nonce={nonce}"
-                ))
-            })?;
-
-        let decoded_payload = if let (Some(payload), Some(target_address_hash)) =
-            (&message.payload, &message.target_address_hash)
-        {
-            self.fetch_decoded_calldata_cached(
-                payload,
-                target_address_hash.to_string(),
-                init_chain_id,
-            )
-            .await
-            .inspect_err(|e| {
-                tracing::error!("failed to fetch decoded calldata: {e}");
-            })
-            .ok()
-        } else {
-            None
-        };
-
-        let extended_message = ExtendedInteropMessage {
-            message,
-            decoded_payload,
-        };
-
-        Ok(extended_message)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub async fn list_interop_messages(
-        &self,
-        init_chain_id: Option<ChainId>,
-        relay_chain_id: Option<ChainId>,
-        address: Option<AddressAlloy>,
-        direction: Option<MessageDirection>,
-        nonce: Option<i64>,
-        page_size: u64,
-        page_token: Option<(DateTime, TxHash)>,
-    ) -> Result<(Vec<ExtendedInteropMessage>, Option<(DateTime, TxHash)>), ServiceError> {
-        if let Some(init_chain_id) = init_chain_id {
-            self.validate_chain_id(init_chain_id)?;
-        }
-        if let Some(relay_chain_id) = relay_chain_id {
-            self.validate_chain_id(relay_chain_id)?;
-        }
-
-        let cluster_chain_ids = self.active_chain_ids().await?;
-
-        let (messages, next_page_token) = interop_messages::list(
-            &self.db,
-            init_chain_id,
-            relay_chain_id,
-            address,
-            direction,
-            nonce,
-            Some(cluster_chain_ids),
-            page_size,
-            page_token,
-        )
-        .await?;
-
-        let messages = messages
-            .into_iter()
-            .map(|m| ExtendedInteropMessage {
-                message: m,
-                decoded_payload: None,
-            })
-            .collect();
-
-        Ok((messages, next_page_token))
-    }
-
-    pub async fn count_interop_messages(&self, chain_id: ChainId) -> Result<u64, ServiceError> {
-        self.validate_chain_id(chain_id)?;
-
-        let cluster_chain_ids = self.active_chain_ids().await?;
-        let count = interop_messages::count(&self.db, chain_id, Some(cluster_chain_ids)).await?;
-        Ok(count)
-    }
-
     pub async fn get_address_info_aggregated(
         &self,
         address: AddressAlloy,
@@ -337,23 +238,17 @@ impl Cluster {
         .await?
         .unwrap_or_else(|| AggregatedAddressInfo::default(address.into()));
 
-        let (has_tokens, has_interop_message_transfers, coin_price, domain_info) = futures::join!(
+        let (has_tokens, coin_price, domain_info) = futures::join!(
             address_token_balances::check_if_tokens_at_address(
                 &self.db,
                 address,
-                cluster_chain_ids.clone()
-            ),
-            interop_message_transfers::check_if_interop_message_transfers_at_address(
-                &self.db,
-                address,
-                cluster_chain_ids,
+                cluster_chain_ids
             ),
             self.fetch_coin_price_cached(),
             self.get_domain_info_cached(address),
         );
 
         address_info.has_tokens = has_tokens?;
-        address_info.has_interop_message_transfers = has_interop_message_transfers?;
         address_info.exchange_rate = coin_price
             .inspect_err(|e| {
                 tracing::error!("failed to fetch coin price: {e}");
@@ -464,39 +359,6 @@ impl Cluster {
         .await?;
 
         Ok(holders)
-    }
-
-    async fn fetch_decoded_calldata_cached(
-        &self,
-        calldata: &alloy_primitives::Bytes,
-        address_hash: String,
-        chain_id: ChainId,
-    ) -> Result<serde_json::Value, ServiceError> {
-        let blockscout_client = self
-            .blockscout_clients
-            .get(&chain_id)
-            .ok_or_else(|| ServiceError::Internal(anyhow::anyhow!("blockscout client not found")))?
-            .clone();
-
-        let calldata_hash = alloy_primitives::keccak256(calldata).to_string();
-        let calldata = calldata.to_string();
-
-        let key = format!("decoded_calldata:{chain_id}:{address_hash}:{calldata_hash}");
-
-        let get_decoded_payload = || async move {
-            blockscout_client
-                .request(&blockscout::decode_calldata::DecodeCalldata {
-                    params: blockscout::decode_calldata::DecodeCalldataParams {
-                        calldata,
-                        address_hash,
-                    },
-                })
-                .await
-                .map(|r| r.result)
-                .map_err(ServiceError::from)
-        };
-
-        maybe_cache_lookup!(&self.caches.decoded_calldata, key, get_decoded_payload)
     }
 
     pub async fn search_hashes(
