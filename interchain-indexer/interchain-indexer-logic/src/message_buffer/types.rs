@@ -33,7 +33,9 @@ impl Key {
 /// Result of consolidating a working entry into final storage models.
 ///
 /// `is_final` controls whether the entry can be removed from both tiers after
-/// a successful flush.
+/// a successful flush. It must imply a terminal status
+/// (`MessageStatus::is_terminal`, ADR-021): maintenance keeps a final entry
+/// with a non-terminal status as partial.
 #[derive(Clone, Debug)]
 pub struct ConsolidatedMessage {
     pub is_final: bool,

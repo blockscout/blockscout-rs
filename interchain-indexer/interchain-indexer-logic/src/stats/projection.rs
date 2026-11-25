@@ -64,9 +64,12 @@ pub fn token_keys_for_stats_enrichment_from_transfer_models(
 /// its `bridges` row: a message (or a transfer's parent message) contributes to
 /// stats when it is `Completed` (any bridge) or `Failed` on an AMB bridge.
 ///
-/// This is the single source of truth for finality: live projection here and
+/// This is the single source of truth for countability: live projection here and
 /// historical backfill candidate selection in `database.rs` both reuse it so
 /// they can never diverge (e.g. backfill silently dropping failed AMB rows).
+///
+/// Its status branch admits only terminal values (ADR-021); which terminal
+/// values count per bridge is a stats decision.
 pub(crate) fn finalized_message_stats_condition() -> Condition {
     Condition::any()
         .add(crosschain_messages::Column::Status.eq(MessageStatus::Completed))

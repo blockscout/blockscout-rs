@@ -3904,8 +3904,8 @@ mod tests {
         stats_messages, stats_messages_days, tokens,
     };
     use sea_orm::{
-        ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter,
-        QueryOrder, TransactionTrait, Value, prelude::BigDecimal,
+        ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, Iterable, PaginatorTrait,
+        QueryFilter, QueryOrder, TransactionTrait, Value, prelude::BigDecimal,
     };
 
     use super::{
@@ -13690,6 +13690,267 @@ mod tests {
             deferred.stats_processed, 0,
             "permanently deferred transfer must stay unprocessed"
         );
+    }
+
+    /// One cohort of the status-gate test. Message id = transfer id.
+    struct StatusGateCohort {
+        /// Non-terminal messages with `stats_processed = 0`, each with an
+        /// uncounted transfer.
+        fresh: Vec<(i64, i32)>,
+        /// Non-terminal messages with `stats_processed = 1`, as if counted
+        /// through the observability horizon before their destination chain
+        /// became indexed, each with an uncounted transfer. Only this shape
+        /// isolates `message_countable_condition` in the transfer backfill
+        /// query, whose parent `stats_processed > 0` filter hides it otherwise.
+        precounted: Vec<(i64, i32)>,
+        /// `Completed` messages with an uncounted transfer: must be counted,
+        /// which proves the fixture is otherwise countable.
+        controls: Vec<(i64, i32)>,
+    }
+
+    impl StatusGateCohort {
+        fn message_pks(&self) -> Vec<(i64, i32)> {
+            self.fresh
+                .iter()
+                .chain(&self.precounted)
+                .chain(&self.controls)
+                .copied()
+                .collect()
+        }
+
+        fn transfer_ids(&self) -> Vec<i64> {
+            self.message_pks().into_iter().map(|(id, _)| id).collect()
+        }
+    }
+
+    async fn insert_status_gate_row(
+        db: &sea_orm::DatabaseConnection,
+        id: i64,
+        bridge_id: i32,
+        status: MessageStatus,
+        message_stats_processed: i16,
+    ) {
+        crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+            id: Set(id),
+            bridge_id: Set(bridge_id),
+            status: Set(status),
+            init_timestamp: Set(Utc::now().naive_utc()),
+            src_chain_id: Set(1),
+            dst_chain_id: Set(Some(100)),
+            src_tx_hash: Set(Some(vec![0xabu8; 32])),
+            stats_processed: Set(message_stats_processed),
+            ..Default::default()
+        })
+        .exec(db)
+        .await
+        .unwrap();
+        // Per-bridge tokens, so no asset is shared across bridges.
+        let token = bridge_id as u8;
+        crosschain_transfers::Entity::insert(transfer_active_model(
+            id,
+            id,
+            bridge_id,
+            1,
+            100,
+            Some(vec![token; 20]),
+            Some(vec![token | 0x80; 20]),
+        ))
+        .exec(db)
+        .await
+        .unwrap();
+    }
+
+    async fn seed_status_gate_cohort(
+        db: &sea_orm::DatabaseConnection,
+        bridge_ids: &[i32],
+        non_terminal: &[MessageStatus],
+        id_base: i64,
+    ) -> StatusGateCohort {
+        let mut cohort = StatusGateCohort {
+            fresh: Vec::new(),
+            precounted: Vec::new(),
+            controls: Vec::new(),
+        };
+        let mut next_id = id_base;
+        for &bridge_id in bridge_ids {
+            for status in non_terminal {
+                insert_status_gate_row(db, next_id, bridge_id, status.clone(), 0).await;
+                cohort.fresh.push((next_id, bridge_id));
+                next_id += 1;
+                insert_status_gate_row(db, next_id, bridge_id, status.clone(), 1).await;
+                cohort.precounted.push((next_id, bridge_id));
+                next_id += 1;
+            }
+            insert_status_gate_row(db, next_id, bridge_id, MessageStatus::Completed, 0).await;
+            cohort.controls.push((next_id, bridge_id));
+            next_id += 1;
+        }
+        cohort
+    }
+
+    async fn assert_status_gate_cohort(
+        db: &sea_orm::DatabaseConnection,
+        cohort: &StatusGateCohort,
+        phase: &str,
+    ) {
+        let message = |id: i64, bridge_id: i32| async move {
+            crosschain_messages::Entity::find_by_id((id, bridge_id))
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap()
+        };
+        let transfer = |id: i64| async move {
+            crosschain_transfers::Entity::find_by_id(id)
+                .one(db)
+                .await
+                .unwrap()
+                .unwrap()
+        };
+        for &(id, bridge_id) in &cohort.fresh {
+            let m = message(id, bridge_id).await;
+            assert_eq!(
+                m.stats_processed, 0,
+                "{phase}: non-terminal {:?} message {id} on bridge {bridge_id} was counted",
+                m.status
+            );
+            assert_eq!(
+                transfer(id).await.stats_processed,
+                0,
+                "{phase}: transfer of non-terminal {:?} message {id} on bridge {bridge_id} was counted",
+                m.status
+            );
+        }
+        for &(id, bridge_id) in &cohort.precounted {
+            let m = message(id, bridge_id).await;
+            assert_eq!(
+                m.stats_processed, 1,
+                "{phase}: pre-counted message {id} changed"
+            );
+            assert_eq!(
+                transfer(id).await.stats_processed,
+                0,
+                "{phase}: transfer of non-terminal {:?} message {id} on bridge {bridge_id} was counted",
+                m.status
+            );
+        }
+        for &(id, bridge_id) in &cohort.controls {
+            assert_eq!(
+                message(id, bridge_id).await.stats_processed,
+                1,
+                "{phase}: completed control message {id} on bridge {bridge_id} was not counted"
+            );
+            assert_eq!(
+                transfer(id).await.stats_processed,
+                1,
+                "{phase}: completed control transfer {id} on bridge {bridge_id} was not counted"
+            );
+        }
+    }
+
+    /// ADR-021 clause 3 against the stats gate. While a message's destination
+    /// chain is indexed for its bridge, no non-terminal status is counted, by
+    /// live message or transfer projection or by either backfill candidate
+    /// query, on any bridge type. A value added later is covered with no edit.
+    /// `failed` is left out on purpose: which terminal values count per
+    /// bridge is a stats decision, covered by
+    /// `stats_backfill_failed_amb_included_non_amb_excluded_idempotent`. The
+    /// observability-horizon branch (ADR-004) is the stated exception and is
+    /// not exercised here.
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_stats_gate_counts_no_non_terminal_status_while_destination_is_indexed() {
+        let _db = init_db("test_stats_gate_no_non_terminal_status").await;
+        let conn = _db.client();
+        let db = conn.as_ref();
+        chains::Entity::insert_many([
+            chains::ActiveModel {
+                id: Set(1),
+                name: Set("A".into()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(100),
+                name: Set("B".into()),
+                ..Default::default()
+            },
+        ])
+        .exec(db)
+        .await
+        .unwrap();
+
+        // One bridge per bridge type, plus the legacy untyped bridge.
+        let bridge_types: Vec<Option<BridgeType>> =
+            BridgeType::iter().map(Some).chain([None]).collect();
+        let bridge_ids: Vec<i32> = (1..=bridge_types.len() as i32).collect();
+        for (&bridge_id, bridge_type) in bridge_ids.iter().zip(&bridge_types) {
+            bridges::Entity::insert(bridges::ActiveModel {
+                id: Set(bridge_id),
+                name: Set(format!("gate-{bridge_id}")),
+                r#type: Set(bridge_type.clone()),
+                ..Default::default()
+            })
+            .exec(db)
+            .await
+            .unwrap();
+        }
+        // Every destination is indexed for every bridge.
+        let indexed =
+            IndexedChains::from_pairs(bridge_ids.iter().flat_map(|&b| [(b, 1i64), (b, 100i64)]));
+        let non_terminal: Vec<MessageStatus> =
+            MessageStatus::iter().filter(|s| !s.is_terminal()).collect();
+        assert!(!non_terminal.is_empty(), "the test would pass vacuously");
+
+        let assert_messages_count = |expected: i64| {
+            let bridge_ids = bridge_ids.clone();
+            async move {
+                for bridge_id in bridge_ids {
+                    let row = stats_messages::Entity::find_by_id((1i64, 100i64, bridge_id))
+                        .one(db)
+                        .await
+                        .unwrap()
+                        .expect("the control message must have created the stats row");
+                    assert_eq!(row.messages_count, expected, "bridge {bridge_id}");
+                }
+            }
+        };
+
+        // Live projection, in the order `apply_stats_for_flushed_batch` uses.
+        let live = seed_status_gate_cohort(db, &bridge_ids, &non_terminal, 10_000).await;
+        let pks = live.message_pks();
+        let ids = live.transfer_ids();
+        db.transaction(|tx| {
+            let indexed = indexed.clone();
+            Box::pin(async move {
+                crate::stats::projection::project_messages_batch(tx, &pks, &indexed).await?;
+                crate::stats::projection::project_transfers_batch(tx, &ids, &indexed).await?;
+                Ok::<(), sea_orm::DbErr>(())
+            })
+        })
+        .await
+        .unwrap();
+        assert_status_gate_cohort(db, &live, "live").await;
+        assert_messages_count(1).await;
+
+        // Backfill: a fresh cohort above every live id.
+        let backfill = seed_status_gate_cohort(db, &bridge_ids, &non_terminal, 20_000).await;
+        let ic = InterchainDatabase::new(conn.clone());
+        let report = ic
+            .backfill_stats_projection_round(&indexed, 19_999, 10_000, 19_999, 10_000)
+            .await
+            .unwrap();
+        assert_eq!(
+            report.messages_scanned,
+            bridge_ids.len(),
+            "the message candidate query must select only the completed controls"
+        );
+        assert_eq!(
+            report.transfers_scanned,
+            bridge_ids.len(),
+            "the transfer candidate query must select only the completed controls"
+        );
+        assert_status_gate_cohort(db, &backfill, "backfill").await;
+        assert_messages_count(2).await;
     }
 
     #[tokio::test]

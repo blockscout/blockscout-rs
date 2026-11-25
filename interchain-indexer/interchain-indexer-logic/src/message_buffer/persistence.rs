@@ -5,12 +5,12 @@ use std::collections::HashMap;
 use alloy::primitives::ChainId;
 use interchain_indexer_entity::{
     amb_message_anomalies, amb_messages_confirmations, crosschain_messages, crosschain_transfers,
-    indexer_checkpoints, op_interop_legs, pending_messages,
+    indexer_checkpoints, op_interop_legs, pending_messages, sea_orm_active_enums::MessageStatus,
 };
 use itertools::Itertools;
 use sea_orm::{
-    ActiveValue, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbErr, EntityTrait,
-    QueryFilter, QuerySelect,
+    ActiveEnum, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbErr, EntityTrait,
+    Iterable, QueryFilter, QuerySelect,
     sea_query::{Expr, OnConflict},
 };
 use std::collections::HashSet;
@@ -37,6 +37,25 @@ fn pending_messages_on_conflict() -> OnConflict {
     .to_owned()
 }
 
+/// The terminal `message_status` labels as an SQL list, `'completed',
+/// 'failed'` today, derived from `MessageStatus::is_terminal` (ADR-021).
+fn terminal_statuses_sql() -> String {
+    MessageStatus::iter()
+        .filter(MessageStatus::is_terminal)
+        .map(|status| format!("'{}'", status.to_value()))
+        .join(", ")
+}
+
+/// The upsert's terminal guard: the stored status is terminal and the
+/// incoming one is not. Then the stored status and destination columns win.
+fn keep_terminal_sql() -> String {
+    let terminal = terminal_statuses_sql();
+    format!(
+        "crosschain_messages.status::text IN ({terminal}) \
+         AND EXCLUDED.status::text NOT IN ({terminal})"
+    )
+}
+
 /// Conflict policy for `crosschain_messages`: a **non-regressing merge**.
 ///
 /// The two halves of a message (source and destination) are produced by
@@ -48,8 +67,9 @@ fn pending_messages_on_conflict() -> OnConflict {
 /// would regress the terminal status and drop the destination tx hash.
 ///
 /// Instead we merge, so the outcome is order-independent:
-/// - **status** never regresses out of a terminal state — if the stored row is
-///   `completed`/`failed` and the incoming one is not, the stored status wins;
+/// - **status** never regresses out of a terminal state
+///   (`MessageStatus::is_terminal`, ADR-021) — if the stored row is terminal
+///   and the incoming one is not, the stored status wins;
 /// - **destination identity** (`dst_*`, recipient) is preserved while keeping a
 ///   terminal status, and otherwise prefers the incoming value without nulling;
 /// - **source/other columns** are filled from whichever side carries them
@@ -58,14 +78,13 @@ fn pending_messages_on_conflict() -> OnConflict {
 ///
 /// `EXCLUDED` is the incoming row; `crosschain_messages` is the stored row.
 fn crosschain_messages_on_conflict() -> OnConflict {
-    const KEEP_TERMINAL: &str = "crosschain_messages.status::text IN ('completed', 'failed') \
-         AND EXCLUDED.status::text NOT IN ('completed', 'failed')";
+    let keep_terminal = keep_terminal_sql();
 
     // Destination-owned column: keep the stored value when we are keeping a
     // terminal status, otherwise prefer the incoming value but never null it out.
     let keep_existing_if_terminal = |col: &str| {
         Expr::cust(format!(
-            "CASE WHEN {KEEP_TERMINAL} \
+            "CASE WHEN {keep_terminal} \
              THEN crosschain_messages.{col} \
              ELSE COALESCE(EXCLUDED.{col}, crosschain_messages.{col}) END"
         ))
@@ -83,7 +102,7 @@ fn crosschain_messages_on_conflict() -> OnConflict {
     // below branches on — duplicating this SQL would risk the two rules
     // silently disagreeing on whether the destination is known.
     let dst_result_sql = format!(
-        "CASE WHEN {KEEP_TERMINAL} \
+        "CASE WHEN {keep_terminal} \
          THEN crosschain_messages.dst_chain_id \
          ELSE COALESCE(EXCLUDED.dst_chain_id, crosschain_messages.dst_chain_id) END"
     );
@@ -137,7 +156,7 @@ fn crosschain_messages_on_conflict() -> OnConflict {
     .value(
         crosschain_messages::Column::Status,
         Expr::cust(format!(
-            "CASE WHEN {KEEP_TERMINAL} \
+            "CASE WHEN {keep_terminal} \
              THEN crosschain_messages.status ELSE EXCLUDED.status END"
         )),
     )
@@ -1191,15 +1210,17 @@ mod tests {
         stats_assets,
     };
     use sea_orm::{
-        ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter,
-        QueryOrder, TransactionTrait, prelude::BigDecimal,
+        ActiveEnum, ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DbBackend,
+        EntityTrait, Iterable, QueryFilter, QueryOrder, QueryTrait, TransactionTrait,
+        prelude::BigDecimal,
     };
 
     use super::{
         BridgeId, ConsolidatedMessage, DestinationExecution, DetachedConfirmations, Key,
         apply_destination_execution_reconciliation, attach_detached_confirmations,
-        delete_replaced_messages, flush_to_final_storage, reconcile_destination_executions,
-        remove_finalized_from_pending,
+        crosschain_messages_on_conflict, delete_replaced_messages, flush_to_final_storage,
+        keep_terminal_sql, reconcile_destination_executions, remove_finalized_from_pending,
+        terminal_statuses_sql,
     };
     use crate::{InterchainDatabase, test_utils::init_db};
 
@@ -1207,9 +1228,184 @@ mod tests {
     const MESSAGE_ID: i64 = 4242;
     const SRC_CHAIN: i64 = 100;
     const DST_CHAIN: i64 = 200;
+    const OTHER_DST_CHAIN: i64 = 300;
 
     fn ts(secs: i64) -> NaiveDateTime {
         DateTime::from_timestamp(secs, 0).unwrap().naive_utc()
+    }
+
+    /// The full `INSERT … ON CONFLICT` statement the flush sends for
+    /// `crosschain_messages`, with placeholders, as PostgreSQL receives it.
+    fn rendered_crosschain_messages_upsert_sql() -> String {
+        crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+            id: ActiveValue::Set(MESSAGE_ID),
+            bridge_id: ActiveValue::Set(BRIDGE_ID),
+            status: ActiveValue::Set(MessageStatus::Initiated),
+            src_chain_id: ActiveValue::Set(SRC_CHAIN),
+            ..Default::default()
+        })
+        .on_conflict(crosschain_messages_on_conflict())
+        .build(DbBackend::Postgres)
+        .sql
+    }
+
+    #[test]
+    fn test_keep_terminal_sql_renders_the_former_literal() {
+        assert_eq!(terminal_statuses_sql(), "'completed', 'failed'");
+        assert_eq!(
+            keep_terminal_sql(),
+            "crosschain_messages.status::text IN ('completed', 'failed') AND EXCLUDED.status::text NOT IN ('completed', 'failed')"
+        );
+        for status in MessageStatus::iter() {
+            let label = status.to_value();
+            assert!(
+                !label.is_empty() && label.chars().all(|c| c.is_ascii_lowercase() || c == '_'),
+                "status label {label:?} would need escaping in the rendered guard"
+            );
+        }
+    }
+
+    #[test]
+    fn test_crosschain_messages_on_conflict_renders_the_guard_at_every_site() {
+        let sql = rendered_crosschain_messages_upsert_sql();
+        let guard = keep_terminal_sql();
+        assert_eq!(
+            sql.matches(guard.as_str()).count(),
+            5,
+            "the terminal guard must render at status, dst_tx_hash, recipient_address, \
+             dst_chain_id and the unresolved_destination condition: {sql}"
+        );
+        let rest = sql.replace(guard.as_str(), "");
+        for status in MessageStatus::iter() {
+            let literal = format!("'{}'", status.to_value());
+            assert!(
+                !rest.contains(&literal),
+                "status literal {literal} outside the derived guard: {sql}"
+            );
+        }
+    }
+
+    /// One row of the status-merge matrix: `source_only_ready_to_claim` with
+    /// the given id and status, and either a destination
+    /// `(dst_chain_id, dst_tx_hash byte, recipient byte)` or none.
+    fn merge_matrix_row(
+        id: i64,
+        status: MessageStatus,
+        destination: Option<(i64, u8, u8)>,
+    ) -> ConsolidatedMessage {
+        let mut entry = source_only_ready_to_claim();
+        entry.message.id = ActiveValue::Set(id);
+        entry.message.status = ActiveValue::Set(status);
+        entry.message.dst_chain_id = ActiveValue::Set(destination.map(|(chain, _, _)| chain));
+        entry.message.dst_tx_hash = ActiveValue::Set(destination.map(|(_, tx, _)| vec![tx]));
+        entry.message.recipient_address =
+            ActiveValue::Set(destination.map(|(_, _, recipient)| vec![recipient]));
+        entry
+    }
+
+    async fn flush_all(db: &InterchainDatabase, entries: Vec<ConsolidatedMessage>) {
+        let conn = db.db.as_ref();
+        let tx = conn.begin().await.unwrap();
+        flush_to_final_storage(&tx, entries).await.unwrap();
+        tx.commit().await.unwrap();
+    }
+
+    /// ADR-021, the upsert guard over every `(stored, incoming)` status pair.
+    /// The stored status wins only when it is terminal and the incoming one is
+    /// not; every other pair takes the incoming status. This pins:
+    /// - a stored `failed` against every non-terminal incoming status;
+    /// - non-terminal -> non-terminal moves, allowed both ways;
+    /// - `failed -> completed`, the protocol retry of clause 2;
+    /// - `completed -> failed`, passing: the accepted stale-flush gap
+    ///   (ADR-021, decision 2).
+    /// Shape A carries a different non-null destination, the only shape that
+    /// tells the guard from `COALESCE`. Shape B carries none: an upsert never
+    /// clears a destination column, which is why a retraction cannot be an
+    /// upsert.
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_status_merge_keeps_terminal_against_non_terminal_and_never_clears_destination() {
+        let test_db = init_db("flush_status_merge_matrix").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+        db.upsert_chains(vec![chains::ActiveModel {
+            id: ActiveValue::Set(OTHER_DST_CHAIN),
+            name: ActiveValue::Set("other_dst_chain".to_string()),
+            ..Default::default()
+        }])
+        .await
+        .unwrap();
+
+        const STORED_DESTINATION: (i64, u8, u8) = (DST_CHAIN, 0xDD, 0xCC);
+        const INCOMING_DESTINATION: (i64, u8, u8) = (OTHER_DST_CHAIN, 0xEE, 0xEF);
+
+        let mut cases = Vec::new();
+        let mut stored_rows = Vec::new();
+        let mut incoming_rows = Vec::new();
+        for (stored_index, stored) in MessageStatus::iter().enumerate() {
+            for (incoming_index, incoming) in MessageStatus::iter().enumerate() {
+                for (shape_index, incoming_destination) in
+                    [Some(INCOMING_DESTINATION), None].into_iter().enumerate()
+                {
+                    let id = 10_000
+                        + 100 * stored_index as i64
+                        + 10 * incoming_index as i64
+                        + shape_index as i64;
+                    stored_rows.push(merge_matrix_row(
+                        id,
+                        stored.clone(),
+                        Some(STORED_DESTINATION),
+                    ));
+                    incoming_rows.push(merge_matrix_row(
+                        id,
+                        incoming.clone(),
+                        incoming_destination,
+                    ));
+                    cases.push((id, stored.clone(), incoming.clone(), incoming_destination));
+                }
+            }
+        }
+        flush_all(&db, stored_rows).await;
+        flush_all(&db, incoming_rows).await;
+
+        for (id, stored, incoming, incoming_destination) in cases {
+            let keep = stored.is_terminal() && !incoming.is_terminal();
+            let (expected_status, expected_destination) = match (keep, incoming_destination) {
+                (true, _) | (false, None) => (
+                    if keep {
+                        stored.clone()
+                    } else {
+                        incoming.clone()
+                    },
+                    STORED_DESTINATION,
+                ),
+                (false, Some(destination)) => (incoming.clone(), destination),
+            };
+            let row = crosschain_messages::Entity::find_by_id((id, BRIDGE_ID))
+                .one(db.db.as_ref())
+                .await
+                .unwrap()
+                .expect("crosschain_messages row must exist");
+            let case = format!(
+                "stored {stored:?}, incoming {incoming:?}, incoming destination {incoming_destination:?}"
+            );
+            assert_eq!(row.status, expected_status, "status: {case}");
+            assert_eq!(
+                row.dst_chain_id,
+                Some(expected_destination.0),
+                "dst_chain_id: {case}"
+            );
+            assert_eq!(
+                row.dst_tx_hash,
+                Some(vec![expected_destination.1]),
+                "dst_tx_hash: {case}"
+            );
+            assert_eq!(
+                row.recipient_address,
+                Some(vec![expected_destination.2]),
+                "recipient_address: {case}"
+            );
+        }
     }
 
     /// Destination-only finalized row: executed body, no source side. Mirrors

@@ -331,4 +331,6 @@
 - `interchain-indexer-entity/src/codegen/`
   - generated entity view of the current schema
 - `interchain-indexer-entity/src/manual/mod.rs`
-  - place for manual entity customizations that survive regeneration
+  - place for manual entity customizations that survive regeneration;
+    `MessageStatus::is_terminal`, the only definition of terminality
+    (ADR-021)

@@ -246,7 +246,8 @@ Three logical outcomes:
   produce canonical rows but the message is not yet final. Flushed to DB but
   kept in buffer for further updates.
 - `Ok(Some(ConsolidatedMessage { is_final: true, .. }))` — complete: flushed
-  to DB and evicted from buffer.
+  to DB and evicted from buffer, only when its status is terminal; a final
+  entry with a non-terminal status is kept as partial (ADR-021).
 
 `ConsolidatedMessage` contains a `crosschain_messages::ActiveModel`, a
 `Vec<crosschain_transfers::ActiveModel>`, and `is_final`. This is the universal

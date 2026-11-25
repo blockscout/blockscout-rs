@@ -68,6 +68,12 @@ The repo-specific condition under which a message is ready for canonical final
 storage. For Avalanche flows, finality is more complex than “an execution event
 exists”; it depends on execution success and, for ICTT, transfer completion.
 
+## Terminal Status
+
+`completed` or `failed`: the row never again holds a non-terminal status
+(ADR-021, `MessageStatus::is_terminal`). Not the same as `is_final` (the
+buffer entry may be evicted) or as countable (stats may count the row).
+
 ## Checkpoint
 
 Persisted cursor state that lets an indexer resume log streaming safely after

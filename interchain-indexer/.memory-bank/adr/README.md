@@ -34,6 +34,7 @@ An ADR captures the context, decision, and consequences of an architectural choi
 | [018](./018-op-interop-confirmed-reading-and-leg-ledger.md) | OP Interop Indexer Reads Confirmed Blocks Only And Keeps A Leg Ledger | Accepted | 2026-11-14 |
 | [019](./019-op-interop-eth-transfer-from-message-payload.md) | OP Interop ETH Transfers Are Derived From The Message Payload | Accepted | 2026-11-16 |
 | [020](./020-op-interop-ledger-records-every-inbox-execution.md) | OP Interop Ledger Records Every CrossL2Inbox Execution And Is The Message Journal | Accepted | 2026-11-24 |
+| [021](./021-message-status-base-set-with-non-terminal-extensions.md) | Message Status Is A Shared Base Set With Non-Terminal Extensions | Accepted | 2026-11-25 |
 
 ## Creating a New ADR
 

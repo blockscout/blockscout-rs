@@ -9,6 +9,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use chrono::{TimeDelta, Utc};
+use interchain_indexer_entity::sea_orm_active_enums::MessageStatus;
 use sea_orm::{DbErr, TransactionTrait};
 
 use super::{
@@ -130,16 +131,58 @@ impl BridgeCounts {
     }
 }
 
+/// Classifies a dirty buffer entry for this maintenance cycle.
+///
+/// An entry is `Complete` (flushed, then evicted from both tiers) only when
+/// it is `is_final` and its status is terminal (ADR-021, clause 4). A final
+/// entry with a non-terminal status is an indexer bug. It is handled as
+/// `Partial`: flushed, kept, and offloaded at `hot_ttl`, so a later event can
+/// still finish it. It is logged at `error`, and panics only under
+/// `cfg(test)`, so the crate's tests catch it while debug and release builds
+/// of the service keep running. Never an `Err`: that would stall maintenance
+/// for the whole bridge on every cycle.
 fn classify_item<T: Consolidate>(key: &Key, item: &BufferItem<T>) -> Result<ConsolidationOutcome> {
     if !item.is_dirty() {
         return Ok(ConsolidationOutcome::Unchanged);
     }
 
-    match item.inner.consolidate(key)? {
-        Some(message) if message.is_final => Ok(ConsolidationOutcome::Complete(message)),
-        Some(message) => Ok(ConsolidationOutcome::Partial(message)),
-        None => Ok(ConsolidationOutcome::NotReady),
-    }
+    Ok(match item.inner.consolidate(key)? {
+        Some(message) if is_complete(&message) => ConsolidationOutcome::Complete(message),
+        Some(message) => {
+            if message.is_final {
+                tracing::error!(
+                    bridge_id = key.bridge_id,
+                    message_id = key.message_id,
+                    status = ?message.message.status,
+                    "consolidated entry is final but its status is not terminal; \
+                     keeping it in the buffer as partial"
+                );
+                // Tests only, not `debug_assert!`: `just run*` builds debug,
+                // and a panic here would kill this bridge's maintenance task
+                // until restart, while the release path below keeps running.
+                if cfg!(test) {
+                    panic!(
+                        "is_final implies a terminal status (ADR-021): bridge_id={} \
+                         message_id={} status={:?}",
+                        key.bridge_id, key.message_id, message.message.status
+                    );
+                }
+            }
+            ConsolidationOutcome::Partial(message)
+        }
+        None => ConsolidationOutcome::NotReady,
+    })
+}
+
+/// `is_final` and a terminal status (ADR-021, clause 4). A status left
+/// `NotSet` takes the column default, `initiated`, which is not terminal.
+fn is_complete(message: &ConsolidatedMessage) -> bool {
+    message.is_final
+        && message
+            .message
+            .status
+            .try_as_ref()
+            .is_some_and(MessageStatus::is_terminal)
 }
 
 #[derive(Clone, Debug, Default)]
@@ -576,17 +619,65 @@ mod tests {
         indexer_checkpoints, pending_messages,
         sea_orm_active_enums::{MessageStatus, TransferAssetLinkage},
     };
-    use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, QueryFilter, prelude::BigDecimal};
+    use sea_orm::{
+        ActiveValue, ColumnTrait, EntityTrait, Iterable, QueryFilter, prelude::BigDecimal,
+    };
     use serde::{Deserialize, Serialize};
 
     use super::{
         BufferItem, Consolidate, ConsolidatedMessage, DestinationExecution, DetachedConfirmations,
-        HotEvictionReason, Key, MaintenancePlan, MessageBuffer, resolved_hot_evictions,
+        HotEvictionReason, Key, MaintenancePlan, MessageBuffer, classify_item, is_complete,
+        resolved_hot_evictions,
     };
     use crate::{
         InterchainDatabase, StatsReadSettings, StatsService, settings::MessageBufferSettings,
         stats::IndexedChains, test_utils::init_db,
     };
+
+    /// Violates ADR-021 clause 4 on purpose: final, but `Initiated`.
+    #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+    struct FinalNonTerminalDummyMessage;
+
+    impl Consolidate for FinalNonTerminalDummyMessage {
+        fn consolidate(&self, key: &Key) -> anyhow::Result<Option<ConsolidatedMessage>> {
+            let mut message = completed_without_transfers(key);
+            message.message.status = ActiveValue::Set(MessageStatus::Initiated);
+            Ok(Some(message))
+        }
+    }
+
+    #[test]
+    fn test_is_complete_requires_is_final_and_a_terminal_status() {
+        let key = Key::new(1, 1);
+        for status in MessageStatus::iter() {
+            for is_final in [true, false] {
+                let mut message = completed_without_transfers(&key);
+                message.is_final = is_final;
+                message.message.status = ActiveValue::Set(status.clone());
+                assert_eq!(
+                    is_complete(&message),
+                    is_final && status.is_terminal(),
+                    "status {status:?}, is_final {is_final}"
+                );
+            }
+        }
+
+        let mut unset = completed_without_transfers(&key);
+        unset.message.status = ActiveValue::NotSet;
+        assert!(
+            !is_complete(&unset),
+            "an unset status takes the column default, initiated, which is not terminal"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "is_final implies a terminal status")]
+    fn test_classify_item_final_entry_with_non_terminal_status_panics_under_test() {
+        let key = Key::new(1, 1);
+        let mut item = BufferItem::new(FinalNonTerminalDummyMessage);
+        item.touch().unwrap();
+        let _ = classify_item(&key, &item);
+    }
 
     /// Minimal `Consolidate` impl carrying one transfer, used only to drive
     /// `MessageBuffer::run()` end to end (offload/restore/flush/stats hook)
@@ -608,7 +699,12 @@ mod tests {
                 message: crosschain_messages::ActiveModel {
                     id: ActiveValue::Set(key.message_id),
                     bridge_id: ActiveValue::Set(key.bridge_id as i32),
-                    status: ActiveValue::Set(MessageStatus::Initiated),
+                    // `is_final` implies a terminal status (ADR-021).
+                    status: ActiveValue::Set(if self.is_final {
+                        MessageStatus::Completed
+                    } else {
+                        MessageStatus::Initiated
+                    }),
                     init_timestamp: ActiveValue::Set(Utc::now().naive_utc()),
                     src_chain_id: ActiveValue::Set(1),
                     dst_chain_id: ActiveValue::Set(Some(100)),
@@ -716,10 +812,10 @@ mod tests {
         .await
         .unwrap();
 
-        // Chain 100 is unindexed for bridge 1, so the `Initiated` (never
-        // `Completed`) message/transfer this dummy produces is countable via
-        // the "destination confirmation can never arrive" branch — without
-        // this, nothing here would ever become countable regardless of
+        // Chain 100 is unindexed for bridge 1, so the `Initiated`
+        // message/transfer this dummy produces while not final is countable
+        // via the "destination confirmation can never arrive" branch —
+        // without this, nothing here would ever become countable before
         // `is_final`, and the test would not exercise the widened trigger.
         let stats = Arc::new(StatsService::new(
             Arc::new(db.clone()),

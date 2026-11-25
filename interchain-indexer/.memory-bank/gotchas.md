@@ -3368,3 +3368,29 @@ When a pull read of the very `SentMessage` being relayed shares the relay's
 window, both candidates match. The lower log index is linked, which may be the
 pull read in a multicall that placed it before the relay. Identity is
 identical and only `log_index` differs. Telling them apart needs a call trace.
+
+## `replace_existing` Bypasses The Terminal Status Guard
+
+`ConsolidatedMessage.replace_existing` makes `flush_to_final_storage` delete
+the stored `crosschain_messages` row (`delete_replaced_messages`, cascading
+to its transfers) before the upsert. The delete checks neither the status
+nor `stats_processed`: a terminal or already-counted row goes, and the
+replacement is a fresh row with `stats_processed = 0`. The terminal guard in
+`crosschain_messages_on_conflict` never sees the old row. Only AMB
+`messageId` collisions set the flag; that path predates ADR-021 and stays as
+it is. A new path that deletes or rewrites a canonical row must not reuse
+it: it must refuse a row whose status is terminal
+(`MessageStatus::is_terminal`) or whose `stats_processed > 0`. See ADR-021.
+
+## A Retraction Cannot Be An Upsert: Destination Columns Are Only Ever Filled
+
+`crosschain_messages_on_conflict` never writes `NULL` into `dst_chain_id`,
+`dst_tx_hash` or `recipient_address`. It keeps the stored value when the
+stored status is terminal and the incoming one is not; in every other case
+it takes `COALESCE(incoming, stored)`. The `protocol_metadata` merge removes nothing but
+`unresolved_destination`. Re-flushing a message without its destination leg
+therefore leaves the old destination on the row, and a client that reads
+`dst_tx_hash` as "delivered" keeps showing it. Retracting a destination leg
+needs a dedicated statement that clears those columns and refuses terminal
+or counted rows (ADR-021). The status-merge matrix test in `persistence.rs`
+pins this.

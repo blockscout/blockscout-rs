@@ -1965,7 +1965,7 @@ mod tests {
         /// `crosschain_messages_on_conflict` path (`message_buffer::run` is
         /// the only public entry point into it; `persistence.rs` itself is
         /// out of scope to edit per the task's hard constraints). It always
-        /// produces a fresh, non-terminal `Initiated` row with
+        /// produces a fresh, non-final, non-terminal `Initiated` row with
         /// `stats_processed = 0` — exactly what a freshly re-decoded replay
         /// of the same logs would rebuild, since a hot/cold entry evicted
         /// after its first final flush leaves no trace of having been
@@ -1976,7 +1976,7 @@ mod tests {
         impl Consolidate for ReplayTestMessage {
             fn consolidate(&self, key: &Key) -> anyhow::Result<Option<ConsolidatedMessage>> {
                 Ok(Some(ConsolidatedMessage {
-                    is_final: true,
+                    is_final: false,
                     replace_existing: false,
                     message: interchain_indexer_entity::crosschain_messages::ActiveModel {
                         id: ActiveValue::Set(key.message_id),

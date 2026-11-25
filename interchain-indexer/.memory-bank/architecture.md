@@ -137,8 +137,9 @@ message, canonical or second execution, one row per validator. See ADR-015.
 
 Three outcomes, not two: `Ok(None)` (not yet consolidatable), `Ok(Some(.. is_final:
 false ..))` (partial — flushed but kept in the buffer), `Ok(Some(.. is_final: true
-..))` (complete — flushed and evicted). "Ready for finality" is not simply "all
-expected events received" for every protocol — see
+..))` (complete — flushed and evicted, only with a terminal status; a final
+entry with a non-terminal status is kept as partial, ADR-021). "Ready for
+finality" is not simply "all expected events received" for every protocol — see
 `.memory-bank/research/message-lifecycle.md` for the full contract and
 `interchain-indexer-logic/src/indexer/avalanche/consolidation.rs` for how
 Avalanche's finality rule (execution success **and** ICTT completeness, where
