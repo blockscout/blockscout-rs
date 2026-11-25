@@ -1,7 +1,5 @@
 {
     "schedules": {
-        "total_interop_messages_group": "0 */10 * * * * *",
-        "total_interop_transfers_group":  "0 */10 * * * * *",
         "total_multichain_txns_group": "0 30 * * * * *",
         "total_multichain_addresses_group": "0 30 * * * * *",
         "new_txns_multichain_group": "0 30 * * * * *",

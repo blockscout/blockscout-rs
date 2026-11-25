@@ -1,14 +1,6 @@
 {
     "template_values": {},
     "counters": {
-        "total_interop_messages": {
-            "title": "Total interop messages",
-            "description": "Number of interop messages over all time"
-        },
-        "total_interop_transfers": {
-            "title": "Total interop transfers",
-            "description": "Number of interop transfers over all time"
-        },
         "total_multichain_txns": {
             "title": "Total transactions",
             "description": "Number of transactions across all chains in the cluster"

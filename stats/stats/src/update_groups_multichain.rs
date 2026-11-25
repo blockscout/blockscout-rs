@@ -12,8 +12,6 @@ use crate::{
 use crate::counters::multichain::*;
 
 singleton_groups!(
-    TotalInteropMessages,
-    TotalInteropTransfers,
     TotalMultichainAddresses,
     TotalMultichainTxns,
     YesterdayTxnsMultichain,
