@@ -1,4 +1,4 @@
-type Domain @entity {
+type Domain @entity(immutable: false) {
   "The namehash of the name"
   id: ID!
   "The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)"
@@ -11,7 +11,7 @@ type Domain @entity {
   parent: Domain
   "Can count domains from length of array"
   subdomains: [Domain!]! @derivedFrom(field: "parent")
-  "The number of subdomains"
+  "The number of direct subdomains that are live: they have an owner, a resolver, or a live subdomain of their own"
   subdomainCount: Int!
   "Address logged from current resolver, if any"
   resolvedAddress: Account
@@ -32,6 +32,8 @@ type Domain @entity {
   registrant: Account
   "The account that owns the wrapped domain"
   wrappedOwner: Account
+  "The name's current token in its ENSv2 registry (id = registry address ++ uint256 token id); null for a name not live in ENSv2"
+  registryToken: ENSv2Token
 
   "The expiry date for the domain, from either the registration, or the wrapped domain if PCC is burned"
   expiryDate: BigInt
@@ -44,12 +46,12 @@ type Domain @entity {
   "The events associated with the domain"
   events: [DomainEvent!]! @derivedFrom(field: "domain")
 
-  "Is domain stored offchain"
+  "Is domain stored offchain (Blockscout/BENS extension)"
   storedOffchain: Boolean!
-  "Is domain resolved with wildcard"
+  "Is domain resolved with wildcard (Blockscout/BENS extension)"
   resolvedWithWildcard: Boolean!
 
-  "Token ID for the domain (ERC721)"
+  "Token ID for the domain (ERC721) (Blockscout/BENS extension)"
   tokenId: BigInt
 }
 
@@ -64,7 +66,7 @@ interface DomainEvent {
   transactionID: Bytes!
 }
 
-type Transfer implements DomainEvent @entity {
+type Transfer implements DomainEvent @entity(immutable: true) {
   "The unique identifier of the event"
   id: ID!
   "The domain name associated with the event"
@@ -77,7 +79,7 @@ type Transfer implements DomainEvent @entity {
   owner: Account!
 }
 
-type NewOwner implements DomainEvent @entity {
+type NewOwner implements DomainEvent @entity(immutable: true) {
   "The unique identifier of the event"
   id: ID!
   "The parent domain of the domain name associated with the event"
@@ -92,7 +94,7 @@ type NewOwner implements DomainEvent @entity {
   owner: Account!
 }
 
-type NewResolver implements DomainEvent @entity {
+type NewResolver implements DomainEvent @entity(immutable: true) {
   "The unique identifier of the event"
   id: ID!
   "The domain name associated with the event"
@@ -105,7 +107,7 @@ type NewResolver implements DomainEvent @entity {
   resolver: Resolver!
 }
 
-type NewTTL implements DomainEvent @entity {
+type NewTTL implements DomainEvent @entity(immutable: true) {
   "The unique identifier of the event"
   id: ID!
   "The domain name associated with the event"
@@ -118,7 +120,7 @@ type NewTTL implements DomainEvent @entity {
   ttl: BigInt!
 }
 
-type WrappedTransfer implements DomainEvent @entity {
+type WrappedTransfer implements DomainEvent @entity(immutable: true) {
   "The unique identifier of the event"
   id: ID!
   "The domain name associated with the event"
@@ -131,7 +133,7 @@ type WrappedTransfer implements DomainEvent @entity {
   owner: Account!
 }
 
-type NameWrapped implements DomainEvent @entity {
+type NameWrapped implements DomainEvent @entity(immutable: true) {
   "The unique identifier of the wrapped domain"
   id: ID!
   "The domain name associated with the wrapped domain"
@@ -150,7 +152,7 @@ type NameWrapped implements DomainEvent @entity {
   expiryDate: BigInt!
 }
 
-type NameUnwrapped implements DomainEvent @entity {
+type NameUnwrapped implements DomainEvent @entity(immutable: true) {
   "The unique identifier of the event"
   id: ID!
   "The domain name associated with the event"
@@ -163,7 +165,7 @@ type NameUnwrapped implements DomainEvent @entity {
   owner: Account!
 }
 
-type FusesSet implements DomainEvent @entity {
+type FusesSet implements DomainEvent @entity(immutable: true) {
   "The unique identifier of the event"
   id: ID!
   "The domain name associated with the event"
@@ -176,7 +178,7 @@ type FusesSet implements DomainEvent @entity {
   fuses: Int!
 }
 
-type ExpiryExtended implements DomainEvent @entity {
+type ExpiryExtended implements DomainEvent @entity(immutable: true) {
   "The unique identifier of the event"
   id: ID!
   "The domain name associated with the event"
@@ -189,7 +191,7 @@ type ExpiryExtended implements DomainEvent @entity {
   expiryDate: BigInt!
 }
 
-type Registration @entity {
+type Registration @entity(immutable: false) {
   "The unique identifier of the registration"
   id: ID!
   "The domain name associated with the registration"
@@ -219,7 +221,7 @@ interface RegistrationEvent {
   transactionID: Bytes!
 }
 
-type NameRegistered implements RegistrationEvent @entity {
+type NameRegistered implements RegistrationEvent @entity(immutable: true) {
   "The unique identifier of the NameRegistered event"
   id: ID!
   "The registration associated with the event"
@@ -234,7 +236,7 @@ type NameRegistered implements RegistrationEvent @entity {
   expiryDate: BigInt!
 }
 
-type NameRenewed implements RegistrationEvent @entity {
+type NameRenewed implements RegistrationEvent @entity(immutable: true) {
   "The unique identifier of the NameRenewed event"
   id: ID!
   "The registration associated with the event"
@@ -247,7 +249,7 @@ type NameRenewed implements RegistrationEvent @entity {
   expiryDate: BigInt!
 }
 
-type NameTransferred implements RegistrationEvent @entity {
+type NameTransferred implements RegistrationEvent @entity(immutable: true) {
   "The ID of the event"
   id: ID!
   "The registration associated with the event"
@@ -260,7 +262,7 @@ type NameTransferred implements RegistrationEvent @entity {
   newOwner: Account!
 }
 
-type WrappedDomain @entity {
+type WrappedDomain @entity(immutable: false) {
   "unique identifier for each instance of the WrappedDomain entity"
   id: ID!
   "The domain that is wrapped by this WrappedDomain"
@@ -275,7 +277,7 @@ type WrappedDomain @entity {
   name: String
 }
 
-type Account @entity {
+type Account @entity(immutable: false) {
   "The unique identifier for the account"
   id: ID!
   "The domains owned by the account"
@@ -284,9 +286,17 @@ type Account @entity {
   wrappedDomains: [WrappedDomain!] @derivedFrom(field: "owner")
   "The Registrations made by the account"
   registrations: [Registration!] @derivedFrom(field: "registrant")
+  "The ENSv2 name slots currently owned by the account"
+  ensv2Slots: [ENSv2NameSlot!]! @derivedFrom(field: "owner")
+  "The ENSv2 tokens currently owned by the account"
+  ensv2Tokens: [ENSv2Token!]! @derivedFrom(field: "owner")
+  "The account's ENSIP-19 default primary name (at most one; keyed by address). Forward-verify before trusting it."
+  ensv2PrimaryNames: [ENSv2PrimaryName!]! @derivedFrom(field: "account")
+  "The ENSv2 registrations currently owned by the account"
+  ensv2Registrations: [ENSv2Registration!]! @derivedFrom(field: "owner")
 }
 
-type Resolver @entity {
+type Resolver @entity(immutable: false) {
   "The unique identifier for this resolver, which is a concatenation of the resolver address and the domain namehash"
   id: ID!
   "The domain that this resolver is associated with"
@@ -316,7 +326,7 @@ interface ResolverEvent {
   transactionID: Bytes!
 }
 
-type AddrChanged implements ResolverEvent @entity {
+type AddrChanged implements ResolverEvent @entity(immutable: true) {
   "Unique identifier for this event"
   id: ID!
   "The resolver associated with this event"
@@ -329,7 +339,7 @@ type AddrChanged implements ResolverEvent @entity {
   addr: Account!
 }
 
-type MulticoinAddrChanged implements ResolverEvent @entity {
+type MulticoinAddrChanged implements ResolverEvent @entity(immutable: true) {
   "Unique identifier for the event"
   id: ID!
   "Resolver associated with this event"
@@ -344,7 +354,7 @@ type MulticoinAddrChanged implements ResolverEvent @entity {
   addr: Bytes!
 }
 
-type NameChanged implements ResolverEvent @entity {
+type NameChanged implements ResolverEvent @entity(immutable: true) {
   "Concatenation of block number and log ID"
   id: ID!
   "Used to derive relationships to Resolvers"
@@ -357,7 +367,7 @@ type NameChanged implements ResolverEvent @entity {
   name: String!
 }
 
-type AbiChanged implements ResolverEvent @entity {
+type AbiChanged implements ResolverEvent @entity(immutable: true) {
   "Concatenation of block number and log ID"
   id: ID!
   "Used to derive relationships to Resolvers"
@@ -370,7 +380,7 @@ type AbiChanged implements ResolverEvent @entity {
   contentType: BigInt!
 }
 
-type PubkeyChanged implements ResolverEvent @entity {
+type PubkeyChanged implements ResolverEvent @entity(immutable: true) {
   "Concatenation of block number and log ID"
   id: ID!
   "Used to derive relationships to Resolvers"
@@ -385,7 +395,7 @@ type PubkeyChanged implements ResolverEvent @entity {
   y: Bytes!
 }
 
-type TextChanged implements ResolverEvent @entity {
+type TextChanged implements ResolverEvent @entity(immutable: true) {
   "Concatenation of block number and log ID"
   id: ID!
   "Used to derive relationships to Resolvers"
@@ -400,7 +410,7 @@ type TextChanged implements ResolverEvent @entity {
   value: String
 }
 
-type ContenthashChanged implements ResolverEvent @entity {
+type ContenthashChanged implements ResolverEvent @entity(immutable: true) {
   "Concatenation of block number and log ID"
   id: ID!
   "Used to derive relationships to Resolvers"
@@ -413,7 +423,7 @@ type ContenthashChanged implements ResolverEvent @entity {
   hash: Bytes!
 }
 
-type InterfaceChanged implements ResolverEvent @entity {
+type InterfaceChanged implements ResolverEvent @entity(immutable: true) {
   "Concatenation of block number and log ID"
   id: ID!
   "Used to derive relationships to Resolvers"
@@ -428,7 +438,7 @@ type InterfaceChanged implements ResolverEvent @entity {
   implementer: Bytes!
 }
 
-type AuthorisationChanged implements ResolverEvent @entity {
+type AuthorisationChanged implements ResolverEvent @entity(immutable: true) {
   "Unique identifier for this event"
   id: ID!
   "The resolver associated with this event"
@@ -445,7 +455,7 @@ type AuthorisationChanged implements ResolverEvent @entity {
   isAuthorized: Boolean!
 }
 
-type VersionChanged implements ResolverEvent @entity {
+type VersionChanged implements ResolverEvent @entity(immutable: true) {
   "Unique identifier for this event"
   id: ID!
   "The resolver associated with this event"
@@ -456,4 +466,778 @@ type VersionChanged implements ResolverEvent @entity {
   transactionID: Bytes!
   "The new version number of the resolver"
   version: BigInt!
+}
+
+# ---------------------------------------------------------------------------
+# ENSv2 native and compatibility entities.
+# ENSv2-native entities are the source of truth for registries, namespaces,
+# slots, tokens, resources, and linked paths. Domain (above) and eligible
+# ENSv2NamePath rows are bounded compatibility projections and do not backfill
+# registrations that predate a namespace link. RootRegistry paths are
+# materialized natively but remain unprojected because root-label namehashes
+# can collide with existing ENSv1 TLD Domain rows.
+# ---------------------------------------------------------------------------
+
+enum ENSv2RegistryKind {
+  ROOT
+  ETH
+  USER
+  WRAPPER
+  REVERSE
+  UNKNOWN
+}
+
+enum ENSv2NameSlotStatus {
+  AVAILABLE
+  RESERVED
+  REGISTERED
+}
+
+type ENSv2Registry @entity(immutable: false) {
+  id: Bytes! # registry address
+  address: Bytes!
+  # The implementation the proxy runs: set from ProxyDeployed, then followed
+  # through ERC1967 Upgraded. Classifies `kind` (on discovery) and selects
+  # implementation-specific behaviour such as unregister clearing.
+  implementation: Bytes
+  kind: ENSv2RegistryKind!
+  canonicalParentRegistry: ENSv2Registry
+  canonicalParentLabel: String
+  namespaces: [ENSv2Namespace!]! @derivedFrom(field: "registry")
+  namespaceCount: Int!
+  # The namespaces this registry's names currently have ENSv2NamePath (and
+  # Domain) rows under: its canonical namespace, plus at most 8 aliases, and
+  # never more than 16 in total (ensv2Paths.ts). Every registration writes one
+  # path per entry, so the list is what bounds the cost of a registration.
+  materializedNamespaces: [ENSv2Namespace!]!
+  # How many times the registry's names have been projected under a canonical
+  # namespace and under an alias, over its whole life: first links, and every
+  # time a link (its own, or one further up the tree) was removed and made
+  # again. Each pool stops at 32, after which further links of that kind are
+  # recorded but not projected. This is what stops a link being toggled to
+  # redo a whole registry's projection for one cheap event. The two pools are
+  # separate so that linking a registry under other names cannot use up the
+  # allowance of its own name. Not counted for the RootRegistry and
+  # ETHRegistry, which are never backfilled.
+  canonicalMaterializations: Int!
+  aliasMaterializations: Int!
+  # True once the registry's own events are indexed: it is the RootRegistry
+  # or ETHRegistry, it was deployed through VerifiableFactory, or it has
+  # emitted LabelRegistered, LabelReserved or ParentUpdated. False for an
+  # address that a name merely points at, or that a registry names as its
+  # parent, and that has emitted nothing itself.
+  indexed: Boolean!
+  # Number of ENSv2RegistrySlotIndex rows: every slot this registry has ever
+  # had, so a namespace linked after its names were registered can project them.
+  slotCount: Int!
+  discoveredAt: BigInt!
+  createdAtBlock: BigInt!
+  updatedAtBlock: BigInt!
+  # Registry-level token metadata URI template and renderer.
+  # Current-state only, like the sibling resolver/subregistry fields on
+  # ENSv2NameSlot — URIUpdated's own history isn't otherwise meaningful.
+  uri: String
+  uriRenderer: Bytes
+}
+# Two other PermissionedRegistry events are intentionally unwired:
+# RegistryCreated() fires from the same constructor path that
+# ProxyDeployed/bootstrapRegistry already use to create this row, so it adds
+# no information; URI(string,uint256) is part of the standard ERC1155
+# interface this contract implements but is never actually emitted anywhere
+# in its own source (confirmed on-chain: zero occurrences from RootRegistry
+# or ETHRegistry directly — the nonzero network-wide topic0 count is
+# collisions with unrelated ERC1155 contracts on the same chain, since
+# URI(string,uint256) is a very common signature).
+
+# HCA (Hierarchical Context Authority) proxies are deployed through the same
+# VerifiableFactory this subgraph already indexes for ENSv2Registry proxies
+# — StandaloneHCAFactory shares that instance rather than deploying its own
+# — so an HCA deployment fires the identical ProxyDeployed event a registry
+# deployment does. Recorded separately here rather than folded into
+# ENSv2Registry: an HCA isn't a registry (no namespaces/subdomains under
+# it), so giving it a Registry row — even tagged UNKNOWN — would be wrong,
+# not just imprecise. An HCA is an optional per-wallet ENS execution account,
+# not the wallet's identity.
+type ENSv2HCA @entity(immutable: false) {
+  id: Bytes! # HCA proxy address
+  implementation: Bytes!
+  # ProxyDeployed's own `sender` param — the caller of
+  # StandaloneHCAFactory.deploy(...), not necessarily the HCA's eventual
+  # owner (the real owner is an argument to that call, not surfaced on the
+  # ProxyDeployed event itself).
+  deployer: Bytes!
+  discoveredAt: BigInt!
+  createdAtBlock: BigInt!
+}
+
+# ENSIP-19 "default" (chain-agnostic) primary name, set via
+# DefaultReverseRegistrar.setName()/setNameForAddr()/setNameForAddrWithSignature()
+# — a flat address -> name mapping (contracts-v2's
+# lib/ens-contracts/contracts/reverseRegistrar/StandaloneReverseRegistrar.sol
+# ::_names), entirely separate from the legacy node-keyed addr.reverse scheme
+# the existing v1 ENSRegistry/Resolver sources already pick up generically
+# (NewResolver/NameChanged on any node, including addr.reverse subnodes).
+# Deliberately NOT named ENSv2ReverseRecord/PrimaryName-generic: this entity
+# is specifically the ENSIP-19 "default" reverse record, not a general
+# reverse-resolution model — a coin-type-specific (non-default) reverse
+# record would be a different mechanism/contract entirely, out of scope here.
+type ENSv2PrimaryName @entity(immutable: false) {
+  id: Bytes! # the address itself
+  account: Account!
+  # Null exactly when the last NameForAddrChanged carried an empty string —
+  # the contract's own clearing convention (StandaloneReverseRegistrar has no
+  # separate "cleared" event), matching this schema's established pattern for
+  # other entities where an empty/zero value is the clear signal.
+  name: String
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+  "Blockscout/BENS extension: namehash of <address>.addr.reverse, so the legacy reverse-name lookup (keyed by that node) can join this record without keccak in SQL"
+  reverseNode: Bytes
+}
+
+type ENSv2NameSlot @entity(immutable: false) {
+  id: Bytes! # registry-address + slotId
+  registry: ENSv2Registry!
+  slotId: BigInt!
+  labelhash: Bytes!
+  label: String
+  currentResource: ENSv2Resource # null while AVAILABLE
+  currentToken: ENSv2Token # null while AVAILABLE
+  owner: Account # active native owner; null while AVAILABLE
+  registrant: Account # active native registrant; null while AVAILABLE
+  resolverAddress: Bytes # denormalised convenience copy of resolver's address; null exactly when resolver is null
+  resolver: ENSv2Resolver
+  subregistryAddress: Bytes # denormalised convenience copy of subregistry's address; null exactly when subregistry is null
+  subregistry: ENSv2Registry
+  status: ENSv2NameSlotStatus!
+  expiryDate: BigInt
+  pathCount: Int! # paths bound to the slot; the length of its ENSv2SlotPathIndex list
+  registryIndex: Int! # the slot's position in its registry's ENSv2RegistrySlotIndex
+  migratedFromV1: Boolean! # true if the current registration's sender was a migration controller
+  resources: [ENSv2Resource!]! @derivedFrom(field: "slot")
+  paths: [ENSv2NamePath!]! @derivedFrom(field: "slot")
+  events: [ENSv2NameSlotEvent!]! @derivedFrom(field: "slot")
+  createdAt: BigInt!
+  updatedAt: BigInt!
+  createdAtBlock: BigInt!
+  updatedAtBlock: BigInt!
+}
+
+type ENSv2Resource @entity(immutable: false) {
+  id: Bytes! # registry-address + resource
+  registry: ENSv2Registry!
+  slot: ENSv2NameSlot!
+  resource: BigInt!
+  currentToken: ENSv2Token
+  active: Boolean!
+  createdAt: BigInt!
+  endedAt: BigInt
+  createdAtBlock: BigInt!
+  updatedAtBlock: BigInt!
+}
+
+type ENSv2Token @entity(immutable: false) {
+  id: Bytes! # registry-address + tokenId
+  registry: ENSv2Registry!
+  slot: ENSv2NameSlot
+  resource: BigInt
+  resourceEntity: ENSv2Resource
+  tokenId: BigInt!
+  owner: Account
+  active: Boolean!
+  createdAtBlock: BigInt!
+  updatedAtBlock: BigInt!
+}
+
+type ENSv2NamePath @entity(immutable: false) {
+  id: Bytes! # namehash hex
+  slot: ENSv2NameSlot!
+  registry: ENSv2Registry! # registry that owns this label slot
+  namespace: ENSv2Namespace!
+  parent: ENSv2NamePath
+  label: String
+  labelhash: Bytes!
+  name: String
+  namehash: Bytes!
+  depth: Int!
+  domain: Domain # compatibility projection; nullable for late-linked and root paths
+  active: Boolean!
+  namespaceCount: Int! # needed to enumerate ENSv2PathNamespaceIndex
+  # Position in its namespace's ENSv2NamespacePathIndex list while the path
+  # is active, -1 otherwise.
+  namespaceIndex: Int!
+  # Position in its slot's ENSv2SlotPathIndex list.
+  slotIndex: Int!
+  # The namespace currently linked below this name, if any. A name has one
+  # subregistry at a time, so there is at most one, and retiring the name
+  # follows this instead of scanning every namespace it ever had.
+  activeNamespace: ENSv2Namespace
+  # True once the ENSv1 names below this name stopped resolving through
+  # ENSv1 for good. ENSv2 resolves a name from its registries, so once a name
+  # is registered in ENSv2 the ENSv1 names below it are answered by its
+  # ENSv2 resolver or not at all. Their Domain rows, at every depth, were
+  # cleared of resolver and resolved address at that point, and ENSv1
+  # NewResolver events for them are recorded as history only from then on.
+  # Set when the name is first projected, when it is retired, and when a
+  # subregistry linked under it could not be projected. Never reset: a name
+  # below shows an address again only when ENSv2 projects it.
+  # False on a name migrated from a locked ENSv1 NameWrapper name: its
+  # WrapperRegistry still sends emancipated subnames that have not migrated
+  # to ENSv1, so those keep their ENSv1 rows; every other ENSv1 name below
+  # was cleared all the same.
+  legacySubtreeVoided: Boolean!
+  createdAt: BigInt!
+  updatedAt: BigInt!
+  createdAtBlock: BigInt!
+  updatedAtBlock: BigInt!
+}
+
+type ENSv2Namespace @entity(immutable: false) {
+  id: Bytes! # registry + baseNamehash
+  registry: ENSv2Registry! # registry serving this namespace
+  parentPath: ENSv2NamePath # e.g. base.eth for the registry serving *.base.eth
+  parentSlot: ENSv2NameSlot
+  parentRegistry: ENSv2Registry
+  parentSlotId: BigInt
+  parentTokenId: BigInt
+  parentResource: BigInt
+  baseName: String
+  baseNamehash: Bytes!
+  active: Boolean!
+  # True while the registry's names are projected under this namespace: they
+  # get ENSv2NamePath (and Domain) rows as they are registered, and the names
+  # registered before the link are being, or have been, projected (see
+  # `backfilled`). An active namespace with `materialized: false` is linked
+  # on chain but not projected: the registry already had its 8 alias
+  # namespaces, it sits more than 16 registries below the link that changed,
+  # or the registry has used up its lifetime projections of that kind
+  # (ENSv2Registry.canonicalMaterializations / aliasMaterializations).
+  # Emitting the link again (setSubregistry with the same address) retries.
+  materialized: Boolean!
+  # True once every name the registry had when the namespace was linked has
+  # been projected under it. One event projects at most 10,000 names, so a
+  # larger registry is projected over the ENSv2 registry events that follow
+  # (any registry's), 10,000 names per event, and `backfilled` is false until
+  # the last of them. It is also false, and stays false, while names are left
+  # out because a name above already has 100,000 names below it
+  # (ENSv2SubtreeSize); emitting the link again retries those. While it is
+  # false, a name of the registry may have no ENSv2NamePath or Domain yet.
+  backfilled: Boolean!
+  # How many of the registry's slots (ENSv2RegistrySlotIndex positions) have
+  # been looked at for this namespace; where the projection resumes.
+  backfillCursor: Int!
+  # Bookkeeping: true while the namespace waits in the ENSv2BackfillQueue.
+  backfillQueued: Boolean!
+  # True when the parent name is the one the registry declares as its parent
+  # (ParentUpdated) and that name is itself reached through a canonical
+  # namespace. A canonical namespace is materialised ahead of aliases, so
+  # linking someone else's registry under other names cannot crowd it out.
+  # Evaluated when the namespace is linked, when its registry's parent
+  # declaration changes, and when a namespace above it becomes canonical or
+  # stops being so (for the first 100,000 names below that declaration).
+  canonical: Boolean!
+  pathCount: Int! # active paths under the namespace; the length of its ENSv2NamespacePathIndex list
+  createdAt: BigInt!
+  createdAtBlock: BigInt!
+  updatedAtBlock: BigInt!
+  transactionID: Bytes
+  logIndex: BigInt
+}
+
+type ENSv2NamespaceLink @entity(immutable: false) {
+  id: Bytes! # parent registry + parent slot + child address
+  parentRegistry: ENSv2Registry!
+  parentSlot: ENSv2NameSlot
+  parentSlotId: BigInt!
+  parentTokenId: BigInt
+  parentResource: BigInt
+  childRegistryAddress: Bytes!
+  childRegistry: ENSv2Registry
+  active: Boolean!
+  transactionID: Bytes!
+  blockNumber: BigInt!
+  logIndex: BigInt!
+}
+
+type ENSv2Resolver @entity(immutable: false) {
+  id: Bytes! # resolver address
+  address: Bytes!
+  # True once the address has emitted PermissionedResolver (recordId-keyed)
+  # events. Such a resolver answers for a node without its own record from
+  # its default record (the record linked to the root node).
+  recordBased: Boolean!
+  # Number of ENSv2ResolverAttachmentIndex rows: names ever pointed at this
+  # (record-based) resolver, so a default-record change can reach them.
+  attachmentCount: Int!
+  # True once this resolver has names whose records are not projected to the
+  # legacy side: one event refreshes at most 100 names (the first 100 linked
+  # to a record, and the first 100 pointed at the resolver for its default
+  # record; ensv2ResolverProjection.ts). A name beyond that is never given a
+  # record snapshot, so its legacy Resolver and Domain.resolvedAddress are
+  # empty rather than out of date. The ENSv2Resolver* entities are always
+  # complete.
+  legacyProjectionTruncated: Boolean!
+  slots: [ENSv2NameSlot!]! @derivedFrom(field: "resolver")
+  # PermissionedResolver's recordId-keyed model — see ENSv2ResolverRecord below.
+  records: [ENSv2ResolverRecord!]! @derivedFrom(field: "resolver")
+  links: [ENSv2ResolverLink!]! @derivedFrom(field: "resolver")
+}
+
+type ENSv2ResolverAttachment @entity(immutable: true) {
+  id: Bytes! # resolver + node
+  resolver: ENSv2Resolver!
+  node: Bytes!
+  # Position among the names ever pointed at the resolver. Only the first 100
+  # follow the resolver's default record (ensv2ResolverProjection.ts).
+  index: Int!
+}
+
+type ENSv2ResolverAttachmentIndex @entity(immutable: true) {
+  id: Bytes! # resolver + index
+  resolver: ENSv2Resolver!
+  index: Int!
+  attachment: ENSv2ResolverAttachment!
+}
+
+type ENSv2RoleAssignment @entity(immutable: false) {
+  id: Bytes! # contract-address + resource + account
+  contract: Bytes!
+  resource: BigInt!
+  resourceEntity: ENSv2Resource
+  resourceArgument: ENSv2ResolverResourceArgument
+  account: Account!
+  roleBitmap: BigInt!
+  updatedAtBlock: BigInt!
+}
+
+# Argument bytes used to derive an argument-scoped PermissionedResolver role
+# resource. ResourceArgument is emitted once before the first role grant for
+# that resource; this row retains the latest observed metadata.
+type ENSv2ResolverResourceArgument @entity(immutable: false) {
+  id: Bytes! # resolver + resource
+  resolver: ENSv2Resolver!
+  resource: BigInt!
+  arg: Bytes!
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+}
+
+type ENSv2RoleChange @entity(immutable: true) {
+  id: Bytes!
+  contract: Bytes!
+  resource: BigInt!
+  account: Account!
+  oldRoleBitmap: BigInt!
+  newRoleBitmap: BigInt!
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+}
+
+interface ENSv2NameSlotEvent {
+  id: Bytes!
+  slot: ENSv2NameSlot!
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+}
+
+type ENSv2LabelRegistered implements ENSv2NameSlotEvent
+  @entity(immutable: true) {
+  id: Bytes! # transactionID-logIndex
+  slot: ENSv2NameSlot!
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+  owner: Account!
+  expiryDate: BigInt!
+  isReRegistration: Boolean!
+  sender: Bytes! # event.params.sender, the actual caller of register()
+  isV1Migration: Boolean! # true if sender matches a known migration controller address
+}
+
+type ENSv2LabelRenewed implements ENSv2NameSlotEvent @entity(immutable: true) {
+  id: Bytes!
+  slot: ENSv2NameSlot!
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+  newExpiryDate: BigInt!
+}
+
+type ENSv2LabelUnregistered implements ENSv2NameSlotEvent
+  @entity(immutable: true) {
+  id: Bytes!
+  slot: ENSv2NameSlot!
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+  sender: Bytes!
+}
+
+type ENSv2TokenTransferred implements ENSv2NameSlotEvent
+  @entity(immutable: true) {
+  id: Bytes!
+  slot: ENSv2NameSlot!
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+  from: Account!
+  to: Account!
+  tokenId: BigInt!
+}
+
+type ENSv2TokenRegenerated implements ENSv2NameSlotEvent
+  @entity(immutable: true) {
+  id: Bytes!
+  slot: ENSv2NameSlot!
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+  oldTokenId: BigInt!
+  newTokenId: BigInt!
+}
+
+type ENSv2ResolverUpdate implements ENSv2NameSlotEvent
+  @entity(immutable: true) {
+  id: Bytes!
+  slot: ENSv2NameSlot!
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+  resolverAddress: Bytes # null means setResolver(..., address(0))
+  sender: Bytes!
+}
+
+type ENSv2SubregistryUpdate implements ENSv2NameSlotEvent
+  @entity(immutable: true) {
+  id: Bytes!
+  slot: ENSv2NameSlot!
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+  subregistryAddress: Bytes # null means setSubregistry(..., address(0))
+  sender: Bytes!
+}
+
+type ENSv2Registration @entity(immutable: false) {
+  id: Bytes! # registry address + slotId; same scheme as ENSv2NameSlot.id
+  slot: ENSv2NameSlot!
+  resource: ENSv2Resource
+  path: ENSv2NamePath
+  label: String
+  # owner/duration/paymentToken/referrer/base/premium are all unconditionally
+  # set from non-optional NameRegistered event params on every creation
+  # path in handleNameRegistered — tightened from nullable to match that
+  # actual event data.
+  owner: Account!
+  duration: BigInt!
+  paymentToken: Bytes!
+  referrer: Bytes!
+  base: BigInt!
+  premium: BigInt!
+  registrationDate: BigInt!
+  # Always set from the registration event on creation.
+  expiryDate: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+}
+
+# PublicResolverV2's generic node-keyed DataChanged profile. It is indexed by
+# the existing addressless classic Resolver source, not PermissionedResolver.
+type ENSv2ResolverData @entity(immutable: false) {
+  id: Bytes! # resolver + node + key
+  resolver: ENSv2Resolver!
+  node: Bytes!
+  key: String!
+  # No `value` field: DataChanged's real signature only logs the data's
+  # keccak256 hash as an indexed topic (indexedData), never the raw bytes —
+  # no code path could ever populate one (see src/resolver.ts::handleDataChanged).
+  # The raw value cannot be recovered from this event.
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+}
+
+# --- Deployed recordId-keyed PermissionedResolver event model ---
+# A recordId is an opaque integer, minted once per resolver instance
+# (contracts-v2's _recordCount/_recordIds are per-contract storage — a
+# recordId is only unique WITHIN one resolver, never globally, hence every
+# id below being resolver-prefixed). The first setter call for a
+# previously-unlinked DNS name allocates a fresh recordId and emits
+# Linked(recordId, node, name); every later setter call on an
+# already-linked name fires only its own *Updated(recordId, ...) event — no
+# node/name, Linked isn't re-emitted. Multiple names can share one recordId
+# via explicit linkToNode/linkToRecord. linkToRecord(name, 0) is a real,
+# valid "explicitly unlink" call — recordId == 0 is reachable on Linked,
+# never on any *Updated event (setters always resolve to recordId >= 1).
+
+type ENSv2ResolverRecord @entity(immutable: false) {
+  id: Bytes! # resolver + recordId
+  resolver: ENSv2Resolver!
+  recordId: BigInt!
+  contenthash: Bytes
+  primaryName: String
+  addresses: [ENSv2ResolverAddress!]! @derivedFrom(field: "record")
+  texts: [ENSv2ResolverText!]! @derivedFrom(field: "record")
+  datas: [ENSv2ResolverRecordData!]! @derivedFrom(field: "record")
+  abis: [ENSv2ResolverABI!]! @derivedFrom(field: "record")
+  interfaces: [ENSv2ResolverInterface!]! @derivedFrom(field: "record")
+  links: [ENSv2ResolverLink!]! @derivedFrom(field: "record")
+  memberships: [ENSv2ResolverRecordLinkMembership!]!
+    @derivedFrom(field: "record")
+  linkIndexCount: Int!
+  addressIndexCount: Int!
+  textIndexCount: Int!
+  createdAtBlock: BigInt!
+  updatedAtBlock: BigInt!
+}
+
+# One row per (resolver, node) — the name-to-record association, written by
+# Linked. `record` is null exactly when `recordId` is the literal 0
+# sentinel (an explicit unlink via linkToRecord(name, 0)), never deleted —
+# retained as current state rather than deleting the row.
+type ENSv2ResolverLink @entity(immutable: false) {
+  id: Bytes! # resolver + node
+  resolver: ENSv2Resolver!
+  node: Bytes!
+  name: Bytes! # DNS-encoded
+  # Null when the name is malformed, has an invalid label or is longer than
+  # 255 bytes (not decoded).
+  nameDecoded: String
+  record: ENSv2ResolverRecord
+  recordId: BigInt! # always set, including the literal 0 unlink sentinel
+  active: Boolean! # recordId != 0
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+}
+
+type ENSv2ResolverAddress @entity(immutable: false) {
+  id: Bytes! # record + coinType
+  record: ENSv2ResolverRecord!
+  coinType: BigInt!
+  index: Int!
+  addressBytes: Bytes!
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+}
+
+type ENSv2ResolverText @entity(immutable: false) {
+  id: Bytes! # record + keyHash
+  record: ENSv2ResolverRecord!
+  key: String!
+  value: String!
+  keyHash: Bytes!
+  index: Int!
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+}
+
+# Explicit record-to-node membership. This is separate from
+# ENSv2ResolverLink so a record can enumerate its current and former members
+# without relying on @derivedFrom inside a mapping.
+type ENSv2ResolverRecordLinkMembership @entity(immutable: false) {
+  id: Bytes! # record + node
+  record: ENSv2ResolverRecord!
+  link: ENSv2ResolverLink!
+  node: Bytes!
+  index: Int!
+  active: Boolean!
+}
+
+type ENSv2ResolverRecordLinkIndex @entity(immutable: true) {
+  id: Bytes! # record + uint32(index)
+  record: ENSv2ResolverRecord!
+  index: Int!
+  membership: ENSv2ResolverRecordLinkMembership!
+}
+
+type ENSv2ResolverAddressIndex @entity(immutable: true) {
+  id: Bytes! # record + uint32(index)
+  record: ENSv2ResolverRecord!
+  index: Int!
+  address: ENSv2ResolverAddress!
+}
+
+type ENSv2ResolverTextIndex @entity(immutable: true) {
+  id: Bytes! # record + uint32(index)
+  record: ENSv2ResolverRecord!
+  index: Int!
+  text: ENSv2ResolverText!
+}
+
+# Deliberately not named ENSv2ResolverData (the node-keyed PublicResolverV2
+# DataChanged entity above) — PermissionedResolver's DataUpdated event's
+# `value` param is non-indexed and fully recoverable, unlike the old
+# DataChanged's (indexed-only, unrecoverable, why ENSv2ResolverData has no
+# `value` field). Genuinely different capability;
+# distinct entity name so a schema reader doesn't conflate the two.
+type ENSv2ResolverRecordData @entity(immutable: false) {
+  id: Bytes! # record + keyHash
+  record: ENSv2ResolverRecord!
+  key: String!
+  value: Bytes!
+  keyHash: Bytes!
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+}
+
+type ENSv2ResolverABI @entity(immutable: false) {
+  id: Bytes! # record + contentType
+  record: ENSv2ResolverRecord!
+  contentType: BigInt!
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+}
+
+type ENSv2ResolverInterface @entity(immutable: false) {
+  id: Bytes! # record + interfaceId
+  record: ENSv2ResolverRecord!
+  interfaceId: Bytes!
+  implementer: Bytes!
+  blockNumber: BigInt!
+  transactionID: Bytes!
+  logIndex: BigInt!
+}
+
+type ENSv2RegistryNamespaceIndex @entity(immutable: true) {
+  id: Bytes! # registry + index
+  registry: ENSv2Registry!
+  index: Int!
+  namespace: ENSv2Namespace!
+}
+
+type ENSv2RegistrySlotIndex @entity(immutable: true) {
+  id: Bytes! # registry + index
+  registry: ENSv2Registry!
+  index: Int!
+  slot: ENSv2NameSlot!
+}
+
+# How much is projected below a name, at every depth: one unit for each
+# active ENSv2NamePath and two for each subregistry projected under a name
+# (a materialised ENSv2Namespace). One row per ENSv2NamePath that has, or has
+# had, anything below it (id: the path's namehash), and one per
+# ENSv2NameSlot (id: the slot id) holding the sum over the slot's paths.
+# Removing a link, an unregistration and a re-registration retire everything
+# below one slot in a single event, so the slot's count is capped at
+# 100,000: a name or subregistry that would take any slot above it past that
+# is not projected (the name stays in the native slot graph, the link is
+# recorded), which keeps every retirement within what one handler can do.
+# Names directly under the RootRegistry (eth) are neither counted nor
+# capped.
+type ENSv2SubtreeSize @entity(immutable: false) {
+  id: Bytes! # ENSv2NamePath id (32 bytes) or ENSv2NameSlot id (52 bytes)
+  paths: Int! # units: active paths, plus two per projected subregistry
+}
+
+# How many Domain rows name a Domain as their parent: every child ever
+# indexed, live or deleted (Domain.subdomainCount counts the live ones).
+# Reading a name's children loads all of these rows, so the sweep that clears
+# ENSv1 names below an ENSv2 name checks this before it does
+# (legacyGovernance.ts).
+type DomainChildRows @entity(immutable: false) {
+  id: Bytes! # namehash of the parent
+  rows: Int!
+}
+
+# Namespaces whose registry had more names when it was linked than one event
+# projects (ENSv2Namespace.backfilled: false), in the order they are taken up
+# again. A single row; tasks are numbered from `head` (next to run) to
+# `tail` (next free).
+type ENSv2BackfillQueue @entity(immutable: false) {
+  id: Bytes!
+  head: Int!
+  tail: Int!
+}
+
+type ENSv2BackfillTask @entity(immutable: false) {
+  id: Bytes! # position in the queue
+  namespace: ENSv2Namespace!
+}
+
+# The paths bound to a slot, as a dense list: positions 0 to
+# ENSv2NameSlot.pathCount - 1. A path that another slot takes over (a parent
+# that switches subregistry hands the same namehash to the new registry's
+# slot) leaves the list, so it holds one row per name the slot is reached
+# under and does not grow with how often paths change hands; rows at or past
+# pathCount are left over and mean nothing.
+type ENSv2SlotPathIndex @entity(immutable: false) {
+  id: Bytes! # slot + index
+  slot: ENSv2NameSlot!
+  index: Int!
+  path: ENSv2NamePath!
+}
+
+type ENSv2PathNamespaceIndex @entity(immutable: true) {
+  id: Bytes! # path + index
+  path: ENSv2NamePath!
+  index: Int!
+  namespace: ENSv2Namespace!
+}
+
+# An ENSv1 subname that a WrapperRegistry was still sending to ENSv1 (an
+# emancipated NameWrapper subname below a locked name that migrated) and that
+# then left the NameWrapper. The subgraph drops a name's fuses and expiry when
+# it is unwrapped, so it can no longer tell how long ENSv1 answers for it:
+# the name and every ENSv1 name below it lost resolver and resolved address
+# at that point and take none from ENSv1 afterwards, wrapped again or not
+# (legacyGovernance.ts rule 3). Written once per name, which is also what
+# keeps wrapping and unwrapping from repeating the work.
+type ENSv2LegacyCutoff @entity(immutable: true) {
+  id: Bytes! # namehash of the ENSv1 name
+  blockNumber: BigInt!
+  timestamp: BigInt!
+}
+
+# Reverse of ENSv2PathNamespaceIndex above (path -> its namespaces) — this
+# is namespace -> the paths materialised under it, needed to deactivate all
+# of a namespace's paths in bounded time when the namespace itself is
+# deactivated, the same way ENSv2SlotPathIndex already lets
+# handleLabelUnregistered deactivate a slot's own paths.
+# The active paths of a namespace, as a dense list: positions 0 to
+# ENSv2Namespace.pathCount - 1. A path that is retired on its own gives its
+# position to the last one, so the list never holds more than the namespace
+# has live names, however many it has had; rows at or past pathCount are
+# left over and mean nothing. Retiring a namespace walks this list.
+type ENSv2NamespacePathIndex @entity(immutable: false) {
+  id: Bytes! # namespace + index
+  namespace: ENSv2Namespace!
+  index: Int!
+  path: ENSv2NamePath!
+}
+
+# ---------------------------------------------------------------------------
+# Access and admin visibility. Current-state only, with no history entities.
+# ---------------------------------------------------------------------------
+
+type OperatorApproval @entity(immutable: false) {
+  id: Bytes! # contract-owner-operator
+  contract: Bytes!
+  owner: Account!
+  operator: Account!
+  approved: Boolean!
+  updatedAtBlock: BigInt!
+}
+
+type ContractOwnership @entity(immutable: false) {
+  id: Bytes! # contract address
+  contract: Bytes!
+  owner: Account!
+  updatedAtBlock: BigInt!
+}
+
+type RegistrarController @entity(immutable: false) {
+  id: Bytes! # contract-controller
+  contract: Bytes!
+  controller: Bytes!
+  active: Boolean!
+  updatedAtBlock: BigInt!
 }
