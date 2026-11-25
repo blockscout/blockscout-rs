@@ -8,8 +8,6 @@ use super::{
     block_ranges::BlockRange,
     counters::{ChainCounters, Counters},
     hashes::{Hash, proto_hash_type_to_db_hash_type},
-    interop_message_transfers::InteropMessageTransfer,
-    interop_messages::InteropMessage,
 };
 use crate::{
     error::{ParseError, ServiceError},
@@ -21,15 +19,13 @@ use crate::{
     },
 };
 use chrono::NaiveDateTime;
-use sea_orm::prelude::BigDecimal;
-use std::{collections::HashMap, str::FromStr};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct BatchImportRequest {
     pub block_ranges: Vec<BlockRange>,
     pub hashes: Vec<Hash>,
     pub addresses: Vec<Address>,
-    pub interop_messages: Vec<InteropMessage>,
     pub address_coin_balances: Vec<AddressCoinBalance>,
     pub address_token_balances: Vec<AddressTokenBalance>,
     pub tokens: Vec<TokenUpdate>,
@@ -59,17 +55,6 @@ impl BatchImportRequest {
         );
         calculate_entity_metrics!(&self.hashes, |h: &Hash| h.chain_id, "hashes");
         calculate_entity_metrics!(&self.addresses, |a: &Address| a.chain_id, "addresses");
-        calculate_entity_metrics!(
-            &self.interop_messages,
-            |m: &InteropMessage| {
-                if m.init_transaction_hash.is_some() {
-                    m.init_chain_id
-                } else {
-                    m.relay_chain_id
-                }
-            },
-            "interop_messages"
-        );
         calculate_entity_metrics!(
             &self.address_coin_balances,
             |b: &AddressCoinBalance| b.chain_id,
@@ -140,7 +125,6 @@ impl TryFrom<proto::BatchImportRequest> for BatchImportRequest {
                 .collect(),
             hashes: try_into_vec!(value.hashes),
             addresses: try_into_vec!(value.addresses),
-            interop_messages: try_into_vec!(value.interop_messages),
             address_coin_balances: try_into_vec!(value.address_coin_balances),
             address_token_balances: try_into_vec!(value.address_token_balances),
             tokens: try_into_vec!(value.tokens),
@@ -234,135 +218,6 @@ impl TryFrom<(ChainId, proto::batch_import_request::AddressImport)> for Address 
             contract_name: a.contract_name,
             is_contract: a.is_contract.unwrap_or(false),
             is_verified_contract: a.is_verified_contract.unwrap_or(false),
-        })
-    }
-}
-
-impl TryFrom<(ChainId, proto::batch_import_request::InteropMessageImport)> for InteropMessage {
-    type Error = ParseError;
-
-    fn try_from(
-        (chain_id, m): (ChainId, proto::batch_import_request::InteropMessageImport),
-    ) -> Result<Self, Self::Error> {
-        let message = m.message.ok_or_else(|| {
-            ParseError::Custom("interop message is missing or invalid".to_string())
-        })?;
-        let msg = match message {
-            proto::batch_import_request::interop_message_import::Message::Init(init) => {
-                let msg: InteropMessage = init.try_into()?;
-                if msg.init_chain_id != chain_id {
-                    return Err(ParseError::ChainIdMismatch {
-                        expected: chain_id,
-                        actual: msg.init_chain_id,
-                    });
-                }
-                msg
-            }
-            proto::batch_import_request::interop_message_import::Message::Relay(relay) => {
-                let msg: InteropMessage = relay.try_into()?;
-                if msg.relay_chain_id != chain_id {
-                    return Err(ParseError::ChainIdMismatch {
-                        expected: chain_id,
-                        actual: msg.relay_chain_id,
-                    });
-                }
-                msg
-            }
-        };
-
-        Ok(msg)
-    }
-}
-
-impl TryFrom<proto::batch_import_request::interop_message_import::Init> for InteropMessage {
-    type Error = ParseError;
-
-    fn try_from(
-        m: proto::batch_import_request::interop_message_import::Init,
-    ) -> Result<Self, Self::Error> {
-        let sender_address_hash = Some(m.sender_address_hash.parse()?);
-        let target_address_hash = Some(m.target_address_hash.parse()?);
-        let init_transaction_hash = Some(m.init_transaction_hash.parse()?);
-        let timestamp = Some(parse_timestamp_secs(m.timestamp)?);
-        let payload = Some(m.payload.parse()?);
-
-        let transfer = match m {
-            proto::batch_import_request::interop_message_import::Init {
-                transfer_token_address_hash,
-                transfer_from_address_hash: Some(transfer_from_address_hash),
-                transfer_to_address_hash: Some(transfer_to_address_hash),
-                transfer_amount: Some(transfer_amount),
-                ..
-            } => {
-                let token_address_hash = opt_parse!(transfer_token_address_hash);
-                let from_address_hash = transfer_from_address_hash.parse()?;
-                let to_address_hash = transfer_to_address_hash.parse()?;
-                let amount = BigDecimal::from_str(&transfer_amount)?;
-
-                Some(InteropMessageTransfer {
-                    token_address_hash,
-                    from_address_hash,
-                    to_address_hash,
-                    amount,
-                })
-            }
-            proto::batch_import_request::interop_message_import::Init {
-                transfer_token_address_hash: None,
-                transfer_from_address_hash: None,
-                transfer_to_address_hash: None,
-                transfer_amount: None,
-                ..
-            } => None,
-            _ => {
-                return Err(ParseError::Custom(
-                    "invalid interop message: transfer fields are inconsistent".to_string(),
-                ));
-            }
-        };
-
-        let base_msg = {
-            let nonce = m.nonce;
-            let init_chain_id = m.init_chain_id.parse()?;
-            let relay_chain_id = m.relay_chain_id.parse()?;
-
-            InteropMessage::base(nonce, init_chain_id, relay_chain_id)
-        };
-
-        let msg = InteropMessage {
-            sender_address_hash,
-            target_address_hash,
-            init_transaction_hash,
-            timestamp,
-            payload,
-            transfer,
-            ..base_msg
-        };
-
-        Ok(msg)
-    }
-}
-
-impl TryFrom<proto::batch_import_request::interop_message_import::Relay> for InteropMessage {
-    type Error = ParseError;
-
-    fn try_from(
-        m: proto::batch_import_request::interop_message_import::Relay,
-    ) -> Result<Self, Self::Error> {
-        let base_msg = {
-            let nonce = m.nonce;
-            let init_chain_id = m.init_chain_id.parse()?;
-            let relay_chain_id = m.relay_chain_id.parse()?;
-
-            InteropMessage::base(nonce, init_chain_id, relay_chain_id)
-        };
-
-        let relay_transaction_hash = Some(m.relay_transaction_hash.parse()?);
-        let failed = Some(m.failed);
-
-        Ok(Self {
-            relay_transaction_hash,
-            failed,
-            ..base_msg
         })
     }
 }

@@ -156,36 +156,6 @@ message BatchImportRequest {
     uint64 max_block_number = 2;
   }
 
-  message InteropMessageImport {
-    message Init {
-      string sender_address_hash = 1;
-      string target_address_hash = 2;
-      int64 nonce = 3;
-      string init_chain_id = 4;
-      string init_transaction_hash = 5;
-      int64 timestamp = 6;
-      string relay_chain_id = 7;
-      string payload = 8;
-      optional string transfer_token_address_hash = 9;
-      optional string transfer_from_address_hash = 10;
-      optional string transfer_to_address_hash = 11;
-      optional string transfer_amount = 12;
-    }
-
-    message Relay {
-      int64 nonce = 1;
-      string init_chain_id = 2;
-      string relay_chain_id = 3;
-      string relay_transaction_hash = 4;
-      bool failed = 5;
-    }
-
-    oneof message {
-      Init init = 1;
-      Relay relay = 2;
-    }
-  }
-
   message AddressCoinBalanceImport {
     string address_hash = 1;
     string value = 2;
@@ -250,7 +220,8 @@ message BatchImportRequest {
   repeated AddressImport addresses = 2;
   repeated BlockRangeImport block_ranges = 3;
   repeated HashImport hashes = 4;
-  repeated InteropMessageImport interop_messages = 5;
+  reserved 5;
+  reserved "interop_messages";
   repeated AddressCoinBalanceImport address_coin_balances = 6;
   repeated AddressTokenBalanceImport address_token_balances = 7;
   repeated CountersImport counters = 8;

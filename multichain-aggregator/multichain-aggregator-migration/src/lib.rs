@@ -21,6 +21,7 @@ mod m20260201_195943_add_poor_reputation_tokens;
 mod m20260219_125236_add_erc7984_token_type;
 mod m20260922_101500_add_erc8056_token_type;
 mod m20260922_101600_add_ui_multiplier;
+mod m20261125_120000_drop_interop_messages;
 
 pub struct Migrator;
 
@@ -46,6 +47,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260219_125236_add_erc7984_token_type::Migration),
             Box::new(m20260922_101500_add_erc8056_token_type::Migration),
             Box::new(m20260922_101600_add_ui_multiplier::Migration),
+            Box::new(m20261125_120000_drop_interop_messages::Migration),
         ]
     }
 }

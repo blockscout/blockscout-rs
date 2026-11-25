@@ -12,8 +12,6 @@ pub mod counters;
 pub mod dapp;
 pub mod domains;
 pub mod hashes;
-pub mod interop_message_transfers;
-pub mod interop_messages;
 pub mod order_direction;
 pub mod poor_reputation_tokens;
 pub mod portfolio;

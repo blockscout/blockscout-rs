@@ -43,6 +43,8 @@ pub struct CacheSettings {
     pub domain_info_cache: CacheEntrySettings,
     #[serde(default = "default_domain_protocols_cache")]
     pub domain_protocols_cache: CacheEntrySettings,
+    /// Deprecated: not used anymore. Kept so that existing configs with
+    /// `decoded_calldata_cache` keep passing `deny_unknown_fields`.
     #[serde(default = "default_decoded_calldata_cache")]
     pub decoded_calldata_cache: CacheEntrySettings,
     #[serde(default = "default_token_search_cache")]

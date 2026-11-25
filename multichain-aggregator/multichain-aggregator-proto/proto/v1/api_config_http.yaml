@@ -57,15 +57,6 @@ http:
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListChainMetrics
       get: /api/v1/clusters/{cluster_id}/chain-metrics
 
-    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.ListInteropMessages
-      get: /api/v1/clusters/{cluster_id}/messages
-
-    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.GetInteropMessage
-      get: /api/v1/clusters/{cluster_id}/messages/{init_chain_id}/{nonce}
-
-    - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.CountInteropMessages
-      get: /api/v1/clusters/{cluster_id}/messages/count
-
     - selector: blockscout.clusterExplorer.v1.ClusterExplorerService.GetAddress
       get: /api/v1/clusters/{cluster_id}/addresses/{address_hash}
 

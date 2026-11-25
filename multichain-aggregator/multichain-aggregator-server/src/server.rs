@@ -167,12 +167,6 @@ pub async fn run(settings: Settings) -> Result<(), anyhow::Error> {
     let marketplace_enabled_cache = MarketplaceEnabledCache::new();
 
     let caches = ClusterCaches {
-        decoded_calldata: build_cache!(
-            settings,
-            DecodedCalldataCache,
-            decoded_calldata_cache,
-            "decoded_calldata"
-        ),
         domain_search: build_cache!(
             settings,
             DomainSearchCache,

@@ -55,7 +55,6 @@ fn compile(
         .field_attribute("BatchImportRequest.addresses", "#[serde(default)]")
         .field_attribute("BatchImportRequest.block_ranges", "#[serde(default)]")
         .field_attribute("BatchImportRequest.hashes", "#[serde(default)]")
-        .field_attribute("BatchImportRequest.interop_messages", "#[serde(default)]")
         .field_attribute("BatchImportRequest.address_coin_balances", "#[serde(default)]")
         .field_attribute("BatchImportRequest.address_token_balances", "#[serde(default)]")
         .field_attribute("BatchImportRequest.counters", "#[serde(default)]")
@@ -65,8 +64,7 @@ fn compile(
         // Other Optional fields
         .field_attribute("ListAddressTokensRequest.type", "#[serde(default)]")
         .field_attribute("QuickSearchRequest.unlimited_per_chain", "#[serde(default)]")
-        .field_attribute("ClusterQuickSearchRequest.unlimited_per_chain", "#[serde(default)]")
-        .extern_path(".google.protobuf", "::prost-wkt-types");
+        .field_attribute("ClusterQuickSearchRequest.unlimited_per_chain", "#[serde(default)]");
 
     prepare_comma_separated_fields(
         &mut config,

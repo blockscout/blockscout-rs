@@ -23,7 +23,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: q
           in: query
@@ -59,7 +59,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: q
           in: query
@@ -95,7 +95,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: q
           in: query
@@ -131,7 +131,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: only_active
           in: query
@@ -151,7 +151,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -175,7 +175,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -208,7 +208,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -240,7 +240,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -295,7 +295,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -327,7 +327,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -359,117 +359,12 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
           required: true
           type: string
-      tags:
-        - ClusterExplorerService
-  /api/v1/clusters/{cluster_id}/messages:
-    get:
-      summary: Lists interop (cross-chain) messages with optional filters (chains, nonce, address, direction); supports pagination.
-      operationId: ClusterExplorerService_ListInteropMessages
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1ListInteropMessagesResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: cluster_id
-          in: path
-          required: true
-          type: string
-        - name: init_chain_id
-          in: query
-          required: false
-          type: string
-        - name: relay_chain_id
-          in: query
-          required: false
-          type: string
-        - name: nonce
-          in: query
-          required: false
-          type: string
-          format: int64
-        - name: address
-          description: Address of the sender or receiver.
-          in: query
-          required: false
-          type: string
-        - name: direction
-          description: 'Message direction: "from" or "to". Valid only when address is provided.'
-          in: query
-          required: false
-          type: string
-        - name: page_size
-          in: query
-          required: false
-          type: integer
-          format: int64
-        - name: page_token
-          in: query
-          required: false
-          type: string
-      tags:
-        - ClusterExplorerService
-  /api/v1/clusters/{cluster_id}/messages/count:
-    get:
-      summary: Returns the count of interop messages for a given chain in the cluster.
-      operationId: ClusterExplorerService_CountInteropMessages
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1CountInteropMessagesResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: cluster_id
-          in: path
-          required: true
-          type: string
-        - name: chain_id
-          in: query
-          required: false
-          type: string
-      tags:
-        - ClusterExplorerService
-  /api/v1/clusters/{cluster_id}/messages/{init_chain_id}/{nonce}:
-    get:
-      summary: Fetches a single interop message by init_chain_id and nonce.
-      operationId: ClusterExplorerService_GetInteropMessage
-      responses:
-        "200":
-          description: A successful response.
-          schema:
-            $ref: '#/definitions/v1GetInteropMessageResponse'
-        default:
-          description: An unexpected error response.
-          schema:
-            $ref: '#/definitions/googlerpcStatus'
-      parameters:
-        - name: cluster_id
-          in: path
-          required: true
-          type: string
-        - name: init_chain_id
-          in: path
-          required: true
-          type: string
-        - name: nonce
-          in: path
-          required: true
-          type: string
-          format: int64
       tags:
         - ClusterExplorerService
   /api/v1/clusters/{cluster_id}/search/addresses:
@@ -484,7 +379,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -525,7 +420,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -566,7 +461,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -607,7 +502,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -648,7 +543,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -689,7 +584,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -730,7 +625,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -771,7 +666,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -812,7 +707,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -836,7 +731,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -864,7 +759,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -910,7 +805,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -938,7 +833,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: cluster_id
           in: path
@@ -975,7 +870,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: q
           in: query
@@ -1006,7 +901,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       tags:
         - MultichainAggregatorService
   /api/v1/dapps/chains:
@@ -1021,7 +916,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       tags:
         - MultichainAggregatorService
   /api/v1/domains:
@@ -1036,7 +931,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: q
           in: query
@@ -1072,7 +967,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: body
           in: body
@@ -1093,7 +988,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: body
           in: body
@@ -1114,7 +1009,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: q
           in: query
@@ -1150,7 +1045,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: q
           in: query
@@ -1174,7 +1069,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: q
           in: query
@@ -1210,7 +1105,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: chain_id
           in: query
@@ -1242,7 +1137,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: q
           in: query
@@ -1280,7 +1175,7 @@ paths:
         default:
           description: An unexpected error response.
           schema:
-            $ref: '#/definitions/googlerpcStatus'
+            $ref: '#/definitions/rpcStatus'
       parameters:
         - name: service
           in: query
@@ -1342,13 +1237,6 @@ definitions:
         type: string
       hash_type:
         $ref: '#/definitions/v1HashType'
-  BatchImportRequestInteropMessageImport:
-    type: object
-    properties:
-      init:
-        $ref: '#/definitions/InteropMessageImportInit'
-      relay:
-        $ref: '#/definitions/InteropMessageImportRelay'
   BatchImportRequestTokenImport:
     type: object
     properties:
@@ -1387,70 +1275,6 @@ definitions:
       address_hash:
         type: string
       chain_id:
-        type: string
-  InteropMessageImportInit:
-    type: object
-    properties:
-      sender_address_hash:
-        type: string
-      target_address_hash:
-        type: string
-      nonce:
-        type: string
-        format: int64
-      init_chain_id:
-        type: string
-      init_transaction_hash:
-        type: string
-      timestamp:
-        type: string
-        format: int64
-      relay_chain_id:
-        type: string
-      payload:
-        type: string
-      transfer_token_address_hash:
-        type: string
-      transfer_from_address_hash:
-        type: string
-      transfer_to_address_hash:
-        type: string
-      transfer_amount:
-        type: string
-  InteropMessageImportRelay:
-    type: object
-    properties:
-      nonce:
-        type: string
-        format: int64
-      init_chain_id:
-        type: string
-      relay_chain_id:
-        type: string
-      relay_transaction_hash:
-        type: string
-      failed:
-        type: boolean
-  InteropMessageInteropMessageTransfer:
-    type: object
-    properties:
-      token:
-        $ref: '#/definitions/InteropMessageTokenDetails'
-      from:
-        $ref: '#/definitions/v1AddressHash'
-      to:
-        $ref: '#/definitions/v1AddressHash'
-      total:
-        $ref: '#/definitions/InteropMessageTransferTotal'
-  InteropMessageTokenDetails:
-    type: object
-    properties:
-      address_hash:
-        type: string
-  InteropMessageTransferTotal:
-    type: object
-    properties:
-      value:
         type: string
   ListAddressTokensResponseAggregatedTokenBalanceInfo:
     type: object
@@ -1536,7 +1360,13 @@ definitions:
         type: string
       circulating_market_cap:
         type: string
-  googlerpcStatus:
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  rpcStatus:
     type: object
     properties:
       code:
@@ -1549,24 +1379,6 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/protobufAny'
-  protobufAny:
-    type: object
-    properties:
-      '@type':
-        type: string
-    additionalProperties: {}
-  protobufNullValue:
-    type: string
-    enum:
-      - NULL_VALUE
-    default: NULL_VALUE
-    description: |-
-      `NullValue` is a singleton enumeration to represent the null value for the
-      `Value` type union.
-
-      The JSON representation for `NullValue` is JSON `null`.
-
-       - NULL_VALUE: Null value.
   v1Address:
     type: object
     properties:
@@ -1687,11 +1499,6 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/BatchImportRequestHashImport'
-      interop_messages:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/BatchImportRequestInteropMessageImport'
       address_coin_balances:
         type: array
         items:
@@ -1806,12 +1613,6 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Domain'
-  v1CountInteropMessagesResponse:
-    type: object
-    properties:
-      count:
-        type: string
-        format: uint64
   v1Domain:
     type: object
     properties:
@@ -1858,8 +1659,6 @@ definitions:
         description: Map of chain id to chain-specific information.
       has_tokens:
         type: boolean
-      has_interop_message_transfers:
-        type: boolean
       coin_balance:
         type: string
         description: Sum of coin balances across all chains.
@@ -1888,11 +1687,6 @@ definitions:
     properties:
       token:
         $ref: '#/definitions/v1AggregatedTokenInfo'
-  v1GetInteropMessageResponse:
-    type: object
-    properties:
-      message:
-        $ref: '#/definitions/v1InteropMessage'
   v1Hash:
     type: object
     properties:
@@ -1928,46 +1722,6 @@ definitions:
     properties:
       status:
         type: string
-  v1InteropMessage:
-    type: object
-    properties:
-      sender:
-        $ref: '#/definitions/v1AddressHash'
-      target:
-        $ref: '#/definitions/v1AddressHash'
-      nonce:
-        type: string
-        format: int64
-      init_chain_id:
-        type: string
-      init_transaction_hash:
-        type: string
-      timestamp:
-        type: string
-      relay_chain_id:
-        type: string
-      relay_transaction_hash:
-        type: string
-      payload:
-        type: string
-      status:
-        $ref: '#/definitions/v1InteropMessageStatus'
-      transfer:
-        $ref: '#/definitions/InteropMessageInteropMessageTransfer'
-      message_type:
-        type: string
-      method:
-        type: string
-      decoded_payload:
-        type: object
-  v1InteropMessageStatus:
-    type: string
-    enum:
-      - PENDING
-      - FAILED
-      - SUCCESS
-      - EXPIRED
-    default: PENDING
   v1ListAddressTokensResponse:
     type: object
     properties:
@@ -2081,16 +1835,6 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Domain'
-      next_page_params:
-        $ref: '#/definitions/v1Pagination'
-  v1ListInteropMessagesResponse:
-    type: object
-    properties:
-      items:
-        type: array
-        items:
-          type: object
-          $ref: '#/definitions/v1InteropMessage'
       next_page_params:
         $ref: '#/definitions/v1Pagination'
   v1ListNftsResponse:

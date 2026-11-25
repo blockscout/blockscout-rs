@@ -3389,7 +3389,6 @@ dependencies = [
  "prost-build",
  "prost-wkt",
  "prost-wkt-build",
- "prost-wkt-types",
  "serde",
  "serde_with",
  "tonic",
@@ -4233,24 +4232,6 @@ dependencies = [
  "prost-build",
  "prost-types",
  "quote",
-]
-
-[[package]]
-name = "prost-wkt-types"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eeeffd6b9becd4600dd461399f3f71aeda2ff0848802a9ed526cf12e8f42902a"
-dependencies = [
- "chrono",
- "prost",
- "prost-build",
- "prost-types",
- "prost-wkt",
- "prost-wkt-build",
- "regex",
- "serde",
- "serde_derive",
- "serde_json",
 ]
 
 [[package]]

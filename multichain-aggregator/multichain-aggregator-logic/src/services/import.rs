@@ -4,14 +4,11 @@ use std::collections::HashSet;
 
 use crate::{
     error::ServiceError,
-    proto, repository, services,
-    services::channel::{LatestBlockUpdateMessage, NEW_BLOCKS_TOPIC, NEW_INTEROP_MESSAGES_TOPIC},
+    repository, services,
+    services::channel::{LatestBlockUpdateMessage, NEW_BLOCKS_TOPIC},
     types::{
-        address_token_balances::AddressTokenBalance,
-        batch_import_request::BatchImportRequest,
-        interop_messages::InteropMessage,
+        address_token_balances::AddressTokenBalance, batch_import_request::BatchImportRequest,
         poor_reputation_tokens::PoorReputationToken,
-        tokens::{TokenType, TokenUpdate, UpdateTokenType},
     },
 };
 use actix_phoenix_channel::ChannelBroadcaster;
@@ -40,17 +37,6 @@ pub async fn batch_import(
         .inspect_err(|e| {
             tracing::error!(error = ?e, "failed to upsert hashes");
         })?;
-    let messages_with_transfers =
-        repository::interop_messages::upsert_many_with_transfers(&tx, request.interop_messages)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error = ?e, "failed to upsert interop messages");
-            })?;
-
-    let token_type_updates = prepare_erc_7802_token_updates(&messages_with_transfers);
-    let mut token_updates = request.tokens;
-    token_updates.extend(token_type_updates);
-
     // Temporarily save address_coin_balances for backward compatibility
     // until address_coin_balances is fully deprecated
     repository::address_coin_balances::upsert_many(&tx, request.address_coin_balances.clone())
@@ -75,7 +61,7 @@ pub async fn batch_import(
             tracing::error!(error = ?e, "failed to upsert native coin token balances");
         })?;
 
-    repository::tokens::upsert_many(&tx, token_updates)
+    repository::tokens::upsert_many(&tx, request.tokens)
         .await
         .inspect_err(|e| {
             tracing::error!(error = ?e, "failed to upsert tokens");
@@ -87,15 +73,6 @@ pub async fn batch_import(
         })?;
 
     tx.commit().await?;
-
-    let interop_messages = messages_with_transfers
-        .into_iter()
-        .filter(|m| m.init_transaction_hash.is_some())
-        .map(proto::InteropMessage::from)
-        .collect::<Vec<_>>();
-    if !interop_messages.is_empty() {
-        channel.broadcast((NEW_INTEROP_MESSAGES_TOPIC, "new_messages", interop_messages));
-    }
 
     let block_ranges = block_ranges
         .into_iter()
@@ -131,35 +108,4 @@ pub async fn import_poor_reputation_tokens(
             tracing::error!(error = ?err, "failed to import poor reputation tokens");
         })?;
     Ok(())
-}
-
-fn prepare_erc_7802_token_updates(messages_with_transfers: &[InteropMessage]) -> Vec<TokenUpdate> {
-    messages_with_transfers
-        .iter()
-        .filter_map(|message| {
-            let address_hash = message
-                .transfer
-                .as_ref()?
-                .token_address_hash
-                .as_ref()?
-                .to_vec();
-            Some([
-                UpdateTokenType {
-                    chain_id: message.init_chain_id,
-                    address_hash: address_hash.clone(),
-                    token_type: TokenType::Erc7802,
-                },
-                UpdateTokenType {
-                    chain_id: message.relay_chain_id,
-                    address_hash: address_hash.clone(),
-                    token_type: TokenType::Erc7802,
-                },
-            ])
-        })
-        .flatten()
-        .map(|t| TokenUpdate {
-            r#type: Some(t),
-            ..Default::default()
-        })
-        .collect()
 }
