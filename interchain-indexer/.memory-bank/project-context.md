@@ -87,7 +87,7 @@ current production logic is concentrated in the Avalanche path.
 - `OpInteropIndexer`
   - per-bridge indexer for OP Stack interop messenger messages; reads
     `finalized` (or `safe`) blocks only, no receipts, writes the
-    `op_interop_legs` ledger; three contract kinds per chain
+    `op_interop_legs` ledger, including every `CrossL2Inbox` execution; three contract kinds per chain
     (`cross_l2_inbox`, `l2_to_l2_messenger`, `superchain_eth_bridge`); ETH
     transfers are derived from the message payload in `eth_transfer.rs`
   - source: `interchain-indexer-logic/src/indexer/op_interop/`

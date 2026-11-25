@@ -89,6 +89,42 @@ pub(crate) mod test_fixtures {
         log_with_topic0(relay_logs(), EXECUTING_MESSAGE_TOPIC0)
     }
 
+    /// The fixture `ExecutingMessage` at `log_index`, with `Identifier.origin`
+    /// (data word 0) set to `0x9999…99`: a foreign-origin read.
+    pub(crate) fn foreign_read(log_index: u64) -> Log {
+        let mut log = executing_message_log();
+        log.log_index = Some(log_index);
+        let mut data = log.inner.data.data.to_vec();
+        data[..32].fill(0);
+        data[12..32].fill(0x99);
+        log.inner.data = alloy::primitives::LogData::new_unchecked(
+            log.inner.data.topics().to_vec(),
+            data.into(),
+        );
+        log
+    }
+
+    /// The fixture `ExecutingMessage` at `log_index`, reading another log of the
+    /// same source block: `Identifier.logIndex` (data word 2) =
+    /// `source_log_index` and `msgHash` (topic 1) = `marker`. Messenger origin
+    /// and source chain are unchanged, so it is a candidate of a relay in its
+    /// window, but it never matches message 0's source.
+    pub(crate) fn pull_read(
+        log_index: u64,
+        source_log_index: u64,
+        marker: alloy::primitives::B256,
+    ) -> Log {
+        let mut log = executing_message_log();
+        log.log_index = Some(log_index);
+        let mut topics = log.inner.data.topics().to_vec();
+        topics[1] = marker;
+        let mut data = log.inner.data.data.to_vec();
+        data[64..96]
+            .copy_from_slice(&alloy::primitives::U256::from(source_log_index).to_be_bytes::<32>());
+        log.inner.data = alloy::primitives::LogData::new_unchecked(topics, data.into());
+        log
+    }
+
     pub(crate) fn relayed_message_log() -> Log {
         log_with_topic0(relay_logs(), RELAYED_MESSAGE_TOPIC0)
     }

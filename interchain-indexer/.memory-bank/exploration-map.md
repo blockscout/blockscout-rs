@@ -92,25 +92,28 @@
 
 - `interchain-indexer-logic/src/indexer/op_interop/indexer.rs`
   - stream construction per chain with the confirmation tag, log validation,
-    per-transaction grouping and sorting, failed-block attribution
+    per-transaction grouping and sorting, plan → write raw executions →
+    apply, failed-block attribution
 - `interchain-indexer-logic/src/indexer/op_interop/events.rs`
-  - `plan_transaction` (pure pairing and skip rules) and
-    `dispatch_transaction` (buffer mutation, metrics)
+  - `plan_transaction` (executions, relay windows, skip rules),
+    `plan_and_report` and `apply_actions` (buffer mutation, metrics)
 - `interchain-indexer-logic/src/indexer/op_interop/version.rs`
   - pinned `topic0` literals, contract kinds, grammar table
 - `interchain-indexer-logic/src/indexer/op_interop/consolidation.rs`
   - infallible assembly, status, `op_interop_legs` rows, `extra` metadata,
-    the ETH transfer row and the `RelayETH` check
+    the ETH transfer row and the `RelayETH` check; `delivering_execution`
+    and `execution_row`
 - `interchain-indexer-logic/src/indexer/op_interop/eth_transfer.rs`
   - `classify` (the single payload decoder), the transfer model,
     `check_relay_eth`
 - `interchain-indexer-logic/src/log_stream.rs`
   - `HeadBlockTag` and `resolve_head_block`: the confirmed head
 - `interchain-indexer-logic/src/message_buffer/persistence.rs`
-  - the ledger write (`op_interop_legs_on_conflict`, dedup) and the one-level
-    `op_interop` metadata merge
+  - the ledger write (`upsert_op_interop_legs`, used by both writers, and the
+    link rule) and the one-level `op_interop` metadata merge
 - `.memory-bank/adr/018-op-interop-confirmed-reading-and-leg-ledger.md`
 - `.memory-bank/adr/019-op-interop-eth-transfer-from-message-payload.md`
+- `.memory-bank/adr/020-op-interop-ledger-records-every-inbox-execution.md`
 
 ## If You Need to Understand Incoming ICTT Reconstruction / ICM Payload Decoding
 

@@ -33,6 +33,7 @@ An ADR captures the context, decision, and consequences of an architectural choi
 | [017](./017-cluster-scoped-read-api.md) | Cluster-Scoped Read API | Accepted | 2026-11-03 |
 | [018](./018-op-interop-confirmed-reading-and-leg-ledger.md) | OP Interop Indexer Reads Confirmed Blocks Only And Keeps A Leg Ledger | Accepted | 2026-11-14 |
 | [019](./019-op-interop-eth-transfer-from-message-payload.md) | OP Interop ETH Transfers Are Derived From The Message Payload | Accepted | 2026-11-16 |
+| [020](./020-op-interop-ledger-records-every-inbox-execution.md) | OP Interop Ledger Records Every CrossL2Inbox Execution And Is The Message Journal | Accepted | 2026-11-24 |
 
 ## Creating a New ADR
 

@@ -23,9 +23,12 @@ pub struct Model {
     pub tx_hash: Vec<u8>,
     #[sea_orm(column_type = "Text")]
     pub event_kind: String,
-    pub message_id: i64,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
-    pub message_hash: Vec<u8>,
+    pub message_id: Option<i64>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    pub message_hash: Option<Vec<u8>>,
+    pub src_chain_id: Option<i64>,
+    pub src_block_number: Option<i64>,
+    pub src_log_index: Option<i64>,
     #[sea_orm(column_type = "JsonBinary")]
     pub event_data: Json,
     pub created_at: Option<DateTime>,

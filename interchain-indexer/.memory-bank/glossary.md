@@ -239,3 +239,15 @@ build it from query params; cluster entry points take it from the
 A cluster route never returns rows outside the cluster. Chain directories
 intersect with the cluster chain set, per-chain stats derive focal and peers or
 reject the path chain, and empty intersections are empty.
+
+## Raw Execution (OP Interop)
+
+One `CrossL2Inbox` `ExecutingMessage` log, stored as an `op_interop_legs` row
+of any origin. It is linked to a message only if it delivered that message. It
+carries no status and is not listed.
+
+## Relay Window (OP Interop)
+
+The messenger-origin `ExecutingMessage`s of a transaction since the previous
+`RelayedMessage`. Those of the relay's source chain are its candidates, and
+consolidation picks the delivering one by content.

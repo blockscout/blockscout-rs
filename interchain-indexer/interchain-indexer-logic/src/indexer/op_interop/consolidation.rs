@@ -47,7 +47,10 @@ impl Consolidate for Message {
         };
         let destination = self.destination.as_ref();
 
-        let Some(rows) = StorageRows::build(source, destination) else {
+        let executing =
+            destination.and_then(|destination| delivering_execution(destination, source));
+
+        let Some(rows) = StorageRows::build(source, destination, executing) else {
             // Unreachable for an entry built by this indexer: ingestion only
             // stores values that fit the storage types. Reported instead of
             // raised, so that one malformed entry cannot stop the bridge.
@@ -62,8 +65,8 @@ impl Consolidate for Message {
         };
 
         if let Some(destination) = destination
-            && let Some(exec) = &destination.executing
-            && !identifier_matches_source(exec, source)
+            && executing.is_none()
+            && destination.candidates().next().is_some()
         {
             metrics::OP_INTEROP_LEG_CONFLICTS_TOTAL
                 .with_label_values(&[key.bridge_id.to_string().as_str(), "identifier_mismatch"])
@@ -74,8 +77,10 @@ impl Consolidate for Message {
                 message_hash = %source.message_hash,
                 src_tx_hash = %source.log.transaction_hash,
                 dst_tx_hash = %destination.log.transaction_hash,
-                "OP interop ExecutingMessage identifier does not point at the indexed \
-                 SentMessage log; the message completes anyway"
+                candidates = destination.candidates().count(),
+                "OP interop relay has ExecutingMessage candidates but none points at the \
+                 indexed SentMessage log; the message completes without its \
+                 executing_message detail"
             );
         }
 
@@ -151,7 +156,7 @@ impl Consolidate for Message {
             payload: ActiveValue::Set(Some(source.message.to_vec())),
             protocol_metadata: ActiveValue::Set(
                 ProtocolMetadata {
-                    op_interop: Some(metadata(source, destination)),
+                    op_interop: Some(metadata(source, destination, executing)),
                     ..Default::default()
                 }
                 .to_json_value(),
@@ -168,7 +173,7 @@ impl Consolidate for Message {
             transfers,
             amb_confirmations: Vec::new(),
             amb_anomalies: Vec::new(),
-            op_interop_legs: rows.leg_models(key, source, destination),
+            op_interop_legs: rows.leg_models(key, source, destination, executing),
         }))
     }
 }
@@ -200,8 +205,11 @@ struct StorageRows {
 }
 
 impl StorageRows {
-    fn build(source: &SourceLeg, destination: Option<&DestinationLeg>) -> Option<Self> {
-        let executing = destination.and_then(|destination| destination.executing.as_ref());
+    fn build(
+        source: &SourceLeg,
+        destination: Option<&DestinationLeg>,
+        executing: Option<&ExecutingLeg>,
+    ) -> Option<Self> {
         Some(Self {
             source: StoredLogRef::new(&source.log)?,
             destination_chain_id: i64::try_from(source.destination_chain_id).ok()?,
@@ -217,8 +225,9 @@ impl StorageRows {
     }
 
     /// One ledger row per log the entry holds: `sent_message`; with a
-    /// destination, `relayed_message` and, if the relay was paired,
-    /// `executing_message`.
+    /// destination, `relayed_message` and, if a candidate delivered the
+    /// message, `executing_message`. The other candidates are raw executions
+    /// that ingestion already wrote.
     ///
     /// Every model sets the same columns and leaves `created_at` /
     /// `updated_at` unset: SeaORM cannot mix `Set` and `NotSet` for one column
@@ -228,35 +237,32 @@ impl StorageRows {
         key: &Key,
         source: &SourceLeg,
         destination: Option<&DestinationLeg>,
+        executing: Option<&ExecutingLeg>,
     ) -> Vec<op_interop_legs::ActiveModel> {
-        let message_hash = source.message_hash;
+        let bridge_id = key.bridge_id as i32;
+        let link = Some((key.message_id, source.message_hash));
         let mut models = vec![leg_model(
-            key,
-            message_hash,
+            bridge_id,
+            link,
             &source.log,
             &self.source,
             OpInteropEvent::SentMessage,
             SentMessageData::new(source).to_json(),
+            StoredIdentifier::default(),
         )];
 
         if let (Some(destination), Some(stored)) = (destination, &self.destination) {
-            if let (Some(executing), Some(stored)) = (&destination.executing, &self.executing) {
-                models.push(leg_model(
-                    key,
-                    message_hash,
-                    &executing.log,
-                    stored,
-                    OpInteropEvent::ExecutingMessage,
-                    ExecutingMessageData::new(executing).to_json(),
-                ));
+            if let (Some(executing), Some(stored)) = (executing, &self.executing) {
+                models.push(executing_model(bridge_id, executing, stored, link));
             }
             models.push(leg_model(
-                key,
-                message_hash,
+                bridge_id,
+                link,
                 &destination.log,
                 stored,
                 OpInteropEvent::RelayedMessage,
                 RelayedMessageData::new(destination).to_json(),
+                StoredIdentifier::default(),
             ));
         }
 
@@ -264,16 +270,40 @@ impl StorageRows {
     }
 }
 
+/// A link from a ledger row to its message: `(message_id, message_hash)`.
+type LegLink = (i64, B256);
+
+/// `src_*` columns: the `Identifier` join key in storage types. A value that
+/// does not fit `i64` is `None` (stored `NULL`); `event_data` keeps it
+/// verbatim. Never a failure.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct StoredIdentifier {
+    chain_id: Option<i64>,
+    block_number: Option<i64>,
+    log_index: Option<i64>,
+}
+
+impl StoredIdentifier {
+    fn new(executing: &ExecutingLeg) -> Self {
+        Self {
+            chain_id: i64::try_from(executing.source_chain_id).ok(),
+            block_number: i64::try_from(executing.source_block_number).ok(),
+            log_index: i64::try_from(executing.source_log_index).ok(),
+        }
+    }
+}
+
 fn leg_model(
-    key: &Key,
-    message_hash: B256,
+    bridge_id: i32,
+    link: Option<LegLink>,
     log: &LogRef,
     stored: &StoredLogRef,
     event: OpInteropEvent,
     event_data: serde_json::Value,
+    identifier: StoredIdentifier,
 ) -> op_interop_legs::ActiveModel {
     op_interop_legs::ActiveModel {
-        bridge_id: ActiveValue::Set(key.bridge_id as i32),
+        bridge_id: ActiveValue::Set(bridge_id),
         chain_id: ActiveValue::Set(stored.chain_id),
         block_hash: ActiveValue::Set(log.block_hash.to_vec()),
         log_index: ActiveValue::Set(stored.log_index),
@@ -281,12 +311,59 @@ fn leg_model(
         block_timestamp: ActiveValue::Set(log.block_timestamp),
         tx_hash: ActiveValue::Set(log.transaction_hash.to_vec()),
         event_kind: ActiveValue::Set(event.as_str().to_string()),
-        message_id: ActiveValue::Set(key.message_id),
-        message_hash: ActiveValue::Set(message_hash.to_vec()),
+        message_id: ActiveValue::Set(link.map(|(message_id, _)| message_id)),
+        message_hash: ActiveValue::Set(link.map(|(_, message_hash)| message_hash.to_vec())),
+        src_chain_id: ActiveValue::Set(identifier.chain_id),
+        src_block_number: ActiveValue::Set(identifier.block_number),
+        src_log_index: ActiveValue::Set(identifier.log_index),
         event_data: ActiveValue::Set(event_data),
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     }
+}
+
+/// The `executing_message` row, identical for both writers but for `link`.
+fn executing_model(
+    bridge_id: i32,
+    executing: &ExecutingLeg,
+    stored: &StoredLogRef,
+    link: Option<LegLink>,
+) -> op_interop_legs::ActiveModel {
+    leg_model(
+        bridge_id,
+        link,
+        &executing.log,
+        stored,
+        OpInteropEvent::ExecutingMessage,
+        ExecutingMessageData::new(executing).to_json(),
+        StoredIdentifier::new(executing),
+    )
+}
+
+/// The ledger row of one `ExecutingMessage` for ingestion. `None` only if the
+/// execution's own location does not fit the storage types, which
+/// `events::log_ref` already rules out.
+pub(super) fn execution_row(
+    bridge_id: i32,
+    executing: &ExecutingLeg,
+    link: Option<LegLink>,
+) -> Option<op_interop_legs::ActiveModel> {
+    StoredLogRef::new(&executing.log)
+        .map(|stored| executing_model(bridge_id, executing, &stored, link))
+}
+
+/// The execution that delivered `source`'s message: among the relay's
+/// candidates, the one whose identifier and payload hash point at the held
+/// `SentMessage` log; the lowest log index if several do (two reads of the
+/// same log are indistinguishable). `None`: nothing is nested or linked.
+pub(super) fn delivering_execution<'a>(
+    destination: &'a DestinationLeg,
+    source: &SourceLeg,
+) -> Option<&'a ExecutingLeg> {
+    destination
+        .candidates()
+        .filter(|executing| identifier_matches_source(executing, source))
+        .min_by_key(|executing| executing.log.log_index)
 }
 
 /// Lower-case `0x` hex, the form every hash and address takes in
@@ -389,29 +466,30 @@ fn leg_ref(log: &LogRef) -> OpInteropLegRef {
 
 /// The `op_interop` namespace of `protocol_metadata`: `nonce` and `source`
 /// from the first flush on, `destination` once the relay is indexed, and
-/// `executing_message` only for a paired relay.
-fn metadata(source: &SourceLeg, destination: Option<&DestinationLeg>) -> OpInterop {
+/// `executing_message` only when a candidate delivered the message.
+fn metadata(
+    source: &SourceLeg,
+    destination: Option<&DestinationLeg>,
+    executing: Option<&ExecutingLeg>,
+) -> OpInterop {
     OpInterop {
         nonce: source.nonce.to_string(),
         source: Some(leg_ref(&source.log)),
         destination: destination.map(|destination| leg_ref(&destination.log)),
-        executing_message: destination
-            .and_then(|destination| destination.executing.as_ref())
-            .map(|executing| OpInteropExecutingMessage {
-                msg_hash: hex_hash(executing.msg_hash),
-                log_index: executing.log.log_index,
-                identifier: identifier(executing),
-            }),
+        executing_message: executing.map(|executing| OpInteropExecutingMessage {
+            msg_hash: hex_hash(executing.msg_hash),
+            log_index: executing.log.log_index,
+            identifier: identifier(executing),
+        }),
     }
 }
 
-/// Diagnostic cross-check, never an outcome: does the `ExecutingMessage` a
-/// relay was paired with point at the `SentMessage` log this indexer holds
-/// for the same message?
+/// Does this `ExecutingMessage` point at the `SentMessage` log this indexer
+/// holds for the message?
 ///
 /// `msgHash` must be the payload hash of that log, and the identifier its
-/// `(chainId, blockNumber, logIndex, timestamp)`. In confirmed data a
-/// mismatch can only mean a decoder or pairing bug.
+/// `(chainId, blockNumber, logIndex, timestamp)`. It is the content test that
+/// selects the delivering execution among a relay's candidates.
 pub(super) fn identifier_matches_source(executing: &ExecutingLeg, source: &SourceLeg) -> bool {
     let source_timestamp = u64::try_from(source.log.block_timestamp.and_utc().timestamp())
         .ok()
@@ -708,7 +786,7 @@ mod tests {
     #[test]
     fn test_consolidate_unpaired_relay_has_two_leg_rows_and_no_executing_metadata() {
         let mut destination = fixture_destination();
-        destination.executing = None;
+        destination.executing_candidates.clear();
         let message = Message {
             source: Some(fixture_source()),
             destination: Some(destination),
@@ -792,6 +870,7 @@ mod tests {
             timestamp: i64,
             tx_hash: Vec<u8>,
             log_index: i64,
+            src: (Option<i64>, Option<i64>, Option<i64>),
             event_data: serde_json::Value,
         }
         let expected = [
@@ -803,6 +882,7 @@ mod tests {
                 timestamp: 1_794_670_098,
                 tx_hash: source_tx,
                 log_index: 1,
+                src: (None, None, None),
                 event_data: serde_json::json!({
                     "destination_chain_id": "420130020",
                     "nonce": "0",
@@ -819,6 +899,7 @@ mod tests {
                 timestamp: 1_794_670_100,
                 tx_hash: destination_tx.clone(),
                 log_index: 0,
+                src: (Some(420_130_019), Some(498_922), Some(1)),
                 event_data: serde_json::json!({
                     "msg_hash": "0xbb39b9f3ce34b43c1ae2bcc42aa7a2ceb451b20cdd22f2396d2ea6ce16bf31fb",
                     "identifier": {
@@ -838,6 +919,7 @@ mod tests {
                 timestamp: 1_794_670_100,
                 tx_hash: destination_tx,
                 log_index: 3,
+                src: (None, None, None),
                 event_data: serde_json::json!({
                     "source_chain_id": "420130019",
                     "nonce": "0",
@@ -859,8 +941,16 @@ mod tests {
                 expected.timestamp
             );
             assert_eq!(value(&leg.tx_hash), expected.tx_hash);
-            assert_eq!(value(&leg.message_id), key().message_id);
-            assert_eq!(value(&leg.message_hash), MESSAGE_0_HASH.to_vec());
+            assert_eq!(value(&leg.message_id), Some(key().message_id));
+            assert_eq!(value(&leg.message_hash), Some(MESSAGE_0_HASH.to_vec()));
+            assert_eq!(
+                (
+                    value(&leg.src_chain_id),
+                    value(&leg.src_block_number),
+                    value(&leg.src_log_index)
+                ),
+                expected.src
+            );
             assert_eq!(value(&leg.event_data), expected.event_data);
             // One `insert_many` cannot mix Set and NotSet for a column.
             assert!(matches!(leg.created_at, ActiveValue::NotSet));
@@ -868,12 +958,42 @@ mod tests {
         }
     }
 
+    fn own() -> ExecutingLeg {
+        fixture_destination().executing_candidates[0].clone()
+    }
+
+    /// Another read of a log of the same source block: never matches message 0.
+    fn pull(log_index: u64) -> ExecutingLeg {
+        let mut exec = own();
+        exec.log.log_index = log_index;
+        exec.source_log_index = U256::from(7);
+        exec.msg_hash = B256::repeat_byte(0xA0);
+        exec
+    }
+
+    fn at(mut exec: ExecutingLeg, log_index: u64) -> ExecutingLeg {
+        exec.log.log_index = log_index;
+        exec
+    }
+
+    fn with_candidates(candidates: Vec<ExecutingLeg>) -> DestinationLeg {
+        let mut destination = fixture_destination();
+        destination.executing = None;
+        destination.executing_candidates = candidates;
+        destination
+    }
+
+    fn complete_with(destination: DestinationLeg) -> ConsolidatedMessage {
+        consolidated(&Message {
+            source: Some(fixture_source()),
+            destination: Some(destination),
+        })
+    }
+
     #[test]
     fn test_identifier_cross_check_detects_mismatch() {
         let source = fixture_source();
-        let executing = fixture_destination()
-            .executing
-            .expect("fixture relay is paired");
+        let executing = own();
 
         assert!(identifier_matches_source(&executing, &source));
 
@@ -892,22 +1012,115 @@ mod tests {
             break_identifier(&mut broken);
             assert!(!identifier_matches_source(&broken, &source));
         }
+    }
 
-        // A mismatch is a diagnostic: the outcome does not change.
-        let mut destination = fixture_destination();
-        if let Some(exec) = destination.executing.as_mut() {
-            exec.msg_hash = MESSAGE_0_HASH;
+    #[test]
+    fn test_consolidate_links_the_candidate_that_points_at_the_source() {
+        for (candidates, own_index) in [
+            (vec![pull(0), at(own(), 1)], 1),
+            (vec![at(own(), 0), pull(1)], 0),
+        ] {
+            let consolidated = complete_with(with_candidates(candidates));
+
+            assert_eq!(
+                event_kinds(&consolidated),
+                vec!["sent_message", "executing_message", "relayed_message"]
+            );
+            let executing = &consolidated.op_interop_legs[1];
+            assert_eq!(value(&executing.log_index), own_index);
+            assert_eq!(value(&executing.message_id), Some(key().message_id));
+            let metadata = value(&consolidated.message.protocol_metadata).expect("metadata");
+            assert_eq!(
+                metadata["op_interop"]["executing_message"]["log_index"],
+                serde_json::json!(own_index)
+            );
         }
-        let message = Message {
-            source: Some(source),
-            destination: Some(destination),
-        };
-        let consolidated = consolidated(&message);
+    }
+
+    #[test]
+    fn test_consolidate_without_a_matching_candidate_nests_and_links_nothing() {
+        let consolidated = complete_with(with_candidates(vec![pull(0)]));
+
         assert!(consolidated.is_final);
         assert_eq!(
             value(&consolidated.message.status),
             MessageStatus::Completed
         );
-        assert_eq!(consolidated.op_interop_legs.len(), 3);
+        assert_eq!(
+            event_kinds(&consolidated),
+            vec!["sent_message", "relayed_message"]
+        );
+        let metadata = value(&consolidated.message.protocol_metadata).expect("metadata");
+        assert!(metadata["op_interop"].get("executing_message").is_none());
+    }
+
+    #[test]
+    fn test_consolidate_legacy_executing_is_a_candidate() {
+        let mut destination = with_candidates(Vec::new());
+        destination.executing = Some(own());
+        let consolidated = complete_with(destination);
+        assert_eq!(
+            event_kinds(&consolidated),
+            vec!["sent_message", "executing_message", "relayed_message"]
+        );
+
+        let mut destination = with_candidates(Vec::new());
+        destination.executing = Some(pull(0));
+        let consolidated = complete_with(destination);
+        assert_eq!(
+            event_kinds(&consolidated),
+            vec!["sent_message", "relayed_message"]
+        );
+    }
+
+    #[test]
+    fn test_consolidate_two_matching_candidates_links_the_lower_log_index() {
+        let consolidated = complete_with(with_candidates(vec![at(own(), 2), at(own(), 1)]));
+        assert_eq!(value(&consolidated.op_interop_legs[1].log_index), 1);
+    }
+
+    #[test]
+    fn test_execution_row_columns() {
+        let link = Some((key().message_id, MESSAGE_0_HASH));
+        let unlinked = execution_row(BRIDGE_ID, &own(), None).expect("fits");
+        let linked = execution_row(BRIDGE_ID, &own(), link).expect("fits");
+
+        assert_eq!(value(&unlinked.message_id), None);
+        assert_eq!(value(&unlinked.message_hash), None);
+        assert_eq!(value(&linked.message_id), Some(key().message_id));
+        assert_eq!(value(&linked.message_hash), Some(MESSAGE_0_HASH.to_vec()));
+
+        let mut relinked = unlinked.clone();
+        relinked.message_id = linked.message_id.clone();
+        relinked.message_hash = linked.message_hash.clone();
+        assert_eq!(relinked, linked, "only the link differs");
+
+        assert_eq!(
+            (
+                unlinked.src_chain_id.clone(),
+                unlinked.src_block_number.clone(),
+                unlinked.src_log_index.clone()
+            ),
+            (Set(Some(420_130_019)), Set(Some(498_922)), Set(Some(1)))
+        );
+
+        let mut wide = own();
+        wide.source_chain_id = U256::from(1) << 64;
+        wide.source_log_index = U256::from(1) << 70;
+        let row = execution_row(BRIDGE_ID, &wide, None).expect("fits");
+        assert_eq!(row.src_chain_id, Set(None));
+        assert_eq!(row.src_log_index, Set(None));
+        assert_eq!(row.src_block_number, Set(Some(498_922)));
+        let data = value(&row.event_data);
+        assert_eq!(data["identifier"]["chain_id"], "18446744073709551616");
+        assert_eq!(data["identifier"]["log_index"], "1180591620717411303424");
+
+        // The boundary: i64::MAX fits, the next value (still a u64) does not.
+        let mut edge = own();
+        edge.source_block_number = U256::from(i64::MAX as u64);
+        edge.source_log_index = U256::from(i64::MAX as u64) + U256::from(1);
+        let row = execution_row(BRIDGE_ID, &edge, None).expect("fits");
+        assert_eq!(row.src_block_number, Set(Some(i64::MAX)));
+        assert_eq!(row.src_log_index, Set(None));
     }
 }

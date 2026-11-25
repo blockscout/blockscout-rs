@@ -13,8 +13,8 @@ lazy_static! {
     /// `relay_eth`.
     ///
     /// Counted per processing attempt, so a retried or rescanned block counts
-    /// again. On one chain, `relayed_message` and messenger-origin
-    /// `executing_message` should grow together; a persistent gap means the
+    /// again. On one chain, `relayed_message` should grow together with
+    /// `raw_executions_total{origin="messenger"}`; a persistent gap means the
     /// inbox event changed shape.
     pub static ref OP_INTEROP_EVENTS_TOTAL: IntCounterVec = register_int_counter_vec!(
         "interchain_indexer_op_interop_events_total",
@@ -35,20 +35,25 @@ lazy_static! {
     )
     .unwrap();
 
-    /// `ExecutingMessage` logs that did not become part of a message.
-    /// `reason` is a closed set: `foreign_origin` (the identifier's origin is
-    /// not the messenger: someone read the inbox directly) and `unpaired` (a
-    /// messenger-origin log no `RelayedMessage` of the transaction consumed).
-    pub static ref OP_INTEROP_EXECUTING_MESSAGES_IGNORED_TOTAL: IntCounterVec =
-        register_int_counter_vec!(
-            "interchain_indexer_op_interop_executing_messages_ignored_total",
-            "OP interop ExecutingMessage logs that were not paired with a relay",
-            &["bridge_id", "chain_id", "reason"],
-        )
-        .unwrap();
+    /// Every `CrossL2Inbox` `ExecutingMessage` indexed as a ledger row, by the
+    /// origin in its identifier. `origin` is a closed set: `messenger` (the
+    /// messenger's own executions and pull reads of messenger logs) and
+    /// `foreign` (reads of any other contract's log). Counted per processing
+    /// attempt, so a retried or rescanned block counts again; a failed write
+    /// still counts (write failures show in the failure-ledger metrics). Per
+    /// chain, `messenger` minus the relays that found a candidate
+    /// (`events_total{event="relayed_message"}` minus
+    /// `relays_unpaired_total`) is the number of messenger-origin pull reads.
+    pub static ref OP_INTEROP_RAW_EXECUTIONS_TOTAL: IntCounterVec = register_int_counter_vec!(
+        "interchain_indexer_op_interop_raw_executions_total",
+        "OP interop CrossL2Inbox ExecutingMessage logs indexed as ledger rows, by identifier origin",
+        &["bridge_id", "chain_id", "origin"],
+    )
+    .unwrap();
 
-    /// `RelayedMessage` logs with no usable `ExecutingMessage` before them in
-    /// the transaction. The message still completes; only its
+    /// `RelayedMessage` logs with no candidate in their relay window (no
+    /// messenger-origin `ExecutingMessage` of their source chain since the
+    /// previous relay). The message still completes; only its
     /// `executing_message` detail is missing. Zero is the expected value.
     pub static ref OP_INTEROP_RELAYS_UNPAIRED_TOTAL: IntCounterVec = register_int_counter_vec!(
         "interchain_indexer_op_interop_relays_unpaired_total",
@@ -74,7 +79,8 @@ lazy_static! {
     /// a closed set: `duplicate_leg` (a different log for a side that is
     /// already filled; impossible on a confirmed chain), `key_collision` (two
     /// message hashes under one 64-bit buffer key) and `identifier_mismatch`
-    /// (a paired `ExecutingMessage` does not point at the indexed source log).
+    /// (a relay has candidates but none points at the indexed source log;
+    /// nothing is nested or linked).
     /// The first observation always wins. Zero is the expected value.
     pub static ref OP_INTEROP_LEG_CONFLICTS_TOTAL: IntCounterVec = register_int_counter_vec!(
         "interchain_indexer_op_interop_leg_conflicts_total",

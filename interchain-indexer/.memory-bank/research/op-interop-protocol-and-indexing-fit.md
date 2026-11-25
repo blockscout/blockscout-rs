@@ -421,7 +421,10 @@ struct Identifier { address origin; uint256 blockNumber; uint256 logIndex; uint2
    Then it emits `RelayedMessage(source, nonce, messageHash, returnDataHash)`.
 3. **Log order in a successful relay tx**: `ExecutingMessage` (`0x…22`) →
    target logs → `RelayedMessage` (`0x…23`). Relays never nest; a multicall
-   holds several sequential groups.
+   holds several sequential groups. **[V]** against the
+   `L2ToL2CrossDomainMessenger` 2.1.0 source: `relayMessage` is
+   `nonReentrant`, calls `CrossL2Inbox.validateMessage` before `target.call`
+   and emits `RelayedMessage` after it; `source` is `_id.chainId`.
 4. A target with no code counts as a successful relay and consumes the message.
 
 ### ETH transfer
@@ -479,6 +482,9 @@ never expire; messages to non-member chains stay pending forever.
 
 ### Pull read (reference; phase 2)
 
+- **Built (ADR-020):** every `ExecutingMessage` of the configured chains is
+  stored in `op_interop_legs`, any origin, with the `Identifier` join key typed
+  and indexed. Listing, counting and source resolution are not built.
 - **[V]** `validateMessage` on-chain only rejects deposits, range-checks the
   `Identifier`, and requires the type-3 checksum slot to be warm, which only an
   EIP-2930 access-list entry under `0x…22` can achieve. Then it emits. The
@@ -576,9 +582,9 @@ never expire; messages to non-member chains stay pending forever.
 
 ### Pull reads (phase 2)
 
-- One record per `ExecutingMessage` log, keyed by `(dst_chain_id, dst_tx_hash,
-  dst_log_index)` → keccak → `i64`. Never key by `Identifier`, which
-  legitimately repeats.
+- One ledger row per `ExecutingMessage`, keyed by the ledger primary key; the
+  `Identifier` join key is in `src_chain_id` / `src_block_number` /
+  `src_log_index`, indexed, never a key.
 - From logs alone: `src_chain_id`, source block/logIndex/timestamp, `origin`
   (as sender), payload hash, destination tx. Not available without extra work:
   `src_tx_hash` and payload (source resolution, asynchronous enrichment), the
@@ -587,12 +593,12 @@ never expire; messages to non-member chains stay pending forever.
   enrichment.
 - Discovery is cheap: `eth_getLogs(address = 0x…22, topic0 = ExecutingMessage)`.
   Always filter by address; anyone can emit the same `topic0`.
-- Double-counting rule: an `ExecutingMessage` paired with a `RelayedMessage` in
-  the same transaction belongs to that messenger message. Pair on
-  `id.chainId == RelayedMessage.source` and `msgHash == payloadHash(SentMessage)`,
-  taking the closest preceding one; do not pair by `tx.to`. Everything else is a
-  pull read, including `origin == 0x…23` without a match (someone validated a
-  `SentMessage` log directly; that does not deliver it).
+- Double-counting rule: among the messenger-origin executions since the
+  previous `RelayedMessage` whose `id.chainId` equals its source, the one whose
+  identifier and `msgHash` point at the indexed `SentMessage` is linked and
+  nested, the lowest log index if several do. Do not pair by `tx.to`.
+  Everything else is a raw execution, including `origin == 0x…23` without a
+  match.
 - Same-chain reads (`id.chainId == dst`) and reads of chains outside the
   configured cluster are legitimate.
 - Deferred because value at launch is low: no production users, and the data

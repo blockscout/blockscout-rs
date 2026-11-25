@@ -2,11 +2,12 @@
 
 //! Per-transaction handling of OP interop logs, in two phases:
 //!
-//! 1. [`plan_transaction`] — pure: resolve the contract version, decode, pair
-//!    each relay with its `ExecutingMessage`, apply the skip rules. It returns
-//!    the actions to take and what it observed, and touches nothing.
-//! 2. [`dispatch_transaction`] — emit metrics and logs for the observations,
-//!    then apply the actions to the buffer.
+//! 1. [`plan_transaction`] — pure: resolve the contract version, decode,
+//!    collect every `ExecutingMessage` and each relay's candidate executions,
+//!    apply the skip rules. It returns the actions to take, the executions and
+//!    what it observed, and touches nothing. [`plan_and_report`] adds the
+//!    metrics and logs of the observations.
+//! 2. [`apply_actions`] — apply the actions to the buffer.
 //!
 //! Splitting them means a decode problem cannot leave a half-applied
 //! transaction, and every decision is testable as a value.
@@ -18,7 +19,7 @@
 use std::{collections::HashSet, sync::Arc};
 
 use alloy::{
-    primitives::{ChainId, U256},
+    primitives::{Address, B256, ChainId, U256},
     rpc::types::Log,
 };
 use anyhow::{Context, Result, anyhow, bail, ensure};
@@ -74,12 +75,9 @@ pub(super) enum Observation {
     Event(OpInteropEvent),
     /// A message whose other endpoint is outside the bridge.
     Skipped(SkipReason),
-    /// An `ExecutingMessage` whose identifier does not originate from the
-    /// messenger: someone read the inbox directly. Not a message of ours.
-    ExecutingMessageForeignOrigin,
-    /// A messenger-origin `ExecutingMessage` that no relay consumed.
-    ExecutingMessageUnpaired,
-    /// A relay with no usable `ExecutingMessage` before it. Still indexed.
+    /// A decoded ExecutingMessage; written to the ledger as a raw execution.
+    Execution(ExecutionOrigin),
+    /// A relay with no candidate in its relay window. Still indexed.
     RelayUnpaired,
     /// A log whose topic belongs to another version window of its contract.
     WrongVersion,
@@ -99,6 +97,33 @@ pub(super) struct TxPlan {
     pub(super) actions: Vec<TxAction>,
     /// Skips and anomalies, for metrics and logs.
     pub(super) observations: Vec<Observation>,
+    /// Every decoded ExecutingMessage of the transaction, of any origin,
+    /// ascending by log index: one ledger row each.
+    pub(super) executions: Vec<ExecutingLeg>,
+}
+
+/// Whose log an `ExecutingMessage` reads. `as_str` is the `origin` metric label.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ExecutionOrigin {
+    Messenger,
+    Foreign,
+}
+
+impl ExecutionOrigin {
+    pub(super) fn of(origin: Address) -> Self {
+        if origin == L2_TO_L2_MESSENGER {
+            Self::Messenger
+        } else {
+            Self::Foreign
+        }
+    }
+
+    pub(super) fn as_str(&self) -> &'static str {
+        match self {
+            Self::Messenger => "messenger",
+            Self::Foreign => "foreign",
+        }
+    }
 }
 
 /// Whether an on-chain `uint256` chain id names a chain of this bridge.
@@ -245,10 +270,12 @@ fn decode(
 /// Phase 1. `logs` must be the logs of one transaction, ascending by
 /// `log_index` (catch-up batches arrive descending; the caller sorts).
 ///
-/// A relay is paired with the closest preceding messenger-origin
-/// `ExecutingMessage` of the transaction: a single slot that such a log
-/// overwrites and a `RelayedMessage` consumes. Relays never nest, so a
-/// multicall is several `ExecutingMessage … RelayedMessage` groups in order.
+/// Every decoded `ExecutingMessage`, of any origin, goes to
+/// `TxPlan::executions`. The messenger-origin ones also go into a window.
+/// Each `RelayedMessage` takes the window entries of its source chain as
+/// candidates and clears the window. Relays never nest, so everything in the
+/// window since the previous relay is either that relay's own execution or a
+/// pull read; the choice between them is made by content in `consolidate`.
 ///
 /// The ETH bridge events are paired by position, with the same single-slot
 /// scheme: a `SentMessage` carrying an ETH transfer payload fills the send
@@ -264,7 +291,7 @@ pub(super) fn plan_transaction(
     logs: &[&Log],
 ) -> Result<TxPlan> {
     let mut plan = TxPlan::default();
-    let mut pending_exec: Option<ExecutingLeg> = None;
+    let mut window: Vec<ExecutingLeg> = Vec::new();
     let mut pending_send_eth: Option<(EthTransfer, U256)> = None;
     let mut pending_relay_eth: Option<RelayEth> = None;
 
@@ -301,17 +328,15 @@ pub(super) fn plan_transaction(
 
         match decoded {
             Decoded::Executing(exec) => {
-                if exec.origin == L2_TO_L2_MESSENGER {
-                    // A new relay group starts.
+                let origin = ExecutionOrigin::of(exec.origin);
+                plan.observations.push(Observation::Execution(origin));
+                if origin == ExecutionOrigin::Messenger {
+                    // A new relay group may start: a RelayETH never precedes
+                    // one of its own group.
                     pending_relay_eth = None;
-                    if pending_exec.replace(exec).is_some() {
-                        plan.observations
-                            .push(Observation::ExecutingMessageUnpaired);
-                    }
-                } else {
-                    plan.observations
-                        .push(Observation::ExecutingMessageForeignOrigin);
+                    window.push(exec.clone());
                 }
+                plan.executions.push(exec);
             }
             Decoded::Sent {
                 log,
@@ -362,17 +387,18 @@ pub(super) fn plan_transaction(
             }
             Decoded::Relayed { log, event } => {
                 let relay_eth = pending_relay_eth.take();
-                let exec = pending_exec.take();
-                let exec_existed = exec.is_some();
-                let paired = exec.filter(|exec| exec.source_chain_id == event.source);
-                if exec_existed && paired.is_none() {
-                    plan.observations
-                        .push(Observation::ExecutingMessageUnpaired);
-                }
+                // Relays never nest: everything in the window since the
+                // previous relay is either this relay's own execution or a
+                // pull read. The window is consumed whatever happens to the
+                // relay.
+                let executing_candidates: Vec<ExecutingLeg> = std::mem::take(&mut window)
+                    .into_iter()
+                    .filter(|exec| exec.source_chain_id == event.source)
+                    .collect();
 
                 match classify_chain(event.source, configured_chains) {
                     ChainRef::Configured(source_chain_id) => {
-                        if paired.is_none() {
+                        if executing_candidates.is_empty() {
                             plan.observations.push(Observation::RelayUnpaired);
                         }
                         plan.actions.push(TxAction::Relay(DestinationLeg {
@@ -381,7 +407,8 @@ pub(super) fn plan_transaction(
                             nonce: event.messageNonce,
                             message_hash: event.messageHash,
                             return_data_hash: event.returnDataHash,
-                            executing: paired,
+                            executing: None,
+                            executing_candidates,
                             relay_eth,
                         }));
                     }
@@ -420,11 +447,6 @@ pub(super) fn plan_transaction(
         plan.observations.push(Observation::SendEthMissing);
     }
 
-    if pending_exec.is_some() {
-        plan.observations
-            .push(Observation::ExecutingMessageUnpaired);
-    }
-
     Ok(plan)
 }
 
@@ -437,15 +459,9 @@ pub(super) struct EventContext<'a> {
     pub(super) buffer: &'a Arc<MessageBuffer<Message>>,
 }
 
-/// Phase 2 on top of phase 1: plans the transaction, reports what was
-/// observed, then applies each action to the buffer in order.
-///
-/// A failing `alter` (its only fallible step is restoring the entry from
-/// `pending_messages`) does not stop the remaining actions; the failures are
-/// aggregated and returned once, as `xdai::events::dispatch_transaction`
-/// does. Swallowing one would let the checkpoint move past a block whose
-/// data was never applied.
-pub(super) async fn dispatch_transaction(ctx: &EventContext<'_>, logs: &[&Log]) -> Result<()> {
+/// Phase 1 plus its reporting: plans the transaction and emits the metrics
+/// and logs of what it observed. Touches neither the buffer nor the database.
+pub(super) fn plan_and_report(ctx: &EventContext<'_>, logs: &[&Log]) -> Result<TxPlan> {
     let plan = plan_transaction(ctx.registry, ctx.configured_chains, ctx.chain_id, logs)?;
     let tx_hash = logs.first().and_then(|log| log.transaction_hash);
     let block_number = logs.first().and_then(|log| log.block_number);
@@ -453,11 +469,27 @@ pub(super) async fn dispatch_transaction(ctx: &EventContext<'_>, logs: &[&Log]) 
     for observation in &plan.observations {
         report_observation(ctx, *observation, tx_hash, block_number);
     }
+    Ok(plan)
+}
 
+/// Phase 2: applies the actions to the buffer in order. A failing action does
+/// not stop the rest; failures are aggregated into one `Err`.
+///
+/// A failing `alter` (its only fallible step is restoring the entry from
+/// `pending_messages`) does not stop the remaining actions; the failures are
+/// aggregated and returned once, as `xdai::events::dispatch_transaction`
+/// does. Swallowing one would let the checkpoint move past a block whose
+/// data was never applied.
+pub(super) async fn apply_actions(
+    ctx: &EventContext<'_>,
+    actions: Vec<TxAction>,
+    tx_hash: B256,
+    block_number: Option<u64>,
+) -> Result<()> {
     let mut last_err: Option<anyhow::Error> = None;
     let mut failed_actions = 0usize;
 
-    for action in plan.actions {
+    for action in actions {
         if let Err(err) = apply_action(ctx, action).await {
             tracing::warn!(
                 err = ?err,
@@ -559,29 +591,10 @@ fn report_observation(
                 "skipped an OP interop message whose other chain is not part of the bridge"
             );
         }
-        Observation::ExecutingMessageForeignOrigin => {
-            metrics::OP_INTEROP_EXECUTING_MESSAGES_IGNORED_TOTAL
-                .with_label_values(&[bridge.as_str(), chain.as_str(), "foreign_origin"])
+        Observation::Execution(origin) => {
+            metrics::OP_INTEROP_RAW_EXECUTIONS_TOTAL
+                .with_label_values(&[bridge.as_str(), chain.as_str(), origin.as_str()])
                 .inc();
-            tracing::trace!(
-                bridge_id = ctx.bridge_id,
-                chain_id = ctx.chain_id,
-                tx_hash = ?tx_hash,
-                block_number,
-                "ignored an ExecutingMessage whose origin is not the messenger"
-            );
-        }
-        Observation::ExecutingMessageUnpaired => {
-            metrics::OP_INTEROP_EXECUTING_MESSAGES_IGNORED_TOTAL
-                .with_label_values(&[bridge.as_str(), chain.as_str(), "unpaired"])
-                .inc();
-            tracing::trace!(
-                bridge_id = ctx.bridge_id,
-                chain_id = ctx.chain_id,
-                tx_hash = ?tx_hash,
-                block_number,
-                "ignored a messenger-origin ExecutingMessage that no relay consumed"
-            );
         }
         Observation::RelayUnpaired => {
             metrics::OP_INTEROP_RELAYS_UNPAIRED_TOTAL
@@ -592,7 +605,7 @@ fn report_observation(
                 chain_id = ctx.chain_id,
                 tx_hash = ?tx_hash,
                 block_number,
-                "OP interop relay has no usable ExecutingMessage before it in its transaction; \
+                "OP interop relay has no candidate ExecutingMessage in its relay window; \
                  the message is indexed without its executing_message detail"
             );
         }
@@ -651,8 +664,8 @@ mod tests {
         super::{
             test_fixtures::{
                 DESTINATION_CHAIN_ID, SOURCE_CHAIN_ID, configured_chains, executing_message_log,
-                registry, relay_eth_log, relay_logs, relayed_message_log, send_calls, send_eth_log,
-                sent_message_logs,
+                foreign_read, pull_read, registry, relay_eth_log, relay_logs, relayed_message_log,
+                send_calls, send_eth_log, sent_message_logs,
             },
             version::CROSS_L2_INBOX,
         },
@@ -790,7 +803,7 @@ mod tests {
     }
 
     #[test]
-    fn test_plan_transaction_relay_fixture_pairs_executing_message() {
+    fn test_plan_transaction_relay_fixture_has_its_execution_as_the_candidate() {
         let logs = relay_logs();
         assert_eq!(logs.len(), 4, "inbox, liquidity, bridge, messenger");
 
@@ -800,6 +813,7 @@ mod tests {
             plan.observations,
             vec![
                 Observation::Event(OpInteropEvent::ExecutingMessage),
+                Observation::Execution(ExecutionOrigin::Messenger),
                 Observation::Event(OpInteropEvent::RelayEth),
                 Observation::Event(OpInteropEvent::RelayedMessage),
             ]
@@ -826,7 +840,10 @@ mod tests {
         );
         assert_eq!(leg.log.log_index, 3);
 
-        let exec = leg.executing.as_ref().expect("relay is paired");
+        assert_eq!(leg.executing, None);
+        assert_eq!(leg.executing_candidates.len(), 1);
+        assert_eq!(plan.executions, leg.executing_candidates);
+        let exec = &leg.executing_candidates[0];
         assert_eq!(exec.log.log_index, 0);
         assert_eq!(exec.log.block_hash, leg.log.block_hash);
         assert_eq!(exec.msg_hash, MESSAGE_0_PAYLOAD_HASH);
@@ -841,7 +858,7 @@ mod tests {
     /// `ExecutingMessage` of its own group. B is the fixture pair moved to
     /// later log indexes, with a different `msgHash` topic to tell it apart.
     #[test]
-    fn test_plan_transaction_multicall_pairs_each_relay_with_its_own_executing_message() {
+    fn test_plan_transaction_multicall_gives_each_relay_its_own_candidates() {
         let marker = B256::repeat_byte(0xB0);
         let logs = vec![
             executing_message_log(),
@@ -854,21 +871,23 @@ mod tests {
 
         let relays = relays(&plan);
         assert_eq!(relays.len(), 2);
-        let first = relays[0].executing.as_ref().expect("A is paired");
-        let second = relays[1].executing.as_ref().expect("B is paired");
+        assert_eq!(relays[0].executing_candidates.len(), 1);
+        assert_eq!(relays[1].executing_candidates.len(), 1);
+        let first = &relays[0].executing_candidates[0];
+        let second = &relays[1].executing_candidates[0];
         assert_eq!((relays[0].log.log_index, first.log.log_index), (3, 0));
         assert_eq!(first.msg_hash, MESSAGE_0_PAYLOAD_HASH);
         assert_eq!((relays[1].log.log_index, second.log.log_index), (7, 4));
         assert_eq!(second.msg_hash, marker);
-        assert_eq!(count(&plan, Observation::ExecutingMessageUnpaired), 0);
         assert_eq!(count(&plan, Observation::RelayUnpaired), 0);
+        assert_eq!(plan.executions.len(), 2);
     }
 
     /// Someone reads the inbox directly between the messenger's
     /// `ExecutingMessage` and its `RelayedMessage`: not ours, and it must not
     /// take the relay's slot.
     #[test]
-    fn test_plan_transaction_foreign_origin_executing_message_does_not_steal_pairing() {
+    fn test_plan_transaction_foreign_origin_executing_message_is_not_a_candidate() {
         let foreign = with_data_word(
             with_log_index(executing_message_log(), 1),
             0,
@@ -878,14 +897,21 @@ mod tests {
 
         let plan = plan(DESTINATION_CHAIN_ID, &logs).expect("plans");
 
-        let exec = relays(&plan)[0]
-            .executing
-            .as_ref()
-            .expect("still paired with the messenger's ExecutingMessage");
-        assert_eq!(exec.log.log_index, 0);
-        assert_eq!(exec.origin, L2_TO_L2_MESSENGER);
-        assert_eq!(count(&plan, Observation::ExecutingMessageForeignOrigin), 1);
-        assert_eq!(count(&plan, Observation::ExecutingMessageUnpaired), 0);
+        let candidates = &relays(&plan)[0].executing_candidates;
+        assert_eq!(candidates.len(), 1, "only the messenger's own execution");
+        assert_eq!(candidates[0].log.log_index, 0);
+        assert_eq!(candidates[0].origin, L2_TO_L2_MESSENGER);
+        assert_eq!(
+            count(&plan, Observation::Execution(ExecutionOrigin::Foreign)),
+            1
+        );
+        assert_eq!(
+            plan.executions
+                .iter()
+                .map(|exec| exec.log.log_index)
+                .collect::<Vec<_>>(),
+            vec![0, 1]
+        );
         assert_eq!(count(&plan, Observation::RelayUnpaired), 0);
     }
 
@@ -897,7 +923,7 @@ mod tests {
         let relays = relays(&plan);
         assert_eq!(relays.len(), 1, "the relay is the fact");
         assert_eq!(relays[0].message_hash, MESSAGE_0_HASH);
-        assert_eq!(relays[0].executing, None);
+        assert!(relays[0].executing_candidates.is_empty());
         assert_eq!(
             plan.observations,
             vec![
@@ -913,8 +939,11 @@ mod tests {
             B256::left_padding_from(Address::repeat_byte(0x99).as_slice()),
         );
         let plan = plan_of_destination(&[foreign, relayed_message_log()]);
-        assert_eq!(self::relays(&plan)[0].executing, None);
-        assert_eq!(count(&plan, Observation::ExecutingMessageForeignOrigin), 1);
+        assert!(self::relays(&plan)[0].executing_candidates.is_empty());
+        assert_eq!(
+            count(&plan, Observation::Execution(ExecutionOrigin::Foreign)),
+            1
+        );
         assert_eq!(count(&plan, Observation::RelayUnpaired), 1);
     }
 
@@ -922,39 +951,104 @@ mod tests {
         plan(DESTINATION_CHAIN_ID, logs).expect("plans")
     }
 
+    fn candidate_indexes(leg: &DestinationLeg) -> Vec<u64> {
+        leg.executing_candidates
+            .iter()
+            .map(|exec| exec.log.log_index)
+            .collect()
+    }
+
+    fn execution_indexes(plan: &TxPlan) -> Vec<u64> {
+        plan.executions
+            .iter()
+            .map(|exec| exec.log.log_index)
+            .collect()
+    }
+
     #[test]
-    fn test_plan_transaction_two_executing_messages_pairs_the_closer_one() {
+    fn test_plan_transaction_returns_every_execution_of_any_origin() {
+        let plan = plan_of_destination(&relay_logs());
+        assert_eq!(plan.executions.len(), 1);
+        assert_eq!(plan.executions[0], relays(&plan)[0].executing_candidates[0]);
+
+        let logs = vec![
+            foreign_read(0),
+            with_log_index(executing_message_log(), 1),
+            pull_read(2, 7, B256::repeat_byte(0xA1)),
+            with_log_index(relayed_message_log(), 5),
+            pull_read(6, 8, B256::repeat_byte(0xA2)),
+        ];
+        let plan = plan_of_destination(&logs);
+        assert_eq!(execution_indexes(&plan), vec![0, 1, 2, 6]);
+        assert_eq!(
+            count(&plan, Observation::Execution(ExecutionOrigin::Foreign)),
+            1
+        );
+        assert_eq!(
+            count(&plan, Observation::Execution(ExecutionOrigin::Messenger)),
+            3
+        );
+        assert_eq!(candidate_indexes(relays(&plan)[0]), vec![1, 2]);
+    }
+
+    #[test]
+    fn test_plan_transaction_relay_takes_every_candidate_of_its_window() {
+        let marker = B256::repeat_byte(0xA0);
+
+        // A pull read before the relay's own execution.
+        let before = vec![
+            pull_read(0, 7, marker),
+            with_log_index(executing_message_log(), 1),
+            with_log_index(relayed_message_log(), 3),
+        ];
+        let plan_before = plan_of_destination(&before);
+        assert_eq!(candidate_indexes(relays(&plan_before)[0]), vec![0, 1]);
+
+        // A pull read inside the target call.
+        let inside = vec![
+            executing_message_log(),
+            pull_read(1, 7, marker),
+            relayed_message_log(),
+        ];
+        let plan_inside = plan_of_destination(&inside);
+        assert_eq!(candidate_indexes(relays(&plan_inside)[0]), vec![0, 1]);
+
+        for plan in [&plan_before, &plan_inside] {
+            assert_eq!(count(plan, Observation::RelayUnpaired), 0);
+            assert_eq!(plan.executions.len(), 2);
+        }
+    }
+
+    #[test]
+    fn test_plan_transaction_skipped_relay_consumes_its_window() {
         let marker = B256::repeat_byte(0xA0);
         let logs = vec![
-            with_topic(executing_message_log(), 1, marker),
-            with_log_index(executing_message_log(), 1),
-            relayed_message_log(),
+            pull_read(0, 7, marker),
+            with_topic(
+                with_log_index(relayed_message_log(), 1),
+                1,
+                word(U256::from(10)),
+            ),
+            with_log_index(executing_message_log(), 2),
+            with_log_index(relayed_message_log(), 5),
         ];
 
         let plan = plan_of_destination(&logs);
 
-        let exec = relays(&plan)[0].executing.as_ref().expect("paired");
-        assert_eq!(exec.log.log_index, 1, "the closest preceding one");
-        assert_eq!(exec.msg_hash, MESSAGE_0_PAYLOAD_HASH);
-        assert_eq!(count(&plan, Observation::ExecutingMessageUnpaired), 1);
-        assert_eq!(count(&plan, Observation::RelayUnpaired), 0);
-
-        // A messenger-origin ExecutingMessage after the last relay is left
-        // over, and counted.
-        let trailing = vec![
-            executing_message_log(),
-            relayed_message_log(),
-            with_log_index(executing_message_log(), 4),
-        ];
-        let plan = plan_of_destination(&trailing);
-        assert_eq!(relays(&plan).len(), 1);
-        assert_eq!(count(&plan, Observation::ExecutingMessageUnpaired), 1);
+        let relays = relays(&plan);
+        assert_eq!(relays.len(), 1);
+        assert_eq!(candidate_indexes(relays[0]), vec![2]);
+        assert_eq!(
+            count(&plan, Observation::Skipped(SkipReason::SourceNotConfigured)),
+            1
+        );
+        assert_eq!(plan.executions.len(), 2);
     }
 
     /// The identifier names another source chain than the relay does: the
     /// `ExecutingMessage` is not this relay's.
     #[test]
-    fn test_plan_transaction_identifier_chain_mismatch_is_unpaired() {
+    fn test_plan_transaction_execution_of_another_source_chain_is_not_a_candidate() {
         // `chainId` is the fifth word of the `Identifier`.
         let other_chain = with_data_word(
             executing_message_log(),
@@ -966,8 +1060,8 @@ mod tests {
 
         let relays = relays(&plan);
         assert_eq!(relays.len(), 1);
-        assert_eq!(relays[0].executing, None);
-        assert_eq!(count(&plan, Observation::ExecutingMessageUnpaired), 1);
+        assert!(relays[0].executing_candidates.is_empty());
+        assert_eq!(plan.executions.len(), 1);
         assert_eq!(count(&plan, Observation::RelayUnpaired), 1);
     }
 
@@ -1022,6 +1116,7 @@ mod tests {
         let plan = plan_of_destination(&early);
 
         assert!(plan.actions.is_empty());
+        assert!(plan.executions.is_empty());
         assert_eq!(
             plan.observations,
             vec![
@@ -1061,8 +1156,8 @@ mod tests {
         );
 
         // Source topic is the first indexed parameter of `RelayedMessage`.
-        // The identifier still names the configured chain, so the
-        // ExecutingMessage is left unpaired as well.
+        // The skipped relay drops its candidate, but the execution is still a
+        // raw execution.
         let relayed_unconfigured = with_topic(relayed_message_log(), 1, word(U256::from(10)));
         let plan = plan_of_destination(&[executing_message_log(), relayed_unconfigured]);
         assert!(plan.actions.is_empty());
@@ -1070,6 +1165,7 @@ mod tests {
             count(&plan, Observation::Skipped(SkipReason::SourceNotConfigured)),
             1
         );
+        assert_eq!(plan.executions.len(), 1);
         assert_eq!(count(&plan, Observation::RelayUnpaired), 0);
 
         let relayed_out_of_range = with_topic(relayed_message_log(), 1, word(U256::MAX));

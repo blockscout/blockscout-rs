@@ -75,6 +75,11 @@ duplicate keys inside one flush are de-duplicated before the statement,
 because they would otherwise be a statement error that rolls back the
 maintenance transaction.
 
+*Amended 2026-11-24 by ADR-020:* rows are written for every
+`ExecutingMessage` of any origin; `message_id` / `message_hash` are nullable
+and set only on the execution that delivered a message; raw executions are
+written at ingestion, legs at the flush.
+
 ### 6. Amendment to ADR-010 decision 3
 
 ADR-010 keeps `protocol_metadata` sparse for resolved messages. The
@@ -126,7 +131,9 @@ ledger deliberately has no link to the message table.
 - Per-leg evidence, with block hashes, is kept for a sent message even if it
   never completes. A relay seen before its source is not in the ledger yet:
   ledger rows are written with the message row, so that leg stays in
-  `pending_messages` until the source leg arrives.
+  `pending_messages` until the source leg arrives. *Amended 2026-11-24 by
+  ADR-020:* its `ExecutingMessage` is, unlinked, from ingestion on; the
+  `relayed_message` row still waits.
 
 ### Negative
 
@@ -137,13 +144,17 @@ ledger deliberately has no link to the message table.
   already finalized message leaves a row in `pending_messages` that never
   finalizes. Harmless to the canonical row; accepted. A destination-only
   replay also writes nothing, so repairing a stored message needs a replay of
-  both its source and destination blocks (see `gotchas.md`).
+  both its source and destination blocks (see `gotchas.md`). *Amended
+  2026-11-24 by ADR-020:* it now writes the block's `executing_message` rows
+  (unlinked, or keeping an existing link), and still nothing else.
 - Nodes of one RPC pool can disagree about the confirmed head.
 
 ### Neutral
 
 - Expiry and refund events and pull reads are out of this slice. ETH
   transfers are built in [ADR-019](./019-op-interop-eth-transfer-from-message-payload.md).
+  *Amended 2026-11-24 by ADR-020:* pull reads are stored as raw executions,
+  not listed.
 
 ## References
 

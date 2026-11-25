@@ -49,8 +49,8 @@ pub(crate) struct SourceLeg {
     pub(crate) payload_hash: B256,
 }
 
-/// The `CrossL2Inbox.ExecutingMessage` log a relay was paired with: the
-/// on-chain `Identifier` verbatim, plus where the log itself was seen.
+/// One `CrossL2Inbox.ExecutingMessage` log: the on-chain `Identifier`
+/// verbatim, plus where the log itself was seen.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ExecutingLeg {
     pub(crate) log: LogRef,
@@ -83,13 +83,29 @@ pub(crate) struct DestinationLeg {
     /// The event's third topic.
     pub(crate) message_hash: B256,
     pub(crate) return_data_hash: B256,
-    /// `None` for a relay with no usable `ExecutingMessage` before it in its
-    /// transaction. The relay is the fact; the identifier is an attribute.
+    /// Legacy single slot, written by the positional pairing of payloads
+    /// stored before raw executions were indexed. Read as one more candidate;
+    /// new code always writes `None`.
     pub(crate) executing: Option<ExecutingLeg>,
+    /// Every messenger-origin `ExecutingMessage` of this relay's window whose
+    /// `id.chainId` is the relay's source, ascending by log index. The one
+    /// that delivered the message is chosen at consolidation, by content.
+    /// Absent in payloads stored before raw executions were indexed.
+    #[serde(default)]
+    pub(crate) executing_candidates: Vec<ExecutingLeg>,
     /// The `RelayETH` of the same relay group, if any. Absent in payloads
     /// stored before ETH transfers were read.
     #[serde(default)]
     pub(crate) relay_eth: Option<RelayEth>,
+}
+
+impl DestinationLeg {
+    /// The new candidates, then the legacy slot.
+    pub(crate) fn candidates(&self) -> impl Iterator<Item = &ExecutingLeg> {
+        self.executing_candidates
+            .iter()
+            .chain(self.executing.as_ref())
+    }
 }
 
 /// Persisted as JSON in `pending_messages.payload`. Any field added later
@@ -349,7 +365,8 @@ mod tests {
             nonce: U256::from(7),
             message_hash,
             return_data_hash: B256::repeat_byte(0xDD),
-            executing: Some(ExecutingLeg {
+            executing: None,
+            executing_candidates: vec![ExecutingLeg {
                 log: log_ref(
                     DESTINATION_CHAIN_ID,
                     block_byte,
@@ -361,7 +378,7 @@ mod tests {
                 source_block_number: U256::from(101),
                 source_log_index: U256::from(1),
                 source_timestamp: U256::from(1_794_670_098_u64),
-            }),
+            }],
             relay_eth: None,
         }
     }
@@ -396,9 +413,61 @@ mod tests {
         assert_eq!(destination.source_chain_id, SOURCE_CHAIN_ID);
     }
 
+    /// A payload stored by the previous slice has a populated `executing`
+    /// slot and no `executing_candidates` key.
+    #[test]
+    fn test_message_slice_three_payload_with_executing_deserializes() {
+        let hash = format!("0x{}", "ab".repeat(32));
+        let raw = format!(
+            r#"{{
+                "source": null,
+                "destination": {{
+                    "log": {{
+                        "chain_id": 420130020,
+                        "block_number": 100,
+                        "block_hash": "{hash}",
+                        "block_timestamp": "2026-11-16T10:00:00",
+                        "transaction_hash": "{hash}",
+                        "log_index": 3
+                    }},
+                    "source_chain_id": 420130019,
+                    "nonce": "0x7",
+                    "message_hash": "{hash}",
+                    "return_data_hash": "{hash}",
+                    "executing": {{
+                        "log": {{
+                            "chain_id": 420130020,
+                            "block_number": 100,
+                            "block_hash": "{hash}",
+                            "block_timestamp": "2026-11-16T10:00:00",
+                            "transaction_hash": "{hash}",
+                            "log_index": 2
+                        }},
+                        "msg_hash": "{hash}",
+                        "origin": "0x4200000000000000000000000000000000000023",
+                        "source_chain_id": "0x1900f163",
+                        "source_block_number": "0x65",
+                        "source_log_index": "0x1",
+                        "source_timestamp": "0x6a0e5e92"
+                    }},
+                    "relay_eth": null
+                }}
+            }}"#
+        );
+        let message: Message = serde_json::from_str(&raw).expect("old payload deserializes");
+        let destination = message.destination.expect("destination present");
+        assert!(destination.executing_candidates.is_empty());
+        let candidates: Vec<_> = destination.candidates().collect();
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].source_log_index, U256::from(1));
+    }
+
     #[test]
     fn test_message_relay_eth_round_trips_through_json() {
         let mut destination = destination_leg(MESSAGE_0_HASH, 2, 3);
+        let mut second = destination.executing_candidates[0].clone();
+        second.log.log_index = 0;
+        destination.executing_candidates.push(second);
         destination.relay_eth = Some(RelayEth {
             from: Address::repeat_byte(0x11),
             to: Address::repeat_byte(0x22),
@@ -431,7 +500,7 @@ mod tests {
 
         let mut destination_only = Message::default();
         let mut unpaired = destination_leg(MESSAGE_0_HASH, 2, 3);
-        unpaired.executing = None;
+        unpaired.executing_candidates.clear();
         destination_only.apply_destination(unpaired.clone());
         let restored: Message =
             serde_json::from_value(serde_json::to_value(&destination_only).unwrap()).unwrap();

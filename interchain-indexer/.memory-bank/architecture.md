@@ -52,11 +52,14 @@ Location: `interchain-indexer-logic/src/indexer/op_interop/`
 
 Reads only logs, only up to a confirmed block tag (`HeadBlockTag` on
 `LogStream`, ADR-018). Per transaction, `events::plan_transaction` (pure)
-pairs each `RelayedMessage` with its `ExecutingMessage` and decides what to
-apply; `dispatch_transaction` then mutates `MessageBuffer` entries keyed by
-the messenger `messageHash`. `Message::consolidate` is infallible. Besides
-`crosschain_messages`, every observed log is written to `op_interop_legs` by
-`flush_to_final_storage`. A native ETH transfer through `SuperchainETHBridge`
+collects every `ExecutingMessage` and each relay's candidate executions;
+`process_batch` writes all executions as unlinked `op_interop_legs` rows in
+one upsert, then `apply_actions` mutates `MessageBuffer` entries keyed by the
+messenger `messageHash`. `Message::consolidate` is infallible and selects the
+delivering execution by content; `flush_to_final_storage` writes the legs and
+links that execution (ADR-020). Besides `crosschain_messages`, every observed
+`SentMessage`, `RelayedMessage` and `ExecutingMessage` log is written to
+`op_interop_legs`. A native ETH transfer through `SuperchainETHBridge`
 is derived from the `SentMessage` payload (`op_interop/eth_transfer.rs`,
 called from `Message::consolidate`); the bridge's `SendETH` / `RelayETH`
 events (third contract kind `superchain_eth_bridge`) are cross-checks only

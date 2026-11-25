@@ -3278,9 +3278,9 @@ See `NAME_SORT_PREFIX_CHARS` in
 **descending** (the `.map` after each stream in `log_stream.rs`), and
 `evm::group_logs_by_transaction` keeps input order. Any per-transaction logic
 that depends on log order must sort its group ascending by `log_index` first.
-The OP interop indexer pairs a `RelayedMessage` with the closest preceding
-messenger-origin `ExecutingMessage`; unsorted, a catch-up batch pairs nothing.
-`indexer/op_interop/indexer.rs` sorts each group before `dispatch_transaction`,
+The OP interop indexer cuts relay windows at each `RelayedMessage` and
+collects candidate `ExecutingMessage`s per window; unsorted, the windows are
+wrong. `indexer/op_interop/indexer.rs` sorts each group before `plan_and_report`,
 and `test_replay_reversed_log_order_gives_same_result` pins it.
 
 ## `protocol_metadata` Upsert Is A Shallow `||`, Except For The `op_interop` Key
@@ -3309,10 +3309,12 @@ leak to chase. `test_replay_source_only_after_completion_keeps_destination`
 asserts the single leftover row. See ADR-018.
 
 The two sides are not symmetric. A source-only replay reaches the upsert; a
-**destination-only replay writes nothing at all**: `consolidate` returns
-`Ok(None)` for an entry without a source leg, so neither the message row nor
-any `op_interop_legs` row is touched, the rescan reports no failure, and the
-only trace is the leftover `pending_messages` row. So a relay that was stored
+**destination-only replay does not repair the message**: `consolidate` returns
+`Ok(None)` for an entry without a source leg. Ingestion still writes the
+`executing_message` rows of the block (unlinked, or keeping an existing
+link), but neither the message row nor any leg row of the message is touched,
+the rescan reports no failure, and the only trace is the leftover
+`pending_messages` row. So a relay that was stored
 wrongly — typically unpaired, because the `cross_l2_inbox` version window was
 misconfigured and its `ExecutingMessage` resolved `WrongVersion` (a warning,
 not a failed block) — is **not** repaired by rescanning the destination range
@@ -3331,3 +3333,38 @@ a destination-only replay writes nothing. To add transfers to older messages,
 rescan both chains' ranges; a source-only rescan also works (it upserts the
 transfer and the projection counts it once) but leaves one `pending_messages`
 row per message, as described above.
+
+## `op_interop_legs` Has Two Writers; The Link Is Never Cleared
+
+Ingestion writes every `ExecutingMessage` unlinked; the flush writes legs
+linked. Both go through `upsert_op_interop_legs`. `message_id` /
+`message_hash` merge with `COALESCE(EXCLUDED, stored)`, so neither write order
+clears a link. As a result, a link or a nested identifier written wrongly is
+never repaired by a replay; the one-level `op_interop` metadata merge never
+removes a key either.
+
+Any new column needs a merge rule that holds in both write orders. The
+overlay's state column is the next one. Never write the table outside that
+function. See ADR-020.
+
+## Raw `CrossL2Inbox` Executions Are Written At Ingestion, Before The Buffer Actions
+
+`process_batch` plans every transaction, writes all executions in one upsert,
+then applies the buffer actions. A write failure attributes the executions'
+blocks as failed, and those blocks apply **nothing** to the buffer: they are
+replayed whole, like a block with an invalid row. Applied anyway, a relay
+could finalize its message before the replay, and the replay would then put
+that relay into a fresh entry with no source, which never finalizes (the
+one-sided leftover below).
+
+The checkpoint can pass such a block (it certifies scanning; see "A Checkpoint
+Certifies Scanning, Not Correctness"). The failure ledger is the guarantee.
+Writing after the actions would open a single-fault window: a stop after
+maintenance flushed the block's entry, but before the write.
+
+## Two Reads Of The Same Source Log In One Relay Window Are Indistinguishable
+
+When a pull read of the very `SentMessage` being relayed shares the relay's
+window, both candidates match. The lower log index is linked, which may be the
+pull read in a multicall that placed it before the relay. Identity is
+identical and only `log_index` differs. Telling them apart needs a call trace.

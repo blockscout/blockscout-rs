@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -10,7 +10,7 @@ use std::{
 
 use alloy::{
     network::Ethereum,
-    primitives::{Address, ChainId},
+    primitives::{Address, B256, ChainId},
     providers::DynProvider,
     rpc::types::{Filter, Log},
 };
@@ -35,9 +35,10 @@ use crate::{
 
 use super::{
     abi::OpInteropRegistry,
-    events::{self, EventContext},
+    consolidation,
+    events::{self, EventContext, TxPlan},
     settings::OpInteropIndexerSettings,
-    types::Message,
+    types::{ExecutingLeg, Message},
 };
 
 /// One configured contract of one chain, valid from `started_at_block`.
@@ -198,7 +199,11 @@ impl OpInteropIndexer {
             .await
     }
 
-    /// Makes no RPC call: everything comes from the log rows.
+    /// Makes no RPC call: everything comes from the log rows. It makes one
+    /// database write per batch that holds executions: every `ExecutingMessage`
+    /// is written as an unlinked ledger row before any buffer action of the
+    /// batch is applied, and a write failure attributes the executions'
+    /// blocks, which then apply nothing to the buffer.
     ///
     /// A log row missing a field this indexer keeps is a processing error
     /// attributed to its block, never a skip: the checkpoint would otherwise
@@ -274,18 +279,80 @@ impl OpInteropIndexer {
             buffer: &ctx.buffer,
         };
 
+        // Phase 1 for every transaction: pure plans plus their metrics.
+        let mut planned: Vec<(B256, Vec<u64>, TxPlan)> = Vec::new();
         for (hash, mut logs) in crate::indexer::evm::group_logs_by_transaction(&valid) {
-            // Catch-up batches arrive descending; pairing needs ascending.
+            // Catch-up batches arrive descending; the relay window needs ascending.
             logs.sort_by_key(|log| log.log_index);
-            if let Err(err) = events::dispatch_transaction(&event_ctx, &logs).await {
+            let blocks: Vec<u64> = logs.iter().filter_map(|log| log.block_number).collect();
+            match events::plan_and_report(&event_ctx, &logs) {
+                Ok(plan) => planned.push((hash, blocks, plan)),
+                Err(err) => {
+                    tracing::warn!(
+                        err = ?err,
+                        bridge_id = ctx.bridge_id,
+                        chain_id,
+                        tx_hash = %hash,
+                        "failed to plan OP interop transaction"
+                    );
+                    failed_blocks.extend(blocks);
+                    failed_count += 1;
+                    last_err = Some(err);
+                }
+            }
+        }
+
+        // Raw executions are written before any buffer effect of this batch
+        // exists. Maintenance flushes concurrently and can move the checkpoint
+        // past a block whose entry it flushed; with this order, every such
+        // block already has its raw rows durable, or its failure is on the way
+        // to the failure ledger.
+        let executions: Vec<&ExecutingLeg> = planned
+            .iter()
+            .flat_map(|(_, _, plan)| plan.executions.iter())
+            .collect();
+        let mut unwritten_blocks: BTreeSet<u64> = BTreeSet::new();
+        if let Err(err) = write_executions(ctx, &executions).await {
+            // Every block of the batch's executions: batched_upsert may have
+            // committed some chunks and not others.
+            unwritten_blocks = executions
+                .iter()
+                .map(|exec| exec.log.block_number)
+                .collect();
+            tracing::warn!(
+                err = ?err,
+                bridge_id = ctx.bridge_id,
+                chain_id,
+                executions = executions.len(),
+                first_block = ?unwritten_blocks.first(),
+                last_block = ?unwritten_blocks.last(),
+                "failed to write OP interop raw executions; attributing their blocks as failed"
+            );
+            failed_blocks.extend(unwritten_blocks.iter().copied());
+            failed_count += 1;
+            last_err = Some(err);
+        }
+
+        // Phase 2: the buffer actions, except in blocks whose raw rows were not
+        // written. Those blocks are replayed whole, like a block with an
+        // invalid row: applied now, a relay could finalize its message before
+        // the replay, and the replay would then put that relay into a fresh
+        // entry with no source, which never finalizes.
+        for (hash, blocks, plan) in planned {
+            if blocks.iter().any(|block| unwritten_blocks.contains(block)) {
+                continue;
+            }
+            if let Err(err) =
+                events::apply_actions(&event_ctx, plan.actions, hash, blocks.first().copied()).await
+            {
                 tracing::warn!(
                     err = ?err,
                     bridge_id = ctx.bridge_id,
                     chain_id,
                     tx_hash = %hash,
-                    "failed to dispatch OP interop transaction"
+                    "failed to apply OP interop transaction"
                 );
-                failed_blocks.extend(logs.iter().filter_map(|log| log.block_number));
+                failed_blocks.extend(blocks);
                 failed_count += 1;
                 last_err = Some(err);
             }
@@ -317,6 +384,29 @@ impl OpInteropIndexer {
 
         Ok(())
     }
+}
+
+/// One unlinked ledger row per execution, in one idempotent call. The flush
+/// links the delivering one later; the conflict rule never clears a link.
+async fn write_executions(ctx: &RunContext, executions: &[&ExecutingLeg]) -> Result<()> {
+    if executions.is_empty() {
+        return Ok(());
+    }
+    let rows = executions
+        .iter()
+        .map(|exec| {
+            consolidation::execution_row(ctx.bridge_id, exec, None).with_context(|| {
+                format!(
+                    "OP interop execution (block {}, log_index {}) does not fit the storage types",
+                    exec.log.block_number, exec.log.log_index
+                )
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let count = rows.len();
+    crate::message_buffer::upsert_op_interop_legs(ctx.db.db.as_ref(), rows)
+        .await
+        .with_context(|| format!("failed to write {count} OP interop raw execution row(s)"))
 }
 
 #[async_trait]
@@ -517,7 +607,8 @@ mod tests {
     };
     use pretty_assertions::assert_eq;
     use sea_orm::{
-        ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, TransactionTrait,
+        ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter,
+        QueryOrder, TransactionTrait,
     };
     use serde_json::json;
 
@@ -527,8 +618,8 @@ mod tests {
         indexer::{
             failure_ledger::settings::FailureRetrySettings,
             op_interop::test_fixtures::{
-                DESTINATION_CHAIN_ID, SOURCE_CHAIN_ID, contracts, relay_logs, send_calls,
-                sent_message_logs,
+                DESTINATION_CHAIN_ID, SOURCE_CHAIN_ID, contracts, foreign_read, pull_read,
+                relay_logs, send_calls, sent_message_logs,
             },
         },
         log_stream::{ScanDirection, test_support::HeadMockService},
@@ -652,6 +743,34 @@ mod tests {
         kinds
     }
 
+    async fn execution_rows(db: &InterchainDatabase) -> Vec<op_interop_legs::Model> {
+        op_interop_legs::Entity::find()
+            .filter(op_interop_legs::Column::EventKind.eq("executing_message"))
+            .order_by_asc(op_interop_legs::Column::ChainId)
+            .order_by_asc(op_interop_legs::Column::BlockNumber)
+            .order_by_asc(op_interop_legs::Column::LogIndex)
+            .all(db.db.as_ref())
+            .await
+            .unwrap()
+    }
+
+    /// The relay fixture with every log at `log_index >= at` shifted up by
+    /// one, plus `extra` (already at `at`).
+    fn relay_logs_with(extra: Log, at: u64) -> Vec<Log> {
+        let mut logs: Vec<Log> = relay_logs()
+            .into_iter()
+            .map(|mut log| {
+                let index = log.log_index.expect("fixture log has an index");
+                if index >= at {
+                    log.log_index = Some(index + 1);
+                }
+                log
+            })
+            .collect();
+        logs.push(extra);
+        logs
+    }
+
     async fn pending_count(db: &InterchainDatabase) -> u64 {
         pending_messages::Entity::find()
             .count(db.db.as_ref())
@@ -712,6 +831,23 @@ mod tests {
             vec!["executing_message", "relayed_message", "sent_message"]
         );
         assert_eq!(pending_count(db).await, 0, "a completed message is evicted");
+
+        let executions = execution_rows(db).await;
+        assert_eq!(executions.len(), 1);
+        assert_eq!(executions[0].message_id, Some(rows[0].id));
+        assert_eq!(executions[0].message_hash, Some(MESSAGE_0_ID_HASH.to_vec()));
+        assert_eq!(
+            (
+                executions[0].src_chain_id,
+                executions[0].src_block_number,
+                executions[0].src_log_index
+            ),
+            (Some(SOURCE), Some(498_922), Some(1))
+        );
+        assert_eq!(
+            json!(executions[0].log_index),
+            op_interop(&rows[0])["executing_message"]["log_index"]
+        );
     }
 
     /// A clone of `log` with the topic at `index` replaced.
@@ -766,7 +902,8 @@ mod tests {
             messages(&db).await.is_empty(),
             "a destination-only entry writes no canonical row"
         );
-        assert!(leg_kinds(&db).await.is_empty());
+        assert_eq!(leg_kinds(&db).await, vec!["executing_message"]);
+        assert_eq!(execution_rows(&db).await[0].message_id, None);
 
         feed(&ctx, SOURCE, send_batch()).await;
         buffer.run().await.unwrap();
@@ -852,6 +989,7 @@ mod tests {
         buffer.run().await.unwrap();
         assert_final_state(&db).await;
         let stats_processed = messages(&db).await[0].stats_processed;
+        let created_at = execution_rows(&db).await[0].created_at;
 
         feed(&ctx, SOURCE, send_batch()).await;
         feed(&ctx, DESTINATION, relay_logs()).await;
@@ -863,6 +1001,8 @@ mod tests {
             stats_processed,
             "a replay must not change the stats marker"
         );
+        assert_eq!(execution_rows(&db).await.len(), 1);
+        assert_eq!(execution_rows(&db).await[0].created_at, created_at);
     }
 
     #[tokio::test]
@@ -1355,5 +1495,301 @@ mod tests {
             2,
             "no duplicate rows"
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_replay_foreign_origin_execution_is_stored_unlinked() {
+        let guard = init_db("op_interop_foreign_origin_execution").await;
+        let db = InterchainDatabase::new(guard.client());
+        seed_bridge_and_chains(&db).await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed(&ctx, DESTINATION, vec![foreign_read(0)]).await;
+        buffer.run().await.unwrap();
+
+        let rows = execution_rows(&db).await;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].chain_id, DESTINATION);
+        assert_eq!(rows[0].log_index, 0);
+        assert_eq!(
+            (rows[0].message_id, rows[0].message_hash.clone()),
+            (None, None)
+        );
+        assert_eq!(
+            (
+                rows[0].src_chain_id,
+                rows[0].src_block_number,
+                rows[0].src_log_index
+            ),
+            (Some(SOURCE), Some(498_922), Some(1))
+        );
+        assert_eq!(
+            rows[0].event_data["identifier"]["origin"],
+            "0x9999999999999999999999999999999999999999"
+        );
+        assert!(messages(&db).await.is_empty());
+        assert_eq!(pending_count(&db).await, 0);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_replay_unpaired_messenger_execution_is_stored_unlinked() {
+        let guard = init_db("op_interop_unpaired_messenger_execution").await;
+        let db = InterchainDatabase::new(guard.client());
+        seed_bridge_and_chains(&db).await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed(
+            &ctx,
+            DESTINATION,
+            vec![crate::indexer::op_interop::test_fixtures::executing_message_log()],
+        )
+        .await;
+        feed(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+
+        let rows = messages(&db).await;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].status, MessageStatus::Initiated);
+        let executions = execution_rows(&db).await;
+        assert_eq!(executions.len(), 1);
+        assert_eq!(executions[0].message_id, None);
+        assert_eq!(
+            leg_kinds(&db).await,
+            vec!["executing_message", "sent_message"]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_replay_destination_only_after_completion_keeps_the_link() {
+        let guard = init_db("op_interop_destination_only_after_completion").await;
+        let db = InterchainDatabase::new(guard.client());
+        seed_bridge_and_chains(&db).await;
+        let buffer = new_buffer(&db, Duration::ZERO);
+        let ctx = run_context(&db, buffer.clone());
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        assert_final_state(&db).await;
+        let created_at = execution_rows(&db).await[0].created_at;
+
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+
+        let executions = execution_rows(&db).await;
+        assert_eq!(executions.len(), 1);
+        assert_eq!(executions[0].message_id, Some(messages(&db).await[0].id));
+        assert_eq!(executions[0].created_at, created_at);
+        let rows = messages(&db).await;
+        assert_eq!(rows.len(), 1);
+        assert_completed(&rows[0]);
+        assert_eq!(pending_count(&db).await, 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_replay_pull_read_does_not_steal_the_nesting() {
+        let marker = B256::repeat_byte(0xA1);
+        for (name, pull_before) in [
+            ("op_interop_pull_read_inside_relay", false),
+            ("op_interop_pull_read_before_relay", true),
+        ] {
+            let guard = init_db(name).await;
+            let db = InterchainDatabase::new(guard.client());
+            seed_bridge_and_chains(&db).await;
+            let buffer = new_buffer(&db, Duration::from_secs(60));
+            let ctx = run_context(&db, buffer.clone());
+
+            let (logs, own_index, pull_index) = if pull_before {
+                (relay_logs_with(pull_read(0, 7, marker), 0), 1, 0)
+            } else {
+                (relay_logs_with(pull_read(1, 7, marker), 1), 0, 1)
+            };
+            feed(&ctx, SOURCE, send_batch()).await;
+            feed(&ctx, DESTINATION, logs).await;
+            buffer.run().await.unwrap();
+
+            let rows = messages(&db).await;
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].status, MessageStatus::Completed, "{name}");
+            let executions = execution_rows(&db).await;
+            assert_eq!(executions.len(), 2, "{name}");
+            for exec in &executions {
+                let linked = exec.log_index == own_index;
+                assert_eq!(exec.message_id.is_some(), linked, "{name}: {exec:?}");
+                assert!(linked || exec.log_index == pull_index, "{name}");
+            }
+            let nested = op_interop(&rows[0]);
+            assert_eq!(nested["executing_message"]["log_index"], json!(own_index));
+            assert_eq!(nested["destination"]["log_index"], json!(4));
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_replay_slice_three_pending_payload_still_links() {
+        let guard = init_db("op_interop_slice_three_pending_payload").await;
+        let db = InterchainDatabase::new(guard.client());
+        seed_bridge_and_chains(&db).await;
+
+        let first_buffer = new_buffer(&db, Duration::ZERO);
+        feed(
+            &run_context(&db, first_buffer.clone()),
+            DESTINATION,
+            relay_logs(),
+        )
+        .await;
+        first_buffer.run().await.unwrap();
+        assert_eq!(pending_count(&db).await, 1);
+        drop(first_buffer);
+
+        let result = db
+            .db
+            .execute_unprepared(
+                "UPDATE pending_messages
+                 SET payload = jsonb_set(
+                         payload #- '{inner,destination,executing_candidates}',
+                         '{inner,destination,executing}',
+                         payload #> '{inner,destination,executing_candidates,0}')
+                 WHERE bridge_id = 2004;",
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.rows_affected(), 1);
+        let stored = pending_messages::Entity::find()
+            .one(db.db.as_ref())
+            .await
+            .unwrap()
+            .expect("one pending row");
+        assert!(
+            stored.payload["inner"]["destination"]
+                .get("executing_candidates")
+                .is_none(),
+            "{}",
+            stored.payload
+        );
+
+        let second_buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, second_buffer.clone());
+        feed(&ctx, SOURCE, send_batch()).await;
+        second_buffer.run().await.unwrap();
+
+        assert_final_state(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_replay_raw_rows_reach_neither_messages_nor_stats() {
+        let guard = init_db("op_interop_raw_rows_reach_nothing_else").await;
+        let db = InterchainDatabase::new(guard.client());
+        seed_bridge_and_chains(&db).await;
+        seed_native_tokens_into(&db, BRIDGE_ID, &[SOURCE, DESTINATION]).await;
+        let buffer = new_buffer(&db, Duration::ZERO);
+        let ctx = run_context(&db, buffer.clone());
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        feed(&ctx, DESTINATION, vec![foreign_read(10)]).await;
+        feed(
+            &ctx,
+            DESTINATION,
+            vec![pull_read(11, 7, B256::repeat_byte(0xA1))],
+        )
+        .await;
+        buffer.run().await.unwrap();
+
+        assert_eq!(messages(&db).await.len(), 1);
+        assert_eq!(transfers(&db).await.len(), 1);
+        let stats = stats_messages::Entity::find()
+            .filter(stats_messages::Column::BridgeId.eq(BRIDGE_ID))
+            .filter(stats_messages::Column::SrcChainId.eq(SOURCE))
+            .filter(stats_messages::Column::DstChainId.eq(DESTINATION))
+            .one(db.db.as_ref())
+            .await
+            .unwrap()
+            .expect("the completed message is counted");
+        assert_eq!(stats.messages_count, 1);
+        let edges = stats_asset_edges::Entity::find()
+            .all(db.db.as_ref())
+            .await
+            .unwrap();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].transfers_count, 1);
+        let executions = execution_rows(&db).await;
+        assert_eq!(executions.len(), 3);
+        assert_eq!(
+            executions
+                .iter()
+                .filter(|exec| exec.message_id.is_some())
+                .count(),
+            1
+        );
+        assert_eq!(pending_count(&db).await, 0);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_process_batch_raw_write_failure_attributes_the_execution_blocks() {
+        let guard = init_db("op_interop_raw_write_failure").await;
+        let db = InterchainDatabase::new(guard.client());
+        seed_bridge_and_chains(&db).await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        db.db
+            .execute_unprepared(
+                "CREATE FUNCTION test_refuse_op_interop_legs() RETURNS trigger LANGUAGE plpgsql AS
+                   $$ BEGIN RAISE EXCEPTION 'test: op_interop_legs write refused'; END $$;
+                 CREATE TRIGGER test_refuse_op_interop_legs BEFORE INSERT ON op_interop_legs
+                   FOR EACH ROW EXECUTE FUNCTION test_refuse_op_interop_legs();",
+            )
+            .await
+            .unwrap();
+
+        let err = OpInteropIndexer::process_batch(&ctx, DESTINATION, &relay_logs())
+            .await
+            .expect_err("the raw write is refused");
+        assert_eq!(
+            err.attributed,
+            vec![BlockRange {
+                from: 895_701,
+                to: 895_701
+            }]
+        );
+        OpInteropIndexer::process_batch(&ctx, SOURCE, &send_batch())
+            .await
+            .unwrap_or_else(|err| {
+                panic!("a batch without executions writes nothing: {:#}", err.error)
+            });
+
+        db.db
+            .execute_unprepared(
+                "DROP TRIGGER test_refuse_op_interop_legs ON op_interop_legs;
+                 DROP FUNCTION test_refuse_op_interop_legs();",
+            )
+            .await
+            .unwrap();
+        buffer.run().await.unwrap();
+
+        // The relay's block applied nothing to the buffer: the message waits
+        // for the replay instead of completing ahead of it.
+        let rows = messages(&db).await;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].status, MessageStatus::Initiated);
+        assert!(execution_rows(&db).await.is_empty());
+
+        // The replay the failure ledger would run.
+        OpInteropIndexer::process_batch(&ctx, DESTINATION, &relay_logs())
+            .await
+            .unwrap_or_else(|err| panic!("the replay succeeds: {:#}", err.error));
+        buffer.run().await.unwrap();
+
+        assert_final_state(&db).await;
+        assert_eq!(pending_count(&db).await, 0, "no one-sided leftover entry");
     }
 }
