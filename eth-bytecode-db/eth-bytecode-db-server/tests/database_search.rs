@@ -10,9 +10,11 @@ use eth_bytecode_db_proto::blockscout::eth_bytecode_db::{
     v2 as eth_bytecode_db_v2,
     v2::{
         BatchSearchEventDescriptionsRequest, BatchSearchEventDescriptionsResponse,
-        EventDescription, SearchAllSourcesRequest, SearchAllSourcesResponse,
+        BatchSearchFunctionDescriptionsRequest, BatchSearchFunctionDescriptionsResponse,
+        EventDescription, FunctionDescription, SearchAllSourcesRequest, SearchAllSourcesResponse,
         SearchAllianceSourcesRequest, SearchEventDescriptionsRequest,
-        SearchEventDescriptionsResponse, SearchSourcesRequest, SearchSourcesResponse,
+        SearchEventDescriptionsResponse, SearchFunctionDescriptionsRequest,
+        SearchFunctionDescriptionsResponse, SearchSourcesRequest, SearchSourcesResponse,
         SearchSourcifySourcesRequest, Source,
     },
 };
@@ -635,6 +637,147 @@ async fn search_event_descriptions() {
         expected_response, event_descriptions,
         "Invalid response returned"
     );
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
+async fn search_function_descriptions() {
+    const ROUTE: &str = "/api/v2/function-descriptions:search";
+
+    let db = init_db(TEST_SUITE_NAME, "search_function_descriptions").await;
+
+    let abi = r#"[{"inputs":[{"internalType":"uint256","name":"val","type":"uint256"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"a","type":"uint256"}],"name":"A","type":"event"},{"stateMutability":"payable","type":"fallback"},{"inputs":[],"name":"f","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"transfer","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"stateMutability":"payable","type":"receive"}]"#;
+
+    let test_data = {
+        let mut test_data =
+            test_input_data::basic(verification::SourceType::Solidity, MatchType::Partial);
+        test_data.set_abi(abi.to_string());
+        test_data
+    };
+
+    let db_url = db.db_url();
+    let verifier_addr = init_verifier_server::<
+        _,
+        eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
+        _,
+    >(service(), test_data.verifier_response)
+    .await;
+
+    let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+
+    // Fill the database with existing value
+    {
+        let dummy_request = default_verify_request();
+        let _verification_response: eth_bytecode_db_v2::VerifyResponse =
+            test_server::send_post_request(&eth_bytecode_db_base, VERIFY_ROUTE, &dummy_request)
+                .await;
+    }
+
+    let request = SearchFunctionDescriptionsRequest {
+        selector: "0xa9059cbb".into(),
+    };
+
+    let function_descriptions: SearchFunctionDescriptionsResponse =
+        test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
+
+    let expected_response = SearchFunctionDescriptionsResponse {
+        function_descriptions: vec![transfer_function_description()],
+    };
+
+    assert_eq!(
+        expected_response, function_descriptions,
+        "Invalid response returned"
+    );
+}
+
+#[rstest]
+#[tokio::test]
+#[timeout(std::time::Duration::from_secs(60))]
+#[ignore = "Needs database to run"]
+async fn batch_search_function_descriptions() {
+    const ROUTE: &str = "/api/v2/function-descriptions:batch-search";
+
+    let db = init_db(TEST_SUITE_NAME, "batch_search_function_descriptions").await;
+
+    let abi = r#"[{"inputs":[{"internalType":"uint256","name":"val","type":"uint256"}],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"a","type":"uint256"}],"name":"A","type":"event"},{"stateMutability":"payable","type":"fallback"},{"inputs":[],"name":"f","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"transfer","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"stateMutability":"payable","type":"receive"}]"#;
+
+    let test_data = {
+        let mut test_data =
+            test_input_data::basic(verification::SourceType::Solidity, MatchType::Partial);
+        test_data.set_abi(abi.to_string());
+        test_data
+    };
+
+    let db_url = db.db_url();
+    let verifier_addr = init_verifier_server::<
+        _,
+        eth_bytecode_db_v2::VerifySolidityMultiPartRequest,
+        _,
+    >(service(), test_data.verifier_response)
+    .await;
+
+    let eth_bytecode_db_base = init_eth_bytecode_db_server(db_url, verifier_addr).await;
+
+    // Fill the database with existing value
+    {
+        let dummy_request = default_verify_request();
+        let _verification_response: eth_bytecode_db_v2::VerifyResponse =
+            test_server::send_post_request(&eth_bytecode_db_base, VERIFY_ROUTE, &dummy_request)
+                .await;
+    }
+
+    // The second selector is unknown, and the last one repeats the first one
+    let selectors = [
+        "0xa9059cbb".to_string(),
+        "0xdeadbeef".to_string(),
+        "0x26121ff0".to_string(),
+        "0xa9059cbb".to_string(),
+    ];
+
+    let request = BatchSearchFunctionDescriptionsRequest {
+        selectors: selectors.into(),
+    };
+
+    let batch_function_descriptions: BatchSearchFunctionDescriptionsResponse =
+        test_server::send_post_request(&eth_bytecode_db_base, ROUTE, &request).await;
+
+    let expected_response = BatchSearchFunctionDescriptionsResponse {
+        responses: vec![
+            SearchFunctionDescriptionsResponse {
+                function_descriptions: vec![transfer_function_description()],
+            },
+            SearchFunctionDescriptionsResponse {
+                function_descriptions: vec![],
+            },
+            SearchFunctionDescriptionsResponse {
+                function_descriptions: vec![FunctionDescription {
+                    r#type: "function".into(),
+                    name: "f".into(),
+                    inputs: "[]".into(),
+                    signature: "f()".into(),
+                }],
+            },
+            SearchFunctionDescriptionsResponse {
+                function_descriptions: vec![transfer_function_description()],
+            },
+        ],
+    };
+
+    assert_eq!(
+        expected_response, batch_function_descriptions,
+        "Invalid response returned"
+    );
+}
+
+fn transfer_function_description() -> FunctionDescription {
+    FunctionDescription {
+        r#type: "function".into(),
+        name: "transfer".into(),
+        inputs: r#"[{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}]"#.into(),
+        signature: "transfer(address,uint256)".into(),
+    }
 }
 
 #[rstest]

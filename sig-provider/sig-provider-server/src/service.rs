@@ -5,9 +5,9 @@ use ethabi::{ethereum_types::H256, RawLog};
 use sig_provider::SourceAggregator;
 use sig_provider_proto::blockscout::sig_provider::v1::{
     abi_service_server::AbiService, signature_service_server::SignatureService,
-    BatchGetEventAbisRequest, BatchGetEventAbisResponse, CreateSignaturesRequest,
-    CreateSignaturesResponse, GetEventAbiRequest, GetEventAbiResponse, GetFunctionAbiRequest,
-    GetFunctionAbiResponse,
+    BatchGetEventAbisRequest, BatchGetEventAbisResponse, BatchGetFunctionAbisRequest,
+    BatchGetFunctionAbisResponse, CreateSignaturesRequest, CreateSignaturesResponse,
+    GetEventAbiRequest, GetEventAbiResponse, GetFunctionAbiRequest, GetFunctionAbiResponse,
 };
 use std::sync::Arc;
 
@@ -107,6 +107,41 @@ impl AbiService for Service {
             responses,
         }))
     }
+
+    async fn batch_get_function_abis(
+        &self,
+        request: tonic::Request<BatchGetFunctionAbisRequest>,
+    ) -> Result<tonic::Response<BatchGetFunctionAbisResponse>, tonic::Status> {
+        const BATCH_LIMIT: usize = 100;
+
+        let request = request.into_inner();
+        if request.selectors.len() > BATCH_LIMIT {
+            return Err(tonic::Status::invalid_argument(format!(
+                "too many selectors: {} requested, at most {BATCH_LIMIT} allowed",
+                request.selectors.len()
+            )));
+        }
+
+        let selectors = request
+            .selectors
+            .iter()
+            .map(String::as_str)
+            .map(parse_selector)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let responses = self
+            .agg
+            .batch_get_function_abi(&selectors)
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?
+            .into_iter()
+            .map(|abi| GetFunctionAbiResponse { abi })
+            .collect();
+
+        Ok(tonic::Response::new(BatchGetFunctionAbisResponse {
+            responses,
+        }))
+    }
 }
 
 // todo: remove once https://github.com/hyperium/tonic/pull/2282 is released
@@ -124,4 +159,11 @@ fn parse_topics(topics: String) -> Result<Vec<H256>, tonic::Status> {
             Ok(H256::from_slice(&hex))
         })
         .collect()
+}
+
+// todo: remove once https://github.com/hyperium/tonic/pull/2282 is released
+#[allow(clippy::result_large_err)]
+fn parse_selector(selector: &str) -> Result<[u8; 4], tonic::Status> {
+    <[u8; 4]>::try_from(decode(selector)?)
+        .map_err(|_| tonic::Status::invalid_argument("selector len must be 4 bytes"))
 }

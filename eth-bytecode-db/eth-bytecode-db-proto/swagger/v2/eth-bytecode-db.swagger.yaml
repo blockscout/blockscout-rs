@@ -188,6 +188,46 @@ paths:
             $ref: '#/definitions/v2SearchEventDescriptionsRequest'
       tags:
         - Database
+  /api/v2/function-descriptions:batch-search:
+    post:
+      operationId: Database_BatchSearchFunctionDescriptions
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2BatchSearchFunctionDescriptionsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2BatchSearchFunctionDescriptionsRequest'
+      tags:
+        - Database
+  /api/v2/function-descriptions:search:
+    post:
+      operationId: Database_SearchFunctionDescriptions
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v2SearchFunctionDescriptionsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/googlerpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v2SearchFunctionDescriptionsRequest'
+      tags:
+        - Database
   /api/v2/verifier/solidity/sources:verify-multi-part:
     post:
       operationId: SolidityVerifier_VerifyMultiPart
@@ -459,6 +499,25 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v2SearchEventDescriptionsResponse'
+  v2BatchSearchFunctionDescriptionsRequest:
+    type: object
+    properties:
+      selectors:
+        type: array
+        items:
+          type: string
+        description: |-
+          The selectors of the functions to look for.
+          A maximum of 100 selectors can be retrieved in a batch.
+  v2BatchSearchFunctionDescriptionsResponse:
+    type: object
+    properties:
+      responses:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v2SearchFunctionDescriptionsResponse'
+        description: Contains one response per requested selector, in the order of the request.
   v2BytecodeType:
     type: string
     enum:
@@ -478,6 +537,21 @@ definitions:
       inputs:
         type: string
         title: / Json encoded array of objects each describing one of the event arguments
+  v2FunctionDescription:
+    type: object
+    properties:
+      type:
+        type: string
+        title: / Will always be "function"
+      name:
+        type: string
+        title: / The name of the function
+      inputs:
+        type: string
+        title: / Json encoded array of objects each describing one of the function arguments
+      signature:
+        type: string
+        title: / Canonical signature of the function, e.g. `transfer(address,uint256)`
   v2HealthCheckResponse:
     type: object
     properties:
@@ -555,6 +629,25 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v2EventDescription'
+  v2SearchFunctionDescriptionsRequest:
+    type: object
+    properties:
+      selector:
+        type: string
+        description: |-
+          / The first 4 bytes of the keccak256 hash of the function signature,
+          / as used at the beginning of the transaction input.
+  v2SearchFunctionDescriptionsResponse:
+    type: object
+    properties:
+      functionDescriptions:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v2FunctionDescription'
+        description: |-
+          / All known functions with the given selector.
+          / Contains more than one element only for functions with colliding selectors.
   v2SearchSourcesRequest:
     type: object
     properties:

@@ -7,9 +7,11 @@ use crate::blockscout::eth_bytecode_db::v2::{
     verifier_alliance_actix::route_verifier_alliance, verifier_alliance_server::VerifierAlliance,
     vyper_verifier_actix::route_vyper_verifier, vyper_verifier_server::VyperVerifier,
     AllianceStats, BatchSearchEventDescriptionsRequest, BatchSearchEventDescriptionsResponse,
+    BatchSearchFunctionDescriptionsRequest, BatchSearchFunctionDescriptionsResponse,
     GetAllianceStatsRequest, ListCompilerVersionsRequest, ListCompilerVersionsResponse,
     SearchAllSourcesRequest, SearchAllSourcesResponse, SearchAllianceSourcesRequest,
-    SearchEventDescriptionsRequest, SearchEventDescriptionsResponse, SearchSourcesRequest,
+    SearchEventDescriptionsRequest, SearchEventDescriptionsResponse,
+    SearchFunctionDescriptionsRequest, SearchFunctionDescriptionsResponse, SearchSourcesRequest,
     SearchSourcesResponse, SearchSourcifySourcesRequest, VerifierAllianceBatchImportResponse,
     VerifierAllianceBatchImportSolidityMultiPartRequest,
     VerifierAllianceBatchImportSolidityStandardJsonRequest, VerifyFromEtherscanSourcifyRequest,
@@ -35,6 +37,10 @@ mock! {
         async fn search_event_descriptions(&self, request: tonic::Request<SearchEventDescriptionsRequest>) -> Result<tonic::Response<SearchEventDescriptionsResponse>, tonic::Status>;
 
         async fn batch_search_event_descriptions(&self, request: tonic::Request<BatchSearchEventDescriptionsRequest>) -> Result<tonic::Response<BatchSearchEventDescriptionsResponse>, tonic::Status>;
+
+        async fn search_function_descriptions(&self, request: tonic::Request<SearchFunctionDescriptionsRequest>) -> Result<tonic::Response<SearchFunctionDescriptionsResponse>, tonic::Status>;
+
+        async fn batch_search_function_descriptions(&self, request: tonic::Request<BatchSearchFunctionDescriptionsRequest>) -> Result<tonic::Response<BatchSearchFunctionDescriptionsResponse>, tonic::Status>;
 
         async fn get_alliance_stats(&self, request: tonic::Request<GetAllianceStatsRequest>) -> Result<tonic::Response<AllianceStats>, tonic::Status>;
     }

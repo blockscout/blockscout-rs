@@ -34,8 +34,25 @@ pub trait SignatureSource {
         Ok(vec![vec![]; hex.len()])
     }
 
+    // Returns the signatures for each of the given selectors, in the order of `hex`.
+    async fn batch_get_function_signatures(
+        &self,
+        hex: &[String],
+    ) -> Result<Vec<Vec<String>>, anyhow::Error> {
+        Ok(vec![vec![]; hex.len()])
+    }
+
     // for errors
     fn source(&self) -> String;
+}
+
+/// A function known together with the names of its arguments.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct CompleteFunction {
+    pub name: String,
+    /// Canonical signature, e.g. `transfer(address,uint256)`
+    pub signature: String,
+    pub inputs: Vec<alloy_json_abi::Param>,
 }
 
 #[automock]
@@ -50,6 +67,14 @@ pub trait CompleteSignatureSource {
         &self,
         hex: &[String],
     ) -> Result<Vec<Vec<alloy_json_abi::Event>>, anyhow::Error> {
+        Ok(vec![vec![]; hex.len()])
+    }
+
+    // Returns the functions for each of the given selectors, in the order of `hex`.
+    async fn batch_get_function_signatures(
+        &self,
+        hex: &[String],
+    ) -> Result<Vec<Vec<CompleteFunction>>, anyhow::Error> {
         Ok(vec![vec![]; hex.len()])
     }
 

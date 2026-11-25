@@ -24,37 +24,69 @@ impl Source {
         self
     }
 
-    async fn fetch(&self, mut path: String) -> Result<Vec<String>, anyhow::Error> {
+    async fn fetch(&self, path: String) -> Result<Vec<String>, anyhow::Error> {
+        // TODO: sort using "id" field
+        Ok(self
+            .fetch_signatures(path)
+            .await?
+            .into_iter()
+            .map(|sig| sig.text_signature)
+            .collect())
+    }
+
+    async fn fetch_signatures(
+        &self,
+        mut path: String,
+    ) -> Result<Vec<json::Signature>, anyhow::Error> {
         let mut signatures = Vec::default();
 
         loop {
             let resp: json::GetResponse = self.try_make_request(&path, self.n_retries).await?;
-            signatures.extend(resp.results.into_iter().map(|sig| sig.text_signature));
+            signatures.extend(resp.results);
             if let Some(next) = resp.next {
                 path = next;
             } else {
                 break;
             }
         }
-        // TODO: sort using "id" field
         Ok(signatures)
     }
 
-    #[async_recursion::async_recursion]
+    // The oldest signatures go first: there is no input data to tell the genuine
+    // signature from the colliding ones registered later, which are mostly spam.
+    async fn fetch_function_signatures_oldest_first(
+        &self,
+        hex: &str,
+    ) -> Result<Vec<String>, anyhow::Error> {
+        let mut signatures = self
+            .fetch_signatures(format!("/api/v1/signatures/?hex_signature={hex}"))
+            .await?;
+        signatures.sort_by_key(|sig| sig.id);
+        Ok(signatures
+            .into_iter()
+            .map(|sig| sig.text_signature)
+            .collect())
+    }
+
     async fn try_make_request(&self, path: &str, n: usize) -> anyhow::Result<json::GetResponse> {
-        let response = self
-            .client
-            .get(self.host.join(path).unwrap())
-            .send()
-            .await
-            .map_err(anyhow::Error::msg)?;
-        match response.status() {
-            reqwest::StatusCode::OK => Ok(response.json::<json::GetResponse>().await?),
-            reqwest::StatusCode::BAD_GATEWAY if n > 0 => self.try_make_request(path, n - 1).await,
-            status => Err(anyhow::anyhow!(
-                "invalid status code got as a result: {}",
-                status
-            )),
+        let mut retries_left = n;
+        loop {
+            let response = self
+                .client
+                .get(self.host.join(path).unwrap())
+                .send()
+                .await
+                .map_err(anyhow::Error::msg)?;
+            match response.status() {
+                reqwest::StatusCode::OK => return Ok(response.json::<json::GetResponse>().await?),
+                reqwest::StatusCode::BAD_GATEWAY if retries_left > 0 => retries_left -= 1,
+                status => {
+                    return Err(anyhow::anyhow!(
+                        "invalid status code got as a result: {}",
+                        status
+                    ))
+                }
+            }
         }
     }
 }
@@ -81,6 +113,35 @@ impl SignatureSource for Source {
             .await
     }
 
+    async fn batch_get_function_signatures(
+        &self,
+        hex: &[String],
+    ) -> Result<Vec<Vec<String>>, anyhow::Error> {
+        // The API has no batch lookup, so the selectors are requested one by one.
+        // A failed lookup must not discard the results of the others.
+        const CONCURRENCY: usize = 10;
+
+        let mut results = Vec::with_capacity(hex.len());
+        for chunk in hex.chunks(CONCURRENCY) {
+            let responses = futures::future::join_all(
+                chunk
+                    .iter()
+                    .map(|hex| self.fetch_function_signatures_oldest_first(hex)),
+            )
+            .await;
+            for (hex, response) in chunk.iter().zip(responses) {
+                results.push(response.unwrap_or_else(|err| {
+                    tracing::warn!(
+                        "could not get function signatures for {hex} from {}: {err:#}",
+                        self.source()
+                    );
+                    vec![]
+                }));
+            }
+        }
+        Ok(results)
+    }
+
     fn source(&self) -> String {
         self.host.to_string()
     }
@@ -96,6 +157,8 @@ mod json {
 
     #[derive(Debug, Deserialize)]
     pub struct Signature {
+        #[serde(default)]
+        pub id: u64,
         pub text_signature: String,
     }
 

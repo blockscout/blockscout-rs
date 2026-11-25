@@ -3,9 +3,10 @@
 use crate::{
     eth_bytecode_db::json::{
         BatchSearchEventDescriptionResponse, BatchSearchEventDescriptionsRequest,
+        BatchSearchFunctionDescriptionsRequest, BatchSearchFunctionDescriptionsResponse,
         SearchEventDescriptionResponse, SearchEventDescriptionsRequest,
     },
-    sources::CompleteSignatureSource,
+    sources::{CompleteFunction, CompleteSignatureSource},
 };
 use itertools::Itertools;
 use reqwest_middleware::ClientWithMiddleware;
@@ -112,6 +113,44 @@ impl CompleteSignatureSource for Source {
         Ok(results)
     }
 
+    async fn batch_get_function_signatures(
+        &self,
+        hex: &[String],
+    ) -> Result<Vec<Vec<CompleteFunction>>, anyhow::Error> {
+        const BATCH_LIMIT: usize = 100;
+
+        let route = "/api/v2/function-descriptions:batch-search";
+
+        let mut results = Vec::with_capacity(hex.len());
+        for chunk in hex.chunks(BATCH_LIMIT) {
+            let request = BatchSearchFunctionDescriptionsRequest {
+                selectors: chunk.iter().map(|hex| super::hash(hex)).collect(),
+            };
+            let responses = self
+                .send_post_request::<_, BatchSearchFunctionDescriptionsResponse>(route, &request)
+                .await?
+                .responses;
+            if responses.len() != chunk.len() {
+                anyhow::bail!(
+                    "invalid number of responses: expected {}, got {}",
+                    chunk.len(),
+                    responses.len()
+                );
+            }
+            for response in responses {
+                results.push(
+                    response
+                        .function_descriptions
+                        .into_iter()
+                        .map(CompleteFunction::try_from)
+                        .collect::<Result<Vec<_>, _>>()?,
+                );
+            }
+        }
+
+        Ok(results)
+    }
+
     fn source(&self) -> String {
         self.host.to_string()
     }
@@ -143,6 +182,45 @@ mod json {
     #[serde(rename_all = "camelCase")]
     pub struct BatchSearchEventDescriptionResponse {
         pub responses: Vec<SearchEventDescriptionResponse>,
+    }
+
+    #[derive(Clone, Debug, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct BatchSearchFunctionDescriptionsRequest {
+        pub selectors: Vec<String>,
+    }
+
+    #[derive(Clone, Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct SearchFunctionDescriptionsResponse {
+        pub function_descriptions: Vec<FunctionDescription>,
+    }
+
+    #[derive(Clone, Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct BatchSearchFunctionDescriptionsResponse {
+        pub responses: Vec<SearchFunctionDescriptionsResponse>,
+    }
+
+    #[derive(Clone, Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct FunctionDescription {
+        name: String,
+        inputs: String,
+        signature: String,
+    }
+
+    impl TryFrom<FunctionDescription> for crate::sources::CompleteFunction {
+        type Error = anyhow::Error;
+        fn try_from(value: FunctionDescription) -> Result<Self, Self::Error> {
+            let inputs: Vec<alloy_json_abi::Param> = serde_json::from_str(&value.inputs)
+                .context("deserializing function_description inputs")?;
+            Ok(Self {
+                name: value.name,
+                signature: value.signature,
+                inputs,
+            })
+        }
     }
 
     #[derive(Clone, Debug, Deserialize)]

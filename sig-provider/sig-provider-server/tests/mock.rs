@@ -310,3 +310,115 @@ async fn batch_get_events() {
         response,
     );
 }
+
+#[tokio::test]
+async fn batch_get_functions() {
+    let _ = tracing_subscriber::fmt::try_init();
+
+    let mocks = SourceMocks::new();
+
+    // Each distinct selector is requested from the sources only once
+    let fourbyte_transfer = serde_json::json!({"count":2,"next":null,"previous":null,"results":[{"id":313067,"text_signature":"many_msg_babbage(bytes1)","hex_signature":"0xa9059cbb"},{"id":145,"text_signature":"transfer(address,uint256)","hex_signature":"0xa9059cbb"}]});
+    mocks.fourbyte_mock(|when, then| {
+        when.method(httpmock::Method::GET)
+            .path("/api/v1/signatures/")
+            .query_param("hex_signature", "a9059cbb");
+        then.status(200)
+            .header("Content-type", "application/json")
+            .json_body(fourbyte_transfer);
+    });
+    // A failed lookup of one selector must not affect the others
+    mocks.fourbyte_mock(|when, then| {
+        when.method(httpmock::Method::GET)
+            .path("/api/v1/signatures/")
+            .query_param("hex_signature", "deadbeef");
+        // not a 5xx, as those are retried by the client
+        then.status(404);
+    });
+    let fourbyte_empty = serde_json::json!({"count":0,"next":null,"previous":null,"results":[]});
+    mocks.fourbyte_mock(|when, then| {
+        when.method(httpmock::Method::GET)
+            .path("/api/v1/signatures/")
+            .query_param("hex_signature", "0d7ac21c");
+        then.status(200)
+            .header("Content-type", "application/json")
+            .json_body(fourbyte_empty);
+    });
+
+    let sigeth_response = serde_json::json!({"ok":true,"result":{"event":{},"function":{
+        "0xa9059cbb":null,
+        "0xdeadbeef":null,
+        "0x0d7ac21c":[{"name":"f((address,uint256[])[],bytes32[2])","filtered":false}],
+    }}});
+    mocks.sigeth_mock(|when, then| {
+        when.method(httpmock::Method::GET)
+            .path("/signature-database/v1/lookup")
+            .query_param("function", "0xa9059cbb,0xdeadbeef,0x0d7ac21c")
+            .query_param("filter", "true");
+        then.status(200)
+            .header("Content-type", "application/json")
+            .json_body(sigeth_response);
+    });
+
+    let eth_bytecode_db_request =
+        serde_json::json!({"selectors":["0xa9059cbb","0xdeadbeef","0x0d7ac21c"]});
+    let eth_bytecode_db_response = serde_json::json!({"responses": [
+        {"functionDescriptions":[]},
+        {"functionDescriptions":[]},
+        {"functionDescriptions":[{"type":"function","name":"f","signature":"f((address,uint256[])[],bytes32[2])","inputs":"[{\"components\":[{\"name\":\"owner\",\"type\":\"address\"},{\"name\":\"ids\",\"type\":\"uint256[]\"}],\"name\":\"orders\",\"type\":\"tuple[]\"},{\"name\":\"proof\",\"type\":\"bytes32[2]\"}]"}]},
+    ]});
+    mocks.eth_bytecode_db_mock(|when, then| {
+        when.method(httpmock::Method::POST)
+            .path("/api/v2/function-descriptions:batch-search")
+            .header("Content-type", "application/json")
+            .json_body(eth_bytecode_db_request);
+        then.status(200)
+            .header("Content-type", "application/json")
+            .json_body(eth_bytecode_db_response);
+    });
+
+    let base = run_server(&mocks).await;
+
+    let route = "/api/v1/abi/functions:batch-get";
+    let request =
+        serde_json::json!({"selectors":["0xa9059cbb","deadbeef","0x0d7ac21c","0xa9059cbb"]});
+    let response: serde_json::Value = test_server::send_post_request(&base, route, &request).await;
+
+    mocks.assert();
+
+    // 4byte returns the newest signatures first, but the oldest one is expected to go first
+    let transfer = serde_json::json!({"abi": [
+        {"inputs":[{"components":[],"indexed":null,"name":"arg0","type":"address","value":""},{"components":[],"indexed":null,"name":"arg1","type":"uint256","value":""}],"name":"transfer"},
+        {"inputs":[{"components":[],"indexed":null,"name":"arg0","type":"bytes1","value":""}],"name":"many_msg_babbage"},
+    ]});
+    assert_eq!(
+        serde_json::json!([
+            transfer,
+            {"abi": []},
+            // known to eth-bytecode-db with argument names, so the same signature from sig.eth is dropped
+            {"abi": [{"inputs":[
+                {"components":[
+                    {"components":[],"indexed":null,"name":"owner","type":"address","value":""},
+                    {"components":[],"indexed":null,"name":"ids","type":"uint256[]","value":""},
+                ],"indexed":null,"name":"orders","type":"tuple[]","value":""},
+                {"components":[],"indexed":null,"name":"proof","type":"bytes32[2]","value":""},
+            ],"name":"f"}]},
+            transfer,
+        ]),
+        response,
+    );
+}
+
+#[tokio::test]
+async fn batch_get_functions_invalid_selector() {
+    let mocks = SourceMocks::new();
+    let base = run_server(&mocks).await;
+
+    let response = reqwest::Client::new()
+        .post(base.join("/api/v1/abi/functions:batch-get").unwrap())
+        .json(&serde_json::json!({"selectors":["0xa9059c"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+}

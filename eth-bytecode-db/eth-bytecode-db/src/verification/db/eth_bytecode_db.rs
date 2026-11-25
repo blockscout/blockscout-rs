@@ -7,8 +7,8 @@ use super::{
 use crate::verification::VerificationMetadata;
 use anyhow::Context;
 use entity::{
-    bytecode_parts, bytecodes, events, files, parts, sea_orm_active_enums, source_files, sources,
-    verified_contracts,
+    bytecode_parts, bytecodes, events, files, functions, parts, sea_orm_active_enums, source_files,
+    sources, verified_contracts,
 };
 use sea_orm::{
     entity::prelude::ColumnTrait, prelude::Uuid, sea_query::OnConflict, ActiveModelTrait,
@@ -132,6 +132,46 @@ pub(crate) async fn insert_event_descriptions(
             Ok(_) | Err(DbErr::RecordNotInserted) => {}
             Err(err) => {
                 return Err(err).context("insert into \"events\"");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn insert_function_descriptions(
+    db_client: &DatabaseConnection,
+    functions: Vec<alloy_json_abi::Function>,
+) -> Result<(), anyhow::Error> {
+    let active_models: Vec<_> = functions
+        .into_iter()
+        .filter_map(|function| {
+            let selector = function.selector();
+            let signature = function.signature();
+            serde_json::to_value(function.inputs)
+                .map_err(|err| {
+                    tracing::error!("{:x} function input serialization failed: {err}", selector)
+                })
+                .ok()
+                .map(|inputs| functions::ActiveModel {
+                    selector: Set(selector.to_vec()),
+                    name: Set(function.name),
+                    signature: Set(signature),
+                    inputs: Set(inputs),
+                    ..Default::default()
+                })
+        })
+        .collect();
+
+    if !active_models.is_empty() {
+        let result = functions::Entity::insert_many(active_models)
+            .on_conflict(OnConflict::new().do_nothing().to_owned())
+            .exec(db_client)
+            .await;
+        match result {
+            Ok(_) | Err(DbErr::RecordNotInserted) => {}
+            Err(err) => {
+                return Err(err).context("insert into \"functions\"");
             }
         }
     }
