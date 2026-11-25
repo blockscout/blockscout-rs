@@ -43,7 +43,7 @@ bridge, but only a genuine `sendETH` message can ever be relayed.
   linkage, so every chain of the set shares one native asset. An `ETH` /
   18-decimals native token row is seeded for every chain at indexer start.
 - `superchain_eth_bridge` becomes a required third contract kind per chain.
-- No `op_interop_legs` rows and no `extra.op_interop` metadata for the bridge
+- No `op_interop_events` rows and no `extra.op_interop` metadata for the bridge
   events; no migration, proto or settings change.
 
 ## Alternatives Considered

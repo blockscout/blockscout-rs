@@ -248,7 +248,7 @@ reject the path chain, and empty intersections are empty.
 
 ## Raw Execution (OP Interop)
 
-One `CrossL2Inbox` `ExecutingMessage` log, stored as an `op_interop_legs` row
+One `CrossL2Inbox` `ExecutingMessage` log, stored as an `op_interop_events` row
 of any origin. It is linked to a message only if it delivered that message. It
 carries no status and is not listed.
 

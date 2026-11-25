@@ -483,7 +483,7 @@ never expire; messages to non-member chains stay pending forever.
 ### Pull read (reference; phase 2)
 
 - **Built (ADR-020):** every `ExecutingMessage` of the configured chains is
-  stored in `op_interop_legs`, any origin, with the `Identifier` join key typed
+  stored in `op_interop_events`, any origin, with the `Identifier` join key typed
   and indexed. Listing, counting and source resolution are not built.
 - **[V]** `validateMessage` on-chain only rejects deposits, range-checks the
   `Identifier`, and requires the type-3 checksum slot to be warm, which only an

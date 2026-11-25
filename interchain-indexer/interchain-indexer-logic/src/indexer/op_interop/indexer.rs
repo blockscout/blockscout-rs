@@ -404,7 +404,7 @@ async fn write_executions(ctx: &RunContext, executions: &[&ExecutingLeg]) -> Res
         })
         .collect::<Result<Vec<_>>>()?;
     let count = rows.len();
-    crate::message_buffer::upsert_op_interop_legs(ctx.db.db.as_ref(), rows)
+    crate::message_buffer::upsert_op_interop_events(ctx.db.db.as_ref(), rows)
         .await
         .with_context(|| format!("failed to write {count} OP interop raw execution row(s)"))
 }
@@ -600,7 +600,7 @@ mod tests {
         rpc::types::Log,
     };
     use interchain_indexer_entity::{
-        bridges, chains, crosschain_messages, crosschain_transfers, op_interop_legs,
+        bridges, chains, crosschain_messages, crosschain_transfers, op_interop_events,
         pending_messages,
         sea_orm_active_enums::{BridgeType, MessageStatus},
         stats_asset_edges, stats_asset_tokens, stats_messages,
@@ -732,7 +732,7 @@ mod tests {
     }
 
     async fn leg_kinds(db: &InterchainDatabase) -> Vec<String> {
-        let mut kinds = op_interop_legs::Entity::find()
+        let mut kinds = op_interop_events::Entity::find()
             .all(db.db.as_ref())
             .await
             .unwrap()
@@ -743,12 +743,12 @@ mod tests {
         kinds
     }
 
-    async fn execution_rows(db: &InterchainDatabase) -> Vec<op_interop_legs::Model> {
-        op_interop_legs::Entity::find()
-            .filter(op_interop_legs::Column::EventKind.eq("executing_message"))
-            .order_by_asc(op_interop_legs::Column::ChainId)
-            .order_by_asc(op_interop_legs::Column::BlockNumber)
-            .order_by_asc(op_interop_legs::Column::LogIndex)
+    async fn execution_rows(db: &InterchainDatabase) -> Vec<op_interop_events::Model> {
+        op_interop_events::Entity::find()
+            .filter(op_interop_events::Column::EventKind.eq("executing_message"))
+            .order_by_asc(op_interop_events::Column::ChainId)
+            .order_by_asc(op_interop_events::Column::BlockNumber)
+            .order_by_asc(op_interop_events::Column::LogIndex)
             .all(db.db.as_ref())
             .await
             .unwrap()
@@ -1743,10 +1743,10 @@ mod tests {
 
         db.db
             .execute_unprepared(
-                "CREATE FUNCTION test_refuse_op_interop_legs() RETURNS trigger LANGUAGE plpgsql AS
-                   $$ BEGIN RAISE EXCEPTION 'test: op_interop_legs write refused'; END $$;
-                 CREATE TRIGGER test_refuse_op_interop_legs BEFORE INSERT ON op_interop_legs
-                   FOR EACH ROW EXECUTE FUNCTION test_refuse_op_interop_legs();",
+                "CREATE FUNCTION test_refuse_op_interop_events() RETURNS trigger LANGUAGE plpgsql AS
+                   $$ BEGIN RAISE EXCEPTION 'test: op_interop_events write refused'; END $$;
+                 CREATE TRIGGER test_refuse_op_interop_events BEFORE INSERT ON op_interop_events
+                   FOR EACH ROW EXECUTE FUNCTION test_refuse_op_interop_events();",
             )
             .await
             .unwrap();
@@ -1769,8 +1769,8 @@ mod tests {
 
         db.db
             .execute_unprepared(
-                "DROP TRIGGER test_refuse_op_interop_legs ON op_interop_legs;
-                 DROP FUNCTION test_refuse_op_interop_legs();",
+                "DROP TRIGGER test_refuse_op_interop_events ON op_interop_events;
+                 DROP FUNCTION test_refuse_op_interop_events();",
             )
             .await
             .unwrap();

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use alloy::primitives::ChainId;
 use interchain_indexer_entity::{
     amb_message_anomalies, amb_messages_confirmations, crosschain_messages, crosschain_transfers,
-    indexer_checkpoints, op_interop_legs, pending_messages, sea_orm_active_enums::MessageStatus,
+    indexer_checkpoints, op_interop_events, pending_messages, sea_orm_active_enums::MessageStatus,
 };
 use itertools::Itertools;
 use sea_orm::{
@@ -290,52 +290,52 @@ fn amb_message_anomalies_on_conflict() -> OnConflict {
     OnConflict::new().do_nothing().to_owned()
 }
 
-/// Conflict policy for `op_interop_legs`, shared by both writers: the
+/// Conflict policy for `op_interop_events`, shared by both writers: the
 /// maintenance flush (legs, linked) and OP interop ingestion (every
 /// `ExecutingMessage`, unlinked). The primary key is the log itself, so a
 /// replay rewrites the row with identical values and a replay after a decoder
 /// fix repairs it. The link is the exception: it is written only by the flush
 /// and never cleared, whichever writer comes second (ADR-020).
-fn op_interop_legs_on_conflict() -> OnConflict {
+fn op_interop_events_on_conflict() -> OnConflict {
     OnConflict::columns([
-        op_interop_legs::Column::BridgeId,
-        op_interop_legs::Column::ChainId,
-        op_interop_legs::Column::BlockHash,
-        op_interop_legs::Column::LogIndex,
+        op_interop_events::Column::BridgeId,
+        op_interop_events::Column::ChainId,
+        op_interop_events::Column::BlockHash,
+        op_interop_events::Column::LogIndex,
     ])
     .update_columns([
-        op_interop_legs::Column::BlockNumber,
-        op_interop_legs::Column::BlockTimestamp,
-        op_interop_legs::Column::TxHash,
-        op_interop_legs::Column::EventKind,
-        op_interop_legs::Column::EventData,
-        op_interop_legs::Column::SrcChainId,
-        op_interop_legs::Column::SrcBlockNumber,
-        op_interop_legs::Column::SrcLogIndex,
+        op_interop_events::Column::BlockNumber,
+        op_interop_events::Column::BlockTimestamp,
+        op_interop_events::Column::TxHash,
+        op_interop_events::Column::EventKind,
+        op_interop_events::Column::EventData,
+        op_interop_events::Column::SrcChainId,
+        op_interop_events::Column::SrcBlockNumber,
+        op_interop_events::Column::SrcLogIndex,
     ])
     .value(
-        op_interop_legs::Column::MessageId,
-        Expr::cust("COALESCE(EXCLUDED.message_id, op_interop_legs.message_id)"),
+        op_interop_events::Column::MessageId,
+        Expr::cust("COALESCE(EXCLUDED.message_id, op_interop_events.message_id)"),
     )
     .value(
-        op_interop_legs::Column::MessageHash,
-        Expr::cust("COALESCE(EXCLUDED.message_hash, op_interop_legs.message_hash)"),
+        op_interop_events::Column::MessageHash,
+        Expr::cust("COALESCE(EXCLUDED.message_hash, op_interop_events.message_hash)"),
     )
     .value(
-        op_interop_legs::Column::UpdatedAt,
+        op_interop_events::Column::UpdatedAt,
         Expr::current_timestamp(),
     )
     .to_owned()
 }
 
-/// The only write of `op_interop_legs`. Deduplicates by primary key first: two
+/// The only write of `op_interop_events`. Deduplicates by primary key first: two
 /// rows with one key in one statement are a statement error.
-pub(super) async fn upsert_op_interop_legs(
+pub(super) async fn upsert_op_interop_events(
     db: &impl ConnectionTrait,
-    legs: Vec<op_interop_legs::ActiveModel>,
+    legs: Vec<op_interop_events::ActiveModel>,
 ) -> Result<(), DbErr> {
-    let legs = dedup_op_interop_legs(legs);
-    batched_upsert(db, &legs, op_interop_legs_on_conflict()).await
+    let legs = dedup_op_interop_events(legs);
+    batched_upsert(db, &legs, op_interop_events_on_conflict()).await
 }
 
 /// Keeps the last row per primary key, in first-appearance order.
@@ -350,11 +350,11 @@ pub(super) async fn upsert_op_interop_legs(
 /// A model whose four key columns are not all `Set` is a programming error in
 /// the indexer that built it. It is dropped with a warning, never turned into
 /// an `Err` — for the same reason.
-fn dedup_op_interop_legs(
-    legs: Vec<op_interop_legs::ActiveModel>,
-) -> Vec<op_interop_legs::ActiveModel> {
+fn dedup_op_interop_events(
+    legs: Vec<op_interop_events::ActiveModel>,
+) -> Vec<op_interop_events::ActiveModel> {
     let mut index_by_key: HashMap<(i32, i64, Vec<u8>, i64), usize> = HashMap::new();
-    let mut deduplicated: Vec<op_interop_legs::ActiveModel> = Vec::with_capacity(legs.len());
+    let mut deduplicated: Vec<op_interop_events::ActiveModel> = Vec::with_capacity(legs.len());
 
     for leg in legs {
         let key = match (
@@ -372,7 +372,7 @@ fn dedup_op_interop_legs(
             _ => {
                 debug_assert!(
                     false,
-                    "op_interop_legs key columns must all be Set; found bridge_id={:?} \
+                    "op_interop_events key columns must all be Set; found bridge_id={:?} \
                      chain_id={:?} log_index={:?}",
                     leg.bridge_id, leg.chain_id, leg.log_index
                 );
@@ -381,7 +381,7 @@ fn dedup_op_interop_legs(
                     chain_id = ?leg.chain_id,
                     log_index = ?leg.log_index,
                     message_id = ?leg.message_id,
-                    "op_interop_legs row reached the op_interop_legs write without its \
+                    "op_interop_events row reached the op_interop_events write without its \
                      key columns set; dropping the row"
                 );
                 continue;
@@ -509,7 +509,7 @@ pub(super) async fn flush_to_final_storage(
         .map(|entry| consolidated_message_pk(&entry.message))
         .collect::<Result<Vec<_>, _>>()?;
 
-    let (messages, transfers, amb_confirmations, amb_anomalies, op_interop_legs): (
+    let (messages, transfers, amb_confirmations, amb_anomalies, op_interop_events): (
         Vec<_>,
         Vec<_>,
         Vec<_>,
@@ -523,14 +523,14 @@ pub(super) async fn flush_to_final_storage(
                 c.transfers,
                 c.amb_confirmations,
                 c.amb_anomalies,
-                c.op_interop_legs,
+                c.op_interop_events,
             )
         })
         .multiunzip();
     let transfers = transfers.into_iter().flatten().collect::<Vec<_>>();
     let amb_confirmations = amb_confirmations.into_iter().flatten().collect::<Vec<_>>();
     let amb_anomalies = amb_anomalies.into_iter().flatten().collect::<Vec<_>>();
-    let op_interop_legs = op_interop_legs.into_iter().flatten().collect::<Vec<_>>();
+    let op_interop_events = op_interop_events.into_iter().flatten().collect::<Vec<_>>();
 
     reject_unset_asset_linkage(&transfers);
 
@@ -538,7 +538,7 @@ pub(super) async fn flush_to_final_storage(
     batched_upsert(tx, &messages, crosschain_messages_on_conflict()).await?;
     // Empty for every indexer but OP interop: `batched_upsert` issues no
     // statement for an empty slice.
-    upsert_op_interop_legs(tx, op_interop_legs).await?;
+    upsert_op_interop_events(tx, op_interop_events).await?;
     batched_upsert(tx, &transfers, crosschain_transfers_on_conflict()).await?;
     batched_upsert(
         tx,
@@ -1205,7 +1205,7 @@ mod tests {
     use chrono::{DateTime, NaiveDateTime};
     use interchain_indexer_entity::{
         amb_message_anomalies, amb_messages_confirmations, bridges, chains, crosschain_messages,
-        crosschain_transfers, indexer_checkpoints, op_interop_legs, pending_messages,
+        crosschain_transfers, indexer_checkpoints, op_interop_events, pending_messages,
         sea_orm_active_enums::{MessageStatus, TransferAssetLinkage},
         stats_assets,
     };
@@ -1436,7 +1436,7 @@ mod tests {
             transfers: vec![],
             amb_confirmations: vec![],
             amb_anomalies: vec![],
-            op_interop_legs: vec![],
+            op_interop_events: vec![],
         }
     }
 
@@ -1469,7 +1469,7 @@ mod tests {
             transfers: vec![],
             amb_confirmations: vec![],
             amb_anomalies: vec![],
-            op_interop_legs: vec![],
+            op_interop_events: vec![],
         }
     }
 
@@ -1863,7 +1863,7 @@ mod tests {
             transfers: vec![],
             amb_confirmations: vec![],
             amb_anomalies: vec![],
-            op_interop_legs: vec![],
+            op_interop_events: vec![],
         }
     }
 
@@ -2119,7 +2119,7 @@ mod tests {
             transfers: vec![],
             amb_confirmations: vec![],
             amb_anomalies: vec![],
-            op_interop_legs: vec![],
+            op_interop_events: vec![],
         }
     }
 
@@ -2394,14 +2394,14 @@ mod tests {
         );
     }
 
-    // --- `op_interop_legs` ledger rows ---
+    // --- `op_interop_events` ledger rows ---
 
-    fn op_interop_leg(
+    fn op_interop_event(
         log_index: i64,
         event_kind: &str,
         event_data: serde_json::Value,
-    ) -> op_interop_legs::ActiveModel {
-        op_interop_legs::ActiveModel {
+    ) -> op_interop_events::ActiveModel {
+        op_interop_events::ActiveModel {
             bridge_id: ActiveValue::Set(BRIDGE_ID),
             chain_id: ActiveValue::Set(SRC_CHAIN),
             block_hash: ActiveValue::Set(vec![0xB1; 32]),
@@ -2421,15 +2421,15 @@ mod tests {
         }
     }
 
-    fn merge_test_row_with_legs(legs: Vec<op_interop_legs::ActiveModel>) -> ConsolidatedMessage {
+    fn merge_test_row_with_legs(legs: Vec<op_interop_events::ActiveModel>) -> ConsolidatedMessage {
         let mut entry = merge_test_row(Some(DST_CHAIN), None);
-        entry.op_interop_legs = legs;
+        entry.op_interop_events = legs;
         entry
     }
 
-    async fn load_op_interop_legs(db: &InterchainDatabase) -> Vec<op_interop_legs::Model> {
-        op_interop_legs::Entity::find()
-            .order_by_asc(op_interop_legs::Column::LogIndex)
+    async fn load_op_interop_events(db: &InterchainDatabase) -> Vec<op_interop_events::Model> {
+        op_interop_events::Entity::find()
+            .order_by_asc(op_interop_events::Column::LogIndex)
             .all(db.db.as_ref())
             .await
             .unwrap()
@@ -2437,28 +2437,28 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database"]
-    async fn test_flush_op_interop_legs_twice_keeps_one_row_and_updates_data() {
-        let test_db = init_db("flush_op_interop_legs_twice_keeps_one_row").await;
+    async fn test_flush_op_interop_events_twice_keeps_one_row_and_updates_data() {
+        let test_db = init_db("flush_op_interop_events_twice_keeps_one_row").await;
         let db = InterchainDatabase::new(test_db.client());
         seed_fk_prerequisites(&db).await;
 
         flush(
             &db,
-            merge_test_row_with_legs(vec![op_interop_leg(
+            merge_test_row_with_legs(vec![op_interop_event(
                 1,
                 "sent_message",
                 serde_json::json!({"nonce": "0"}),
             )]),
         )
         .await;
-        let first = load_op_interop_legs(&db).await;
+        let first = load_op_interop_events(&db).await;
         assert_eq!(first.len(), 1);
 
         // The same log again, decoded differently (a replay after a decoder
         // fix): the row is repaired in place, not duplicated.
         flush(
             &db,
-            merge_test_row_with_legs(vec![op_interop_leg(
+            merge_test_row_with_legs(vec![op_interop_event(
                 1,
                 "sent_message",
                 serde_json::json!({"nonce": "0", "sender": "0xaa"}),
@@ -2466,7 +2466,7 @@ mod tests {
         )
         .await;
 
-        let legs = load_op_interop_legs(&db).await;
+        let legs = load_op_interop_events(&db).await;
         assert_eq!(legs.len(), 1, "a replayed log must not add a row: {legs:?}");
         let leg = &legs[0];
         assert_eq!(leg.bridge_id, BRIDGE_ID);
@@ -2482,7 +2482,7 @@ mod tests {
         assert_eq!(leg.created_at, first[0].created_at);
     }
 
-    fn unlinked(mut leg: op_interop_legs::ActiveModel) -> op_interop_legs::ActiveModel {
+    fn unlinked(mut leg: op_interop_events::ActiveModel) -> op_interop_events::ActiveModel {
         leg.message_id = ActiveValue::Set(None);
         leg.message_hash = ActiveValue::Set(None);
         leg
@@ -2490,32 +2490,32 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database"]
-    async fn test_upsert_op_interop_legs_never_clears_a_link() {
-        let test_db = init_db("upsert_op_interop_legs_never_clears_a_link").await;
+    async fn test_upsert_op_interop_events_never_clears_a_link() {
+        let test_db = init_db("upsert_op_interop_events_never_clears_a_link").await;
         let db = InterchainDatabase::new(test_db.client());
         seed_fk_prerequisites(&db).await;
 
         // (a) Linked by the flush first, then rewritten unlinked by ingestion.
         flush(
             &db,
-            merge_test_row_with_legs(vec![op_interop_leg(
+            merge_test_row_with_legs(vec![op_interop_event(
                 0,
                 "executing_message",
                 serde_json::json!({"msg_hash": "0x01"}),
             )]),
         )
         .await;
-        let first = load_op_interop_legs(&db).await;
-        let mut row = unlinked(op_interop_leg(
+        let first = load_op_interop_events(&db).await;
+        let mut row = unlinked(op_interop_event(
             0,
             "executing_message",
             serde_json::json!({"msg_hash": "0x02"}),
         ));
         row.src_chain_id = ActiveValue::Set(Some(SRC_CHAIN));
-        super::upsert_op_interop_legs(db.db.as_ref(), vec![row])
+        super::upsert_op_interop_events(db.db.as_ref(), vec![row])
             .await
             .unwrap();
-        let legs = load_op_interop_legs(&db).await;
+        let legs = load_op_interop_events(&db).await;
         assert_eq!(legs.len(), 1);
         assert_eq!(legs[0].message_id, Some(MESSAGE_ID));
         assert_eq!(legs[0].message_hash, Some(vec![0x27; 32]));
@@ -2524,9 +2524,9 @@ mod tests {
         assert_eq!(legs[0].created_at, first[0].created_at);
 
         // (b) Ingestion first, then the flush links the row.
-        super::upsert_op_interop_legs(
+        super::upsert_op_interop_events(
             db.db.as_ref(),
-            vec![unlinked(op_interop_leg(
+            vec![unlinked(op_interop_event(
                 1,
                 "executing_message",
                 serde_json::json!({}),
@@ -2536,27 +2536,27 @@ mod tests {
         .unwrap();
         flush(
             &db,
-            merge_test_row_with_legs(vec![op_interop_leg(
+            merge_test_row_with_legs(vec![op_interop_event(
                 1,
                 "executing_message",
                 serde_json::json!({}),
             )]),
         )
         .await;
-        let legs = load_op_interop_legs(&db).await;
+        let legs = load_op_interop_events(&db).await;
         assert_eq!(legs[1].log_index, 1);
         assert_eq!(legs[1].message_id, Some(MESSAGE_ID));
 
         // (c) Two unlinked rows with one key in one call are deduplicated.
-        super::upsert_op_interop_legs(
+        super::upsert_op_interop_events(
             db.db.as_ref(),
             vec![
-                unlinked(op_interop_leg(
+                unlinked(op_interop_event(
                     2,
                     "executing_message",
                     serde_json::json!({}),
                 )),
-                unlinked(op_interop_leg(
+                unlinked(op_interop_event(
                     2,
                     "executing_message",
                     serde_json::json!({}),
@@ -2565,7 +2565,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let legs = load_op_interop_legs(&db).await;
+        let legs = load_op_interop_events(&db).await;
         assert_eq!(legs.iter().filter(|leg| leg.log_index == 2).count(), 1);
     }
 
@@ -2573,22 +2573,22 @@ mod tests {
     /// statement, and with it the whole maintenance transaction.
     #[tokio::test]
     #[ignore = "needs database"]
-    async fn test_flush_op_interop_legs_duplicate_key_in_one_flush_does_not_fail() {
-        let test_db = init_db("flush_op_interop_legs_duplicate_key_in_one_flush").await;
+    async fn test_flush_op_interop_events_duplicate_key_in_one_flush_does_not_fail() {
+        let test_db = init_db("flush_op_interop_events_duplicate_key_in_one_flush").await;
         let db = InterchainDatabase::new(test_db.client());
         seed_fk_prerequisites(&db).await;
 
         flush(
             &db,
             merge_test_row_with_legs(vec![
-                op_interop_leg(3, "relayed_message", serde_json::json!({"nonce": "first"})),
-                op_interop_leg(0, "executing_message", serde_json::json!({})),
-                op_interop_leg(3, "relayed_message", serde_json::json!({"nonce": "last"})),
+                op_interop_event(3, "relayed_message", serde_json::json!({"nonce": "first"})),
+                op_interop_event(0, "executing_message", serde_json::json!({})),
+                op_interop_event(3, "relayed_message", serde_json::json!({"nonce": "last"})),
             ]),
         )
         .await;
 
-        let legs = load_op_interop_legs(&db).await;
+        let legs = load_op_interop_events(&db).await;
         assert_eq!(
             legs.iter().map(|leg| leg.log_index).collect::<Vec<_>>(),
             vec![0, 3]
@@ -2604,15 +2604,15 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database"]
-    async fn test_flush_without_op_interop_legs_writes_no_leg_rows() {
-        let test_db = init_db("flush_without_op_interop_legs_writes_no_leg_rows").await;
+    async fn test_flush_without_op_interop_events_writes_no_leg_rows() {
+        let test_db = init_db("flush_without_op_interop_events_writes_no_leg_rows").await;
         let db = InterchainDatabase::new(test_db.client());
         seed_fk_prerequisites(&db).await;
 
         flush(&db, merge_test_row(Some(DST_CHAIN), None)).await;
 
         assert_eq!(load(&db).await.id, MESSAGE_ID);
-        assert!(load_op_interop_legs(&db).await.is_empty());
+        assert!(load_op_interop_events(&db).await.is_empty());
     }
 
     /// Cohort size that exceeds PostgreSQL's planner stack for a row-valued

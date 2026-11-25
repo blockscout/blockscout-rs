@@ -103,7 +103,7 @@ pub(crate) const RELAY_ETH_TOPIC0: B256 =
 pub(crate) const RELAY_ETH_SELECTOR: [u8; 4] = [0x4f, 0x0e, 0xdc, 0xc9];
 
 /// The events this indexer reads. `as_str` is the `event` metric label. For
-/// the messenger and inbox events it is also `op_interop_legs.event_kind`;
+/// the messenger and inbox events it is also `op_interop_events.event_kind`;
 /// `SendEth` and `RelayEth` are metric labels only and never reach the ledger.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[allow(clippy::enum_variant_names)] // the names mirror the on-chain events

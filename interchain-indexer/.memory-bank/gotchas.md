@@ -3334,10 +3334,10 @@ rescan both chains' ranges; a source-only rescan also works (it upserts the
 transfer and the projection counts it once) but leaves one `pending_messages`
 row per message, as described above.
 
-## `op_interop_legs` Has Two Writers; The Link Is Never Cleared
+## `op_interop_events` Has Two Writers; The Link Is Never Cleared
 
 Ingestion writes every `ExecutingMessage` unlinked; the flush writes legs
-linked. Both go through `upsert_op_interop_legs`. `message_id` /
+linked. Both go through `upsert_op_interop_events`. `message_id` /
 `message_hash` merge with `COALESCE(EXCLUDED, stored)`, so neither write order
 clears a link. As a result, a link or a nested identifier written wrongly is
 never repaired by a replay; the one-level `op_interop` metadata merge never

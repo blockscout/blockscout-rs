@@ -1,14 +1,15 @@
 ALTER TYPE bridge_type ADD VALUE IF NOT EXISTS 'op_interop';
 
--- The OP interop ledger, which is also the message journal (ADR-018,
+-- The OP interop event ledger, which is also the message journal (ADR-018,
 -- ADR-020). One row per observed SentMessage, RelayedMessage and
 -- ExecutingMessage log (SendETH / RelayETH are cross-checks, not rows); rows
 -- are never deleted. Every CrossL2Inbox ExecutingMessage has a row whatever
--- its origin, and only some rows are legs of a messenger message. Keyed by block hash, not block
--- number, so two observations of one height can coexist.
+-- its origin, and only some rows are legs of a messenger message. Keyed by
+-- block hash, not block number, so two observations of one height can
+-- coexist.
 -- No foreign key to crosschain_messages by design: message_id links by
 -- value, and a row must be able to outlive a deleted message.
-CREATE TABLE op_interop_legs (
+CREATE TABLE op_interop_events (
     bridge_id        INTEGER   NOT NULL REFERENCES bridges (id),
     chain_id         BIGINT    NOT NULL REFERENCES chains (id),
     block_hash       BYTEA     NOT NULL,
@@ -36,10 +37,10 @@ CREATE TABLE op_interop_legs (
     PRIMARY KEY (bridge_id, chain_id, block_hash, log_index)
 );
 
-CREATE INDEX idx_op_interop_legs_message
-    ON op_interop_legs (bridge_id, message_id);
+CREATE INDEX idx_op_interop_events_message
+    ON op_interop_events (bridge_id, message_id);
 
 -- Every execution of one source log: the raw message of the PRD.
-CREATE INDEX idx_op_interop_legs_identifier
-    ON op_interop_legs (bridge_id, src_chain_id, src_block_number, src_log_index)
+CREATE INDEX idx_op_interop_events_identifier
+    ON op_interop_events (bridge_id, src_chain_id, src_block_number, src_log_index)
     WHERE event_kind = 'executing_message';

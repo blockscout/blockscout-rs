@@ -12,7 +12,7 @@ pub mod crosschain_messages;
 pub mod crosschain_transfers;
 pub mod indexer_checkpoints;
 pub mod indexer_failures;
-pub mod op_interop_legs;
+pub mod op_interop_events;
 pub mod pending_messages;
 pub mod sea_orm_active_enums;
 pub mod stats_asset_edges;

@@ -20,15 +20,19 @@
 
 ## Decision
 
-1. **Ledger meaning.** `op_interop_legs` holds observed interop logs; some
+1. **Ledger meaning.** `op_interop_events` holds observed interop logs; some
    are legs of a message. Every `ExecutingMessage` of any origin is one row.
    `message_id` / `message_hash` are nullable and set only on the delivering
    execution. The two hashes never mix: `msgHash` stays in `event_data`. The
    typed join key `src_chain_id` / `src_block_number` / `src_log_index`
-   carries a partial index, and a value outside `BIGINT` is `NULL`.
+   carries a partial index, and a value outside `BIGINT` is `NULL`. The
+   table is named for what it holds, observed events, not message legs: it
+   was `op_interop_legs` until 2026-11-25, renamed in place before any
+   deployment (the in-memory `SourceLeg` / `DestinationLeg` keep their names;
+   they are legs of a message).
 2. **Ingestion write.** Raw executions are written per batch, unlinked,
    before the batch's buffer actions, through the same function and conflict
-   policy as the flush (`upsert_op_interop_legs`). A write failure attributes
+   policy as the flush (`upsert_op_interop_events`). A write failure attributes
    the executions' blocks to the failure ledger (ADR-005), and those blocks
    apply no buffer action in that attempt; the replay applies them whole. The
    link merges with `COALESCE` and is never cleared.

@@ -728,7 +728,7 @@ mod tests {
                 }],
                 amb_confirmations: vec![],
                 amb_anomalies: vec![],
-                op_interop_legs: vec![],
+                op_interop_events: vec![],
             }))
         }
     }
@@ -1064,7 +1064,7 @@ mod tests {
             transfers: vec![],
             amb_confirmations: vec![],
             amb_anomalies: vec![],
-            op_interop_legs: vec![],
+            op_interop_events: vec![],
         }
     }
 

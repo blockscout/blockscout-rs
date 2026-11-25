@@ -100,7 +100,7 @@
 - `interchain-indexer-logic/src/indexer/op_interop/version.rs`
   - pinned `topic0` literals, contract kinds, grammar table
 - `interchain-indexer-logic/src/indexer/op_interop/consolidation.rs`
-  - infallible assembly, status, `op_interop_legs` rows, `extra` metadata,
+  - infallible assembly, status, `op_interop_events` rows, `extra` metadata,
     the ETH transfer row and the `RelayETH` check; `delivering_execution`
     and `execution_row`
 - `interchain-indexer-logic/src/indexer/op_interop/eth_transfer.rs`
@@ -109,7 +109,7 @@
 - `interchain-indexer-logic/src/log_stream.rs`
   - `HeadBlockTag` and `resolve_head_block`: the confirmed head
 - `interchain-indexer-logic/src/message_buffer/persistence.rs`
-  - the ledger write (`upsert_op_interop_legs`, used by both writers, and the
+  - the ledger write (`upsert_op_interop_events`, used by both writers, and the
     link rule) and the one-level `op_interop` metadata merge
 - `.memory-bank/adr/018-op-interop-confirmed-reading-and-leg-ledger.md`
 - `.memory-bank/adr/019-op-interop-eth-transfer-from-message-payload.md`

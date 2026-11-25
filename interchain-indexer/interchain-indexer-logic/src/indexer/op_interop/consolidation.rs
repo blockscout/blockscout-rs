@@ -6,7 +6,7 @@ use alloy::{
 };
 use anyhow::Result;
 use interchain_indexer_entity::{
-    crosschain_messages, op_interop_legs, sea_orm_active_enums::MessageStatus,
+    crosschain_messages, op_interop_events, sea_orm_active_enums::MessageStatus,
 };
 use sea_orm::ActiveValue;
 use serde::Serialize;
@@ -173,7 +173,7 @@ impl Consolidate for Message {
             transfers,
             amb_confirmations: Vec::new(),
             amb_anomalies: Vec::new(),
-            op_interop_legs: rows.leg_models(key, source, destination, executing),
+            op_interop_events: rows.leg_models(key, source, destination, executing),
         }))
     }
 }
@@ -238,7 +238,7 @@ impl StorageRows {
         source: &SourceLeg,
         destination: Option<&DestinationLeg>,
         executing: Option<&ExecutingLeg>,
-    ) -> Vec<op_interop_legs::ActiveModel> {
+    ) -> Vec<op_interop_events::ActiveModel> {
         let bridge_id = key.bridge_id as i32;
         let link = Some((key.message_id, source.message_hash));
         let mut models = vec![leg_model(
@@ -301,8 +301,8 @@ fn leg_model(
     event: OpInteropEvent,
     event_data: serde_json::Value,
     identifier: StoredIdentifier,
-) -> op_interop_legs::ActiveModel {
-    op_interop_legs::ActiveModel {
+) -> op_interop_events::ActiveModel {
+    op_interop_events::ActiveModel {
         bridge_id: ActiveValue::Set(bridge_id),
         chain_id: ActiveValue::Set(stored.chain_id),
         block_hash: ActiveValue::Set(log.block_hash.to_vec()),
@@ -328,7 +328,7 @@ fn executing_model(
     executing: &ExecutingLeg,
     stored: &StoredLogRef,
     link: Option<LegLink>,
-) -> op_interop_legs::ActiveModel {
+) -> op_interop_events::ActiveModel {
     leg_model(
         bridge_id,
         link,
@@ -347,7 +347,7 @@ pub(super) fn execution_row(
     bridge_id: i32,
     executing: &ExecutingLeg,
     link: Option<LegLink>,
-) -> Option<op_interop_legs::ActiveModel> {
+) -> Option<op_interop_events::ActiveModel> {
     StoredLogRef::new(&executing.log)
         .map(|stored| executing_model(bridge_id, executing, &stored, link))
 }
@@ -376,7 +376,7 @@ fn hex_address(value: Address) -> String {
     hex::encode_prefixed(value)
 }
 
-/// `op_interop_legs.event_data` of a `sent_message` row. The message bytes
+/// `op_interop_events.event_data` of a `sent_message` row. The message bytes
 /// themselves are `crosschain_messages.payload`.
 #[derive(Debug, Serialize)]
 struct SentMessageData {
@@ -399,7 +399,7 @@ impl SentMessageData {
     }
 }
 
-/// `op_interop_legs.event_data` of a `relayed_message` row.
+/// `op_interop_events.event_data` of a `relayed_message` row.
 #[derive(Debug, Serialize)]
 struct RelayedMessageData {
     source_chain_id: String,
@@ -417,7 +417,7 @@ impl RelayedMessageData {
     }
 }
 
-/// `op_interop_legs.event_data` of an `executing_message` row.
+/// `op_interop_events.event_data` of an `executing_message` row.
 #[derive(Debug, Serialize)]
 struct ExecutingMessageData {
     msg_hash: String,
@@ -572,7 +572,7 @@ mod tests {
 
     fn event_kinds(consolidated: &ConsolidatedMessage) -> Vec<String> {
         consolidated
-            .op_interop_legs
+            .op_interop_events
             .iter()
             .map(|leg| value(&leg.event_kind))
             .collect()
@@ -780,7 +780,7 @@ mod tests {
         assert_eq!(value(&row.dst_chain_id), Some(DESTINATION_CHAIN_ID as i64));
         assert_eq!(value(&row.recipient_address), Some(source.target.to_vec()));
         assert_eq!(value(&row.stats_processed), 0);
-        assert_eq!(consolidated.op_interop_legs.len(), 3);
+        assert_eq!(consolidated.op_interop_events.len(), 3);
     }
 
     #[test]
@@ -928,8 +928,8 @@ mod tests {
             },
         ];
 
-        assert_eq!(consolidated.op_interop_legs.len(), expected.len());
-        for (leg, expected) in consolidated.op_interop_legs.iter().zip(expected) {
+        assert_eq!(consolidated.op_interop_events.len(), expected.len());
+        for (leg, expected) in consolidated.op_interop_events.iter().zip(expected) {
             assert_eq!(value(&leg.event_kind), expected.kind);
             assert_eq!(value(&leg.bridge_id), BRIDGE_ID);
             assert_eq!(value(&leg.chain_id), expected.chain_id);
@@ -1026,7 +1026,7 @@ mod tests {
                 event_kinds(&consolidated),
                 vec!["sent_message", "executing_message", "relayed_message"]
             );
-            let executing = &consolidated.op_interop_legs[1];
+            let executing = &consolidated.op_interop_events[1];
             assert_eq!(value(&executing.log_index), own_index);
             assert_eq!(value(&executing.message_id), Some(key().message_id));
             let metadata = value(&consolidated.message.protocol_metadata).expect("metadata");
@@ -1076,7 +1076,7 @@ mod tests {
     #[test]
     fn test_consolidate_two_matching_candidates_links_the_lower_log_index() {
         let consolidated = complete_with(with_candidates(vec![at(own(), 2), at(own(), 1)]));
-        assert_eq!(value(&consolidated.op_interop_legs[1].log_index), 1);
+        assert_eq!(value(&consolidated.op_interop_events[1].log_index), 1);
     }
 
     #[test]

@@ -64,7 +64,11 @@ source side and carried as the third topic of `RelayedMessage`.
 cross-check; it is never a key. A destination-first entry waits in the buffer
 for its source: no canonical row is written for a destination-only entry.
 
-### 5. The `op_interop_legs` ledger
+### 5. The `op_interop_events` ledger
+
+*Amended 2026-11-25 by ADR-020:* the table was created as `op_interop_legs`
+and renamed `op_interop_events` before the branch was deployed. Once every
+`CrossL2Inbox` execution is a row, not every row is a leg of a message.
 
 One row per observed interop log, keyed
 `(bridge_id, chain_id, block_hash, log_index)`, with the block hash stored from
