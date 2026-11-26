@@ -31,6 +31,10 @@ pub struct Model {
     pub src_log_index: Option<i64>,
     #[sea_orm(column_type = "JsonBinary")]
     pub event_data: Json,
+    #[sea_orm(column_type = "Text")]
+    pub state: String,
+    pub confirmed_seen_at: Option<DateTime>,
+    pub retracted_seen_at: Option<DateTime>,
     pub created_at: Option<DateTime>,
     pub updated_at: Option<DateTime>,
 }

@@ -14,8 +14,8 @@ use serde::Serialize;
 use crate::{
     message_buffer::{Consolidate, ConsolidatedMessage, Key},
     protocol_metadata::{
-        OpInterop, OpInteropExecutingMessage, OpInteropIdentifier, OpInteropLegRef,
-        ProtocolMetadata,
+        OpInterop, OpInteropEventState, OpInteropExecutingMessage, OpInteropIdentifier,
+        OpInteropLegRef, ProtocolMetadata,
     },
 };
 
@@ -249,11 +249,18 @@ impl StorageRows {
             OpInteropEvent::SentMessage,
             SentMessageData::new(source).to_json(),
             StoredIdentifier::default(),
+            OpInteropEventState::Confirmed,
         )];
 
         if let (Some(destination), Some(stored)) = (destination, &self.destination) {
             if let (Some(executing), Some(stored)) = (executing, &self.executing) {
-                models.push(executing_model(bridge_id, executing, stored, link));
+                models.push(executing_model(
+                    bridge_id,
+                    executing,
+                    stored,
+                    link,
+                    OpInteropEventState::Confirmed,
+                ));
             }
             models.push(leg_model(
                 bridge_id,
@@ -263,6 +270,7 @@ impl StorageRows {
                 OpInteropEvent::RelayedMessage,
                 RelayedMessageData::new(destination).to_json(),
                 StoredIdentifier::default(),
+                OpInteropEventState::Confirmed,
             ));
         }
 
@@ -293,6 +301,7 @@ impl StoredIdentifier {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn leg_model(
     bridge_id: i32,
     link: Option<LegLink>,
@@ -301,6 +310,7 @@ fn leg_model(
     event: OpInteropEvent,
     event_data: serde_json::Value,
     identifier: StoredIdentifier,
+    state: OpInteropEventState,
 ) -> op_interop_events::ActiveModel {
     op_interop_events::ActiveModel {
         bridge_id: ActiveValue::Set(bridge_id),
@@ -317,6 +327,9 @@ fn leg_model(
         src_block_number: ActiveValue::Set(identifier.block_number),
         src_log_index: ActiveValue::Set(identifier.log_index),
         event_data: ActiveValue::Set(event_data),
+        state: ActiveValue::Set(state.as_str().to_string()),
+        confirmed_seen_at: ActiveValue::NotSet,
+        retracted_seen_at: ActiveValue::NotSet,
         created_at: ActiveValue::NotSet,
         updated_at: ActiveValue::NotSet,
     }
@@ -328,6 +341,7 @@ fn executing_model(
     executing: &ExecutingLeg,
     stored: &StoredLogRef,
     link: Option<LegLink>,
+    state: OpInteropEventState,
 ) -> op_interop_events::ActiveModel {
     leg_model(
         bridge_id,
@@ -337,6 +351,7 @@ fn executing_model(
         OpInteropEvent::ExecutingMessage,
         ExecutingMessageData::new(executing).to_json(),
         StoredIdentifier::new(executing),
+        state,
     )
 }
 
@@ -347,9 +362,55 @@ pub(super) fn execution_row(
     bridge_id: i32,
     executing: &ExecutingLeg,
     link: Option<LegLink>,
+    state: OpInteropEventState,
 ) -> Option<op_interop_events::ActiveModel> {
     StoredLogRef::new(&executing.log)
-        .map(|stored| executing_model(bridge_id, executing, &stored, link))
+        .map(|stored| executing_model(bridge_id, executing, &stored, link, state))
+}
+
+/// The `sent_message` row of one source leg, linked to its message. The
+/// flush builds the identical row (ADR-020: every leg is written when read).
+/// `None` only if the log's location does not fit the storage types, which
+/// `events::log_ref` already rules out.
+pub(super) fn sent_row(
+    bridge_id: i32,
+    message_id: i64,
+    source: &SourceLeg,
+    state: OpInteropEventState,
+) -> Option<op_interop_events::ActiveModel> {
+    StoredLogRef::new(&source.log).map(|stored| {
+        leg_model(
+            bridge_id,
+            Some((message_id, source.message_hash)),
+            &source.log,
+            &stored,
+            OpInteropEvent::SentMessage,
+            SentMessageData::new(source).to_json(),
+            StoredIdentifier::default(),
+            state,
+        )
+    })
+}
+
+/// The `relayed_message` row of one destination leg, linked to its message.
+pub(super) fn relayed_row(
+    bridge_id: i32,
+    message_id: i64,
+    destination: &DestinationLeg,
+    state: OpInteropEventState,
+) -> Option<op_interop_events::ActiveModel> {
+    StoredLogRef::new(&destination.log).map(|stored| {
+        leg_model(
+            bridge_id,
+            Some((message_id, destination.message_hash)),
+            &destination.log,
+            &stored,
+            OpInteropEvent::RelayedMessage,
+            RelayedMessageData::new(destination).to_json(),
+            StoredIdentifier::default(),
+            state,
+        )
+    })
 }
 
 /// The execution that delivered `source`'s message: among the relay's
@@ -1082,8 +1143,13 @@ mod tests {
     #[test]
     fn test_execution_row_columns() {
         let link = Some((key().message_id, MESSAGE_0_HASH));
-        let unlinked = execution_row(BRIDGE_ID, &own(), None).expect("fits");
-        let linked = execution_row(BRIDGE_ID, &own(), link).expect("fits");
+        let confirmed = OpInteropEventState::Confirmed;
+        let unlinked = execution_row(BRIDGE_ID, &own(), None, confirmed).expect("fits");
+        let linked = execution_row(BRIDGE_ID, &own(), link, confirmed).expect("fits");
+
+        assert_eq!(unlinked.state, Set("confirmed".to_string()));
+        assert_eq!(unlinked.confirmed_seen_at, ActiveValue::NotSet);
+        assert_eq!(unlinked.retracted_seen_at, ActiveValue::NotSet);
 
         assert_eq!(value(&unlinked.message_id), None);
         assert_eq!(value(&unlinked.message_hash), None);
@@ -1107,7 +1173,7 @@ mod tests {
         let mut wide = own();
         wide.source_chain_id = U256::from(1) << 64;
         wide.source_log_index = U256::from(1) << 70;
-        let row = execution_row(BRIDGE_ID, &wide, None).expect("fits");
+        let row = execution_row(BRIDGE_ID, &wide, None, confirmed).expect("fits");
         assert_eq!(row.src_chain_id, Set(None));
         assert_eq!(row.src_log_index, Set(None));
         assert_eq!(row.src_block_number, Set(Some(498_922)));
@@ -1119,8 +1185,36 @@ mod tests {
         let mut edge = own();
         edge.source_block_number = U256::from(i64::MAX as u64);
         edge.source_log_index = U256::from(i64::MAX as u64) + U256::from(1);
-        let row = execution_row(BRIDGE_ID, &edge, None).expect("fits");
+        let row = execution_row(BRIDGE_ID, &edge, None, confirmed).expect("fits");
         assert_eq!(row.src_block_number, Set(Some(i64::MAX)));
         assert_eq!(row.src_log_index, Set(None));
+    }
+
+    #[test]
+    fn test_sent_and_relayed_rows_match_the_flush() {
+        let source = fixture_source();
+        let destination = fixture_destination();
+        let consolidated = consolidated(&Message {
+            source: Some(source.clone()),
+            destination: Some(destination.clone()),
+        });
+        let message_id = key().message_id;
+        let confirmed = OpInteropEventState::Confirmed;
+
+        let find = |kind: &str| {
+            consolidated
+                .op_interop_events
+                .iter()
+                .find(|leg| value(&leg.event_kind) == kind)
+                .unwrap_or_else(|| panic!("no {kind} row"))
+        };
+        assert_eq!(
+            find("sent_message"),
+            &sent_row(BRIDGE_ID, message_id, &source, confirmed).expect("fits")
+        );
+        assert_eq!(
+            find("relayed_message"),
+            &relayed_row(BRIDGE_ID, message_id, &destination, confirmed).expect("fits")
+        );
     }
 }

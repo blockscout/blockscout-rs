@@ -92,8 +92,8 @@
 
 - `interchain-indexer-logic/src/indexer/op_interop/indexer.rs`
   - stream construction per chain with the confirmation tag, log validation,
-    per-transaction grouping and sorting, plan → write raw executions →
-    apply, failed-block attribution
+    per-transaction grouping and sorting, plan → write ledger rows (legs and
+    executions) → apply, failed-block attribution
 - `interchain-indexer-logic/src/indexer/op_interop/events.rs`
   - `plan_transaction` (executions, relay windows, skip rules),
     `plan_and_report` and `apply_actions` (buffer mutation, metrics)

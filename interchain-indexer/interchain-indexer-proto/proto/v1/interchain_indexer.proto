@@ -292,6 +292,12 @@ enum MessageStatus {
   MESSAGE_STATUS_COMPLETED = 1;
   MESSAGE_STATUS_FAILED = 2;
   MESSAGE_STATUS_READY_TO_CLAIM = 3;
+  // Relayed, but at least one leg is above the indexer's confirmation
+  // boundary and can still be replaced. Not final.
+  MESSAGE_STATUS_PENDING_FINALITY = 4;
+  // The block holding the message's source event was replaced. The message is
+  // kept visible; it returns to another status if the source is re-included.
+  MESSAGE_STATUS_INVALIDATED = 5;
 }
 
 message InterchainMessage {

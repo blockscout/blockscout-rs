@@ -291,12 +291,34 @@ fn amb_message_anomalies_on_conflict() -> OnConflict {
 }
 
 /// Conflict policy for `op_interop_events`, shared by both writers: the
-/// maintenance flush (legs, linked) and OP interop ingestion (every
-/// `ExecutingMessage`, unlinked). The primary key is the log itself, so a
+/// maintenance flush and OP interop ingestion. Ingestion writes every leg
+/// (linked) and every execution (unlinked); the flush writes the legs again
+/// and links the delivering execution. The primary key is the log itself, so a
 /// replay rewrites the row with identical values and a replay after a decoder
-/// fix repairs it. The link is the exception: it is written only by the flush
-/// and never cleared, whichever writer comes second (ADR-020).
+/// fix repairs it. The link is the exception: it merges with `COALESCE` and is
+/// never cleared, whichever writer comes second (ADR-020).
+///
+/// A stored `confirmed` or `retracted` row never changes state again;
+/// `provisional` takes the incoming state; each `*_seen_at` is stamped once by
+/// the write that leaves `provisional`. A row inserted directly as `confirmed`
+/// keeps `confirmed_seen_at` NULL: confirmed when first seen.
 fn op_interop_events_on_conflict() -> OnConflict {
+    use crate::protocol_metadata::OpInteropEventState;
+
+    let provisional = OpInteropEventState::Provisional.as_str();
+    // Stamped once: only by the write that moves the stored row out of
+    // `provisional` into `target`. `timezone('utc', now())`, not
+    // `CURRENT_TIMESTAMP`: the column is TIMESTAMP and holds UTC whatever the
+    // session time zone is.
+    let stamp_once = |target: OpInteropEventState, column: &str| {
+        Expr::cust(format!(
+            "CASE WHEN op_interop_events.state = '{provisional}' \
+                  AND EXCLUDED.state = '{}' \
+             THEN timezone('utc', now()) \
+             ELSE op_interop_events.{column} END",
+            target.as_str()
+        ))
+    };
     OnConflict::columns([
         op_interop_events::Column::BridgeId,
         op_interop_events::Column::ChainId,
@@ -320,6 +342,21 @@ fn op_interop_events_on_conflict() -> OnConflict {
     .value(
         op_interop_events::Column::MessageHash,
         Expr::cust("COALESCE(EXCLUDED.message_hash, op_interop_events.message_hash)"),
+    )
+    .value(
+        op_interop_events::Column::State,
+        Expr::cust(format!(
+            "CASE WHEN op_interop_events.state = '{provisional}' \
+             THEN EXCLUDED.state ELSE op_interop_events.state END"
+        )),
+    )
+    .value(
+        op_interop_events::Column::ConfirmedSeenAt,
+        stamp_once(OpInteropEventState::Confirmed, "confirmed_seen_at"),
+    )
+    .value(
+        op_interop_events::Column::RetractedSeenAt,
+        stamp_once(OpInteropEventState::Retracted, "retracted_seen_at"),
     )
     .value(
         op_interop_events::Column::UpdatedAt,
@@ -1222,7 +1259,7 @@ mod tests {
         keep_terminal_sql, reconcile_destination_executions, remove_finalized_from_pending,
         terminal_statuses_sql,
     };
-    use crate::{InterchainDatabase, test_utils::init_db};
+    use crate::{InterchainDatabase, protocol_metadata::OpInteropEventState, test_utils::init_db};
 
     const BRIDGE_ID: i32 = 7;
     const MESSAGE_ID: i64 = 4242;
@@ -2416,9 +2453,20 @@ mod tests {
             src_block_number: ActiveValue::Set(None),
             src_log_index: ActiveValue::Set(None),
             event_data: ActiveValue::Set(event_data),
+            state: ActiveValue::Set(OpInteropEventState::Confirmed.as_str().to_string()),
+            confirmed_seen_at: ActiveValue::NotSet,
+            retracted_seen_at: ActiveValue::NotSet,
             created_at: ActiveValue::NotSet,
             updated_at: ActiveValue::NotSet,
         }
+    }
+
+    fn with_state(
+        mut leg: op_interop_events::ActiveModel,
+        state: OpInteropEventState,
+    ) -> op_interop_events::ActiveModel {
+        leg.state = ActiveValue::Set(state.as_str().to_string());
+        leg
     }
 
     fn merge_test_row_with_legs(legs: Vec<op_interop_events::ActiveModel>) -> ConsolidatedMessage {
@@ -2567,6 +2615,130 @@ mod tests {
         .unwrap();
         let legs = load_op_interop_events(&db).await;
         assert_eq!(legs.iter().filter(|leg| leg.log_index == 2).count(), 1);
+    }
+
+    fn state_leg(log_index: i64, state: OpInteropEventState) -> op_interop_events::ActiveModel {
+        with_state(
+            op_interop_event(log_index, "sent_message", serde_json::json!({})),
+            state,
+        )
+    }
+
+    async fn upsert_ledger(db: &InterchainDatabase, legs: Vec<op_interop_events::ActiveModel>) {
+        super::upsert_op_interop_events(db.db.as_ref(), legs)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_op_interop_events_state_provisional_then_confirmed_stamps_once() {
+        let test_db = init_db("op_interop_events_state_provisional_then_confirmed").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        upsert_ledger(&db, vec![state_leg(1, OpInteropEventState::Provisional)]).await;
+        let first = load_op_interop_events(&db).await;
+        assert_eq!(first[0].state, "provisional");
+        assert_eq!(first[0].confirmed_seen_at, None);
+
+        upsert_ledger(&db, vec![state_leg(1, OpInteropEventState::Confirmed)]).await;
+        let second = load_op_interop_events(&db).await;
+        assert_eq!(second[0].state, "confirmed");
+        assert!(second[0].confirmed_seen_at.is_some());
+        assert_eq!(second[0].retracted_seen_at, None);
+        assert_eq!(second[0].created_at, first[0].created_at);
+
+        upsert_ledger(&db, vec![state_leg(1, OpInteropEventState::Confirmed)]).await;
+        let third = load_op_interop_events(&db).await;
+        assert_eq!(third[0].state, "confirmed");
+        assert_eq!(third[0].confirmed_seen_at, second[0].confirmed_seen_at);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_op_interop_events_state_never_leaves_confirmed_or_retracted() {
+        let test_db = init_db("op_interop_events_state_never_leaves_terminal").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        // Key A (log 1): confirmed, then a provisional read must not move it back.
+        upsert_ledger(&db, vec![state_leg(1, OpInteropEventState::Confirmed)]).await;
+        upsert_ledger(&db, vec![state_leg(1, OpInteropEventState::Provisional)]).await;
+        let rows = load_op_interop_events(&db).await;
+        assert_eq!(rows[0].state, "confirmed");
+        assert_eq!(rows[0].confirmed_seen_at, None);
+
+        // Key B (log 2): provisional, then retracted.
+        upsert_ledger(&db, vec![state_leg(2, OpInteropEventState::Provisional)]).await;
+        upsert_ledger(&db, vec![state_leg(2, OpInteropEventState::Retracted)]).await;
+        let retracted = load_op_interop_events(&db).await;
+        assert_eq!(retracted[1].state, "retracted");
+        assert!(retracted[1].retracted_seen_at.is_some());
+        assert_eq!(retracted[1].confirmed_seen_at, None);
+
+        // A retracted row stays retracted against provisional and confirmed.
+        upsert_ledger(&db, vec![state_leg(2, OpInteropEventState::Provisional)]).await;
+        upsert_ledger(&db, vec![state_leg(2, OpInteropEventState::Confirmed)]).await;
+        let after = load_op_interop_events(&db).await;
+        assert_eq!(after[1].state, "retracted");
+        assert_eq!(after[1].retracted_seen_at, retracted[1].retracted_seen_at);
+        assert_eq!(after[1].confirmed_seen_at, None);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_op_interop_events_state_stamp_is_utc() {
+        let test_db = init_db("op_interop_events_state_stamp_is_utc").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        let tx = db.db.begin().await.unwrap();
+        tx.execute_unprepared("SET LOCAL TIME ZONE 'Asia/Tokyo'")
+            .await
+            .unwrap();
+        super::upsert_op_interop_events(&tx, vec![state_leg(1, OpInteropEventState::Provisional)])
+            .await
+            .unwrap();
+        super::upsert_op_interop_events(&tx, vec![state_leg(1, OpInteropEventState::Confirmed)])
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+
+        let rows = load_op_interop_events(&db).await;
+        let stamp = rows[0].confirmed_seen_at.expect("stamped");
+        let skew = (stamp - chrono::Utc::now().naive_utc()).num_seconds().abs();
+        assert!(skew < 60, "stamp {stamp} is {skew}s from UTC now");
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_op_interop_events_link_rule_holds_with_state() {
+        let test_db = init_db("op_interop_events_link_rule_holds_with_state").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        // Provisional unlinked, then confirmed linked: confirmed and linked.
+        upsert_ledger(
+            &db,
+            vec![unlinked(state_leg(1, OpInteropEventState::Provisional))],
+        )
+        .await;
+        upsert_ledger(&db, vec![state_leg(1, OpInteropEventState::Confirmed)]).await;
+        // Confirmed linked, then provisional unlinked: still confirmed, linked.
+        upsert_ledger(&db, vec![state_leg(2, OpInteropEventState::Confirmed)]).await;
+        upsert_ledger(
+            &db,
+            vec![unlinked(state_leg(2, OpInteropEventState::Provisional))],
+        )
+        .await;
+
+        let rows = load_op_interop_events(&db).await;
+        for row in &rows {
+            assert_eq!(row.state, "confirmed", "log {}", row.log_index);
+            assert_eq!(row.message_id, Some(MESSAGE_ID), "log {}", row.log_index);
+            assert_eq!(row.message_hash, Some(vec![0x27; 32]));
+        }
     }
 
     /// Two rows with one primary key in a single statement would fail the

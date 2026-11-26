@@ -30,15 +30,16 @@ use crate::{
     },
     log_stream::LogBatch,
     message_buffer::MessageBuffer,
+    protocol_metadata::OpInteropEventState,
     secret::redact_urls,
 };
 
 use super::{
     abi::OpInteropRegistry,
     consolidation,
-    events::{self, EventContext, TxPlan},
+    events::{self, EventContext, TxAction, TxPlan},
     settings::OpInteropIndexerSettings,
-    types::{ExecutingLeg, Message},
+    types::{LogRef, Message, key_from_message_hash},
 };
 
 /// One configured contract of one chain, valid from `started_at_block`.
@@ -200,10 +201,10 @@ impl OpInteropIndexer {
     }
 
     /// Makes no RPC call: everything comes from the log rows. It makes one
-    /// database write per batch that holds executions: every `ExecutingMessage`
-    /// is written as an unlinked ledger row before any buffer action of the
-    /// batch is applied, and a write failure attributes the executions'
-    /// blocks, which then apply nothing to the buffer.
+    /// database write per batch that holds executions or legs: every leg and
+    /// every execution is written to the ledger before any buffer action of
+    /// the batch is applied, and a write failure attributes the blocks of
+    /// every written row, which then apply nothing to the buffer.
     ///
     /// A log row missing a field this indexer keeps is a processing error
     /// attributed to its block, never a skip: the checkpoint would otherwise
@@ -302,38 +303,30 @@ impl OpInteropIndexer {
             }
         }
 
-        // Raw executions are written before any buffer effect of this batch
-        // exists. Maintenance flushes concurrently and can move the checkpoint
-        // past a block whose entry it flushed; with this order, every such
-        // block already has its raw rows durable, or its failure is on the way
-        // to the failure ledger.
-        let executions: Vec<&ExecutingLeg> = planned
-            .iter()
-            .flat_map(|(_, _, plan)| plan.executions.iter())
-            .collect();
+        // The ledger rows (every leg and every execution) are written before
+        // any buffer effect of this batch exists. Maintenance flushes
+        // concurrently and can move the checkpoint past a block whose entry it
+        // flushed; with this order, every such block already has its rows
+        // durable, or its failure is on the way to the failure ledger.
         let mut unwritten_blocks: BTreeSet<u64> = BTreeSet::new();
-        if let Err(err) = write_executions(ctx, &executions).await {
-            // Every block of the batch's executions: batched_upsert may have
-            // committed some chunks and not others.
-            unwritten_blocks = executions
-                .iter()
-                .map(|exec| exec.log.block_number)
-                .collect();
+        if let Err(err) = write_ledger_rows(ctx, &planned, OpInteropEventState::Confirmed).await {
+            // Every block of every row: batched_upsert may have committed some
+            // chunks and not others.
+            unwritten_blocks = ledger_row_blocks(&planned);
             tracing::warn!(
                 err = ?err,
                 bridge_id = ctx.bridge_id,
                 chain_id,
-                executions = executions.len(),
                 first_block = ?unwritten_blocks.first(),
                 last_block = ?unwritten_blocks.last(),
-                "failed to write OP interop raw executions; attributing their blocks as failed"
+                "failed to write OP interop ledger rows; attributing their blocks as failed"
             );
             failed_blocks.extend(unwritten_blocks.iter().copied());
             failed_count += 1;
             last_err = Some(err);
         }
 
-        // Phase 2: the buffer actions, except in blocks whose raw rows were not
+        // Phase 2: the buffer actions, except in blocks whose ledger rows were not
         // written. Those blocks are replayed whole, like a block with an
         // invalid row: applied now, a relay could finalize its message before
         // the replay, and the replay would then put that relay into a fresh
@@ -386,27 +379,97 @@ impl OpInteropIndexer {
     }
 }
 
-/// One unlinked ledger row per execution, in one idempotent call. The flush
-/// links the delivering one later; the conflict rule never clears a link.
-async fn write_executions(ctx: &RunContext, executions: &[&ExecutingLeg]) -> Result<()> {
-    if executions.is_empty() {
+fn action_log_and_hash(action: &TxAction) -> (&LogRef, B256) {
+    match action {
+        TxAction::Send(leg) => (&leg.log, leg.message_hash),
+        TxAction::Relay(leg) => (&leg.log, leg.message_hash),
+    }
+}
+
+/// The distinct blocks of every row `write_ledger_rows` would write.
+fn ledger_row_blocks(planned: &[(B256, Vec<u64>, TxPlan)]) -> BTreeSet<u64> {
+    planned
+        .iter()
+        .flat_map(|(_, _, plan)| {
+            plan.executions
+                .iter()
+                .map(|exec| exec.log.block_number)
+                .chain(
+                    plan.actions
+                        .iter()
+                        .map(|action| action_log_and_hash(action).0.block_number),
+                )
+        })
+        .collect()
+}
+
+/// The batch's one ledger write, before any buffer action of the batch: every
+/// execution unlinked, every planned `SentMessage` / `RelayedMessage` leg
+/// linked to its message (ADR-020). The flush writes the same rows later and
+/// links the delivering execution; the conflict rule never clears a link and
+/// never moves `state` back.
+///
+/// Key collision (two message hashes under one 64-bit key): the second
+/// message's leg rows are written too, linked to the shared `message_id` with
+/// their own `message_hash`, while the buffer keeps only the first message.
+/// Readers of a message's rows select by `(bridge_id, message_id,
+/// message_hash)`; no code handles it.
+///
+/// Likewise, a leg the buffer will refuse as a duplicate (a second log for a
+/// side the entry already holds) still gets its linked row: the ledger keeps
+/// every observed leg, the buffer only the first per side.
+async fn write_ledger_rows(
+    ctx: &RunContext,
+    planned: &[(B256, Vec<u64>, TxPlan)],
+    state: OpInteropEventState,
+) -> Result<()> {
+    let mut rows = Vec::new();
+    for (_, _, plan) in planned {
+        for exec in &plan.executions {
+            rows.push(
+                consolidation::execution_row(ctx.bridge_id, exec, None, state).with_context(
+                    || {
+                        format!(
+                            "OP interop execution (block {}, log_index {}) does not fit the storage types",
+                            exec.log.block_number, exec.log.log_index
+                        )
+                    },
+                )?,
+            );
+        }
+        for action in &plan.actions {
+            let (log, message_hash) = action_log_and_hash(action);
+            let message_id = key_from_message_hash(&message_hash, ctx.bridge_id)
+                .with_context(|| {
+                    format!(
+                        "OP interop message key (block {}, log_index {})",
+                        log.block_number, log.log_index
+                    )
+                })?
+                .message_id;
+            let row = match action {
+                TxAction::Send(leg) => {
+                    consolidation::sent_row(ctx.bridge_id, message_id, leg, state)
+                }
+                TxAction::Relay(leg) => {
+                    consolidation::relayed_row(ctx.bridge_id, message_id, leg, state)
+                }
+            };
+            rows.push(row.with_context(|| {
+                format!(
+                    "OP interop leg (block {}, log_index {}) does not fit the storage types",
+                    log.block_number, log.log_index
+                )
+            })?);
+        }
+    }
+    if rows.is_empty() {
         return Ok(());
     }
-    let rows = executions
-        .iter()
-        .map(|exec| {
-            consolidation::execution_row(ctx.bridge_id, exec, None).with_context(|| {
-                format!(
-                    "OP interop execution (block {}, log_index {}) does not fit the storage types",
-                    exec.log.block_number, exec.log.log_index
-                )
-            })
-        })
-        .collect::<Result<Vec<_>>>()?;
     let count = rows.len();
     crate::message_buffer::upsert_op_interop_events(ctx.db.db.as_ref(), rows)
         .await
-        .with_context(|| format!("failed to write {count} OP interop raw execution row(s)"))
+        .with_context(|| format!("failed to write {count} OP interop ledger row(s)"))
 }
 
 #[async_trait]
@@ -902,13 +965,81 @@ mod tests {
             messages(&db).await.is_empty(),
             "a destination-only entry writes no canonical row"
         );
-        assert_eq!(leg_kinds(&db).await, vec!["executing_message"]);
+        assert_eq!(
+            leg_kinds(&db).await,
+            vec!["executing_message", "relayed_message"]
+        );
         assert_eq!(execution_rows(&db).await[0].message_id, None);
 
         feed(&ctx, SOURCE, send_batch()).await;
         buffer.run().await.unwrap();
 
         assert_final_state(&db).await;
+    }
+
+    fn message_0_id() -> i64 {
+        key_from_message_hash(&MESSAGE_0_ID_HASH, BRIDGE_ID)
+            .unwrap()
+            .message_id
+    }
+
+    async fn ledger_rows_of(db: &InterchainDatabase, kind: &str) -> Vec<op_interop_events::Model> {
+        op_interop_events::Entity::find()
+            .filter(op_interop_events::Column::EventKind.eq(kind))
+            .order_by_asc(op_interop_events::Column::LogIndex)
+            .all(db.db.as_ref())
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_replay_relay_before_source_has_its_leg_row() {
+        let guard = init_db("op_interop_relay_before_source_leg_row").await;
+        let db = InterchainDatabase::new(guard.client());
+        seed_bridge_and_chains(&db).await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        assert!(messages(&db).await.is_empty());
+
+        assert_eq!(
+            leg_kinds(&db).await,
+            vec!["executing_message", "relayed_message"]
+        );
+        let relay = ledger_rows_of(&db, "relayed_message").await;
+        assert_eq!(relay.len(), 1);
+        assert_eq!(relay[0].message_id, Some(message_0_id()));
+        assert_eq!(relay[0].message_hash, Some(MESSAGE_0_ID_HASH.to_vec()));
+        assert_eq!(relay[0].state, "confirmed");
+        assert_eq!(relay[0].confirmed_seen_at, None);
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+
+        assert_final_state(&db).await;
+        let after = ledger_rows_of(&db, "relayed_message").await;
+        assert_eq!(after[0].created_at, relay[0].created_at);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_replay_source_batch_writes_its_leg_row_before_the_flush() {
+        let guard = init_db("op_interop_source_leg_row_before_flush").await;
+        let db = InterchainDatabase::new(guard.client());
+        seed_bridge_and_chains(&db).await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed(&ctx, SOURCE, send_batch()).await;
+
+        let sent = ledger_rows_of(&db, "sent_message").await;
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0].message_id, Some(message_0_id()));
+        assert_eq!(sent[0].message_hash, Some(MESSAGE_0_ID_HASH.to_vec()));
+        assert!(messages(&db).await.is_empty(), "the flush has not run");
     }
 
     #[tokio::test]
@@ -1734,12 +1865,15 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "needs database"]
-    async fn test_process_batch_raw_write_failure_attributes_the_execution_blocks() {
+    async fn test_process_batch_ledger_write_failure_attributes_every_row_block() {
         let guard = init_db("op_interop_raw_write_failure").await;
         let db = InterchainDatabase::new(guard.client());
         seed_bridge_and_chains(&db).await;
         let buffer = new_buffer(&db, Duration::from_secs(60));
         let ctx = run_context(&db, buffer.clone());
+
+        // The source batch is accepted first: its ledger row is written.
+        feed(&ctx, SOURCE, send_batch()).await;
 
         db.db
             .execute_unprepared(
@@ -1753,7 +1887,7 @@ mod tests {
 
         let err = OpInteropIndexer::process_batch(&ctx, DESTINATION, &relay_logs())
             .await
-            .expect_err("the raw write is refused");
+            .expect_err("the ledger write is refused");
         assert_eq!(
             err.attributed,
             vec![BlockRange {
@@ -1761,11 +1895,17 @@ mod tests {
                 to: 895_701
             }]
         );
-        OpInteropIndexer::process_batch(&ctx, SOURCE, &send_batch())
+        // The source batch now writes its `sent_message` row, so it fails too.
+        let err = OpInteropIndexer::process_batch(&ctx, SOURCE, &send_batch())
             .await
-            .unwrap_or_else(|err| {
-                panic!("a batch without executions writes nothing: {:#}", err.error)
-            });
+            .expect_err("the source leg row is refused");
+        assert_eq!(
+            err.attributed,
+            vec![BlockRange {
+                from: 498_922,
+                to: 498_922
+            }]
+        );
 
         db.db
             .execute_unprepared(
@@ -1782,6 +1922,7 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].status, MessageStatus::Initiated);
         assert!(execution_rows(&db).await.is_empty());
+        assert!(ledger_rows_of(&db, "relayed_message").await.is_empty());
 
         // The replay the failure ledger would run.
         OpInteropIndexer::process_batch(&ctx, DESTINATION, &relay_logs())

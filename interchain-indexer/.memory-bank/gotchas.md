@@ -3311,10 +3311,10 @@ asserts the single leftover row. See ADR-018.
 The two sides are not symmetric. A source-only replay reaches the upsert; a
 **destination-only replay does not repair the message**: `consolidate` returns
 `Ok(None)` for an entry without a source leg. Ingestion still writes the
-`executing_message` rows of the block (unlinked, or keeping an existing
-link), but neither the message row nor any leg row of the message is touched,
-the rescan reports no failure, and the only trace is the leftover
-`pending_messages` row. So a relay that was stored
+block's `executing_message` rows (unlinked, or keeping an existing link) and
+its `relayed_message` row (linked), but the message row and the
+`sent_message` row are not touched, the rescan reports no failure, and the
+only trace is the leftover `pending_messages` row. So a relay that was stored
 wrongly — typically unpaired, because the `cross_l2_inbox` version window was
 misconfigured and its `ExecutingMessage` resolved `WrongVersion` (a warning,
 not a failed block) — is **not** repaired by rescanning the destination range
@@ -3336,26 +3336,26 @@ row per message, as described above.
 
 ## `op_interop_events` Has Two Writers; The Link Is Never Cleared
 
-Ingestion writes every `ExecutingMessage` unlinked; the flush writes legs
-linked. Both go through `upsert_op_interop_events`. `message_id` /
-`message_hash` merge with `COALESCE(EXCLUDED, stored)`, so neither write order
-clears a link. As a result, a link or a nested identifier written wrongly is
-never repaired by a replay; the one-level `op_interop` metadata merge never
-removes a key either.
+Ingestion writes every leg (linked) and every execution (unlinked); the flush
+writes the legs again and links the delivering execution. Both go through
+`upsert_op_interop_events`. `message_id` / `message_hash` merge with
+`COALESCE(EXCLUDED, stored)`, so neither write order clears a link. As a
+result, a link or a nested identifier written wrongly is never repaired by a
+replay; the one-level `op_interop` metadata merge never removes a key either.
 
-Any new column needs a merge rule that holds in both write orders. The
-overlay's state column is the next one. Never write the table outside that
-function. See ADR-020.
+`state` has its own rule: it moves only away from `provisional`, and the
+`*_seen_at` stamps are set once. A new column still needs a rule that holds in
+every write order. Never write the table outside that function. See ADR-020.
 
-## Raw `CrossL2Inbox` Executions Are Written At Ingestion, Before The Buffer Actions
+## Every OP Interop Ledger Row Is Written At Ingestion, Before The Buffer Actions
 
-`process_batch` plans every transaction, writes all executions in one upsert,
-then applies the buffer actions. A write failure attributes the executions'
-blocks as failed, and those blocks apply **nothing** to the buffer: they are
-replayed whole, like a block with an invalid row. Applied anyway, a relay
-could finalize its message before the replay, and the replay would then put
-that relay into a fresh entry with no source, which never finalizes (the
-one-sided leftover below).
+`process_batch` plans every transaction, writes every leg and every execution
+in one upsert, then applies the buffer actions. A write failure attributes the
+blocks of every row as failed, and those blocks apply **nothing** to the
+buffer: they are replayed whole, like a block with an invalid row. Applied
+anyway, a relay could finalize its message before the replay, and the replay
+would then put that relay into a fresh entry with no source, which never
+finalizes (the one-sided leftover below).
 
 The checkpoint can pass such a block (it certifies scanning; see "A Checkpoint
 Certifies Scanning, Not Correctness"). The failure ledger is the guarantee.

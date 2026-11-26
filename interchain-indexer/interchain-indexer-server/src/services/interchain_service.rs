@@ -725,6 +725,8 @@ fn message_status_to_proto(status: &DbMessageStatus) -> MessageStatus {
         DbMessageStatus::Completed => MessageStatus::MessageStatusCompleted,
         DbMessageStatus::Failed => MessageStatus::MessageStatusFailed,
         DbMessageStatus::ReadyToClaim => MessageStatus::MessageStatusReadyToClaim,
+        DbMessageStatus::PendingFinality => MessageStatus::MessageStatusPendingFinality,
+        DbMessageStatus::Invalidated => MessageStatus::MessageStatusInvalidated,
     }
 }
 
@@ -755,6 +757,18 @@ fn token_info_logic_to_proto(model: TokenInfoModel) -> TokenInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sea_orm::{ActiveEnum, Iterable};
+
+    #[test]
+    fn test_message_status_to_proto_maps_every_value() {
+        for status in DbMessageStatus::iter() {
+            assert_eq!(
+                message_status_to_proto(&status).as_str_name(),
+                format!("MESSAGE_STATUS_{}", status.to_value().to_uppercase()),
+                "proto name of {status:?}"
+            );
+        }
+    }
 
     fn token_model(address: &[u8], token_type: DbTokenType) -> TokenInfoModel {
         TokenInfoModel {

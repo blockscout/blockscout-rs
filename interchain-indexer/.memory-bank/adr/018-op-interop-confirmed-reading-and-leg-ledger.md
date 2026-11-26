@@ -84,6 +84,12 @@ maintenance transaction.
 and set only on the execution that delivered a message; raw executions are
 written at ingestion, legs at the flush.
 
+*Amended 2026-11-26 (ADR-020):* every leg is written when its log is read:
+`sent_message` and `relayed_message` rows linked by `message_id` /
+`message_hash` (known from `messageHash`), next to the unlinked executions,
+before the batch's buffer actions. The flush writes the same rows again and
+links the delivering execution.
+
 ### 6. Amendment to ADR-010 decision 3
 
 ADR-010 keeps `protocol_metadata` sparse for resolved messages. The
@@ -137,7 +143,8 @@ ledger deliberately has no link to the message table.
   ledger rows are written with the message row, so that leg stays in
   `pending_messages` until the source leg arrives. *Amended 2026-11-24 by
   ADR-020:* its `ExecutingMessage` is, unlinked, from ingestion on; the
-  `relayed_message` row still waits.
+  `relayed_message` row still waits. *Amended 2026-11-26:* it no longer
+  waits; it is written at ingestion.
 
 ### Negative
 
@@ -151,6 +158,8 @@ ledger deliberately has no link to the message table.
   both its source and destination blocks (see `gotchas.md`). *Amended
   2026-11-24 by ADR-020:* it now writes the block's `executing_message` rows
   (unlinked, or keeping an existing link), and still nothing else.
+  *Amended 2026-11-26 (ADR-020):* such a replay now also writes the block's
+  `relayed_message` row (linked).
 - Nodes of one RPC pool can disagree about the confirmed head.
 
 ### Neutral

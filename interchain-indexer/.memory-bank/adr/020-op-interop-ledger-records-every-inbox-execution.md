@@ -35,7 +35,11 @@
    policy as the flush (`upsert_op_interop_events`). A write failure attributes
    the executions' blocks to the failure ledger (ADR-005), and those blocks
    apply no buffer action in that attempt; the replay applies them whole. The
-   link merges with `COALESCE` and is never cleared.
+   link merges with `COALESCE` and is never cleared. *Amended 2026-11-26:*
+   the ingestion write covers every leg, not only executions.
+   `sent_message` / `relayed_message` rows are written linked, because a relay
+   read before its source must have its row for a ledger-only sweep to find
+   it. A write failure attributes the blocks of every row.
 3. **Selection by content.**
    - A relay's candidates are the messenger-origin executions since the
      previous `RelayedMessage` whose `id.chainId` is its source.
@@ -54,6 +58,12 @@
      rows.
    - Any new column needs a merge rule that is correct for both writers in
      either order.
+   - *Amended 2026-11-26:* the state columns exist: `state`
+     (`provisional | confirmed | retracted`, default `confirmed`),
+     `confirmed_seen_at`, `retracted_seen_at` (UTC, each set once), a partial
+     index on provisional rows, and the merge rule in
+     `op_interop_events_on_conflict`. Until the overlay ships, every row is
+     `confirmed`.
 5. **No status, no listing.** Raw rows carry no `MessageStatus` and are not
    listed or counted: no list, search or stats path reads the ledger.
 
@@ -107,7 +117,7 @@
   indistinguishable.
 - A wrong link is never repaired by a replay.
 - `process_batch` now writes to the database once per batch that has
-  executions.
+  executions or legs.
 - Candidates are stored in the buffer entry with no cap.
 - From the overlay on, the ledger holds observations a reindex cannot
   rebuild.

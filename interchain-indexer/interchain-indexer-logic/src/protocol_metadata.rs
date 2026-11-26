@@ -134,6 +134,44 @@ pub struct OpInteropIdentifier {
     pub timestamp: String,
 }
 
+/// The journal state of an `op_interop_events` row and, from the overlay on,
+/// of a buffered message leg; rendered as a leg's `safety` in
+/// `extra.op_interop`. A state only moves away from `Provisional`:
+/// `Provisional -> Confirmed | Retracted`.
+///
+/// `Confirmed` is the default: every row and leg stored before the overlay
+/// existed was read at or below the confirmation tag.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OpInteropEventState {
+    /// Read above the confirmation tag by the optimistic overlay.
+    Provisional,
+    /// Delivered by the confirmed stream of the log's own chain.
+    #[default]
+    Confirmed,
+    /// Provisional, and the confirmed stream passed its height without
+    /// delivering it: its block was replaced.
+    Retracted,
+}
+
+impl OpInteropEventState {
+    /// The `op_interop_events.state` value, also the serde name.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Provisional => "provisional",
+            Self::Confirmed => "confirmed",
+            Self::Retracted => "retracted",
+        }
+    }
+
+    /// The inverse of `as_str`; `None` for anything else.
+    pub fn parse(value: &str) -> Option<Self> {
+        [Self::Provisional, Self::Confirmed, Self::Retracted]
+            .into_iter()
+            .find(|state| state.as_str() == value)
+    }
+}
+
 /// Namespace for a canonical message that has been executed on its
 /// destination chain more than once. The array holds only the **later**
 /// executions -- the canonical one stays exactly where it always was,
@@ -635,6 +673,36 @@ mod tests {
     fn multiple_executions_absent_from_default_metadata() {
         assert_eq!(ProtocolMetadata::default().to_json_value(), None);
         assert!(ProtocolMetadata::default().render_extra().is_empty());
+    }
+
+    #[test]
+    fn test_op_interop_event_state_round_trips() {
+        for state in [
+            OpInteropEventState::Provisional,
+            OpInteropEventState::Confirmed,
+            OpInteropEventState::Retracted,
+        ] {
+            assert_eq!(OpInteropEventState::parse(state.as_str()), Some(state));
+            assert_eq!(
+                serde_json::to_value(state).unwrap(),
+                serde_json::json!(state.as_str())
+            );
+            // Rendered into SQL literals: must stay plain identifiers.
+            assert!(
+                !state.as_str().is_empty()
+                    && state
+                        .as_str()
+                        .chars()
+                        .all(|c| c.is_ascii_lowercase() || c == '_'),
+                "state label {} must match [a-z_]+",
+                state.as_str()
+            );
+        }
+        assert_eq!(
+            OpInteropEventState::default(),
+            OpInteropEventState::Confirmed
+        );
+        assert_eq!(OpInteropEventState::parse("finalized"), None);
     }
 
     // --- `op_interop` namespace ---

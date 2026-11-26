@@ -87,7 +87,9 @@ impl MessageStatus {
     pub fn is_terminal(&self) -> bool {
         match self {
             Self::Completed | Self::Failed => true,
-            Self::Initiated | Self::ReadyToClaim => false,
+            Self::Initiated | Self::ReadyToClaim | Self::PendingFinality | Self::Invalidated => {
+                false
+            }
         }
     }
 }

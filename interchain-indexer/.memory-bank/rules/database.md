@@ -126,9 +126,13 @@ impl From<Config> for entity::ActiveModel {
 
 ## Timestamps
 
+- Timestamp columns are `TIMESTAMP` (without time zone) holding UTC; Rust uses
+  `chrono::NaiveDateTime` (UTC)
+- sqlx starts every session with `TimeZone=UTC`, so `CURRENT_TIMESTAMP` stores
+  UTC for this service. A value that must stay UTC regardless of the session
+  (detection times such as `op_interop_events.*_seen_at`) is written as
+  `timezone('utc', now())`, and a test pins it under another session zone
 - Use `Expr::current_timestamp()` for `updated_at` in upserts
-- Store timestamps as `DateTime<Utc>` (chrono)
-- Database stores as `TIMESTAMP WITH TIME ZONE`
 - Prefer application-managed `updated_at` writes for deterministic behavior
 
 ## Pagination

@@ -1,6 +1,6 @@
 {
   "name": "@blockscout/interchain-indexer-types",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "TypeScript definitions for Interchain Indexer microservice",
   "main": "./index.js",
   "types": "./index.d.ts",

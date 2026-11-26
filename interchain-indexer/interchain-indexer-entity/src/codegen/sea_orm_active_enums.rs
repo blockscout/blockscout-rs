@@ -35,6 +35,10 @@ pub enum MessageStatus {
     Failed,
     #[sea_orm(string_value = "ready_to_claim")]
     ReadyToClaim,
+    #[sea_orm(string_value = "pending_finality")]
+    PendingFinality,
+    #[sea_orm(string_value = "invalidated")]
+    Invalidated,
 }
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "token_type")]
