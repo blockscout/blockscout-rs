@@ -447,6 +447,7 @@ mod tests {
             amb_confirmations: vec![],
             amb_anomalies: vec![],
             op_interop_events: vec![],
+            unsettled: false,
         };
 
         conn.transaction::<_, (), DbErr>(|tx| {

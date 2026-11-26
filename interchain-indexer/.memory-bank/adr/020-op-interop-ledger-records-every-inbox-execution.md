@@ -56,6 +56,9 @@
    - A revival or re-relay is a new row, because its block hash differs.
    - `crosschain_messages.status` is a cache of a pure fold over a message's
      rows.
+   - *Amended 2026-11-26 by ADR-022:* the confirmation sweep writes
+     `retracted`; the fold and the guarded overwrite keep
+     `crosschain_messages.status` equal to the fold.
    - Any new column needs a merge rule that is correct for both writers in
      either order.
    - *Amended 2026-11-26:* the state columns exist: `state`

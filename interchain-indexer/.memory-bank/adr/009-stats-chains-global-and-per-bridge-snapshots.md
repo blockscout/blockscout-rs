@@ -90,6 +90,9 @@ Prometheus) drives a one-shot warn-on-appearance / info-on-recovery log
 policy. Neither signal substitutes for the other: structural overlap is risk,
 the recomputation delta is evidence.
 
+*Amended 2026-11-26 (ADR-022):* message and transfer user counts exclude rows
+of `invalidated` messages.
+
 ## Alternatives Considered
 
 ### Alternative 1 (solution 1): Visibility-only filter over the existing global snapshot

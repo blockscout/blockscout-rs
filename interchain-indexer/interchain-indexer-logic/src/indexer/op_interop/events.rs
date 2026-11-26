@@ -24,7 +24,7 @@ use alloy::{
 };
 use anyhow::{Context, Result, anyhow, bail, ensure};
 
-use crate::message_buffer::MessageBuffer;
+use crate::{message_buffer::MessageBuffer, protocol_metadata::OpInteropEventState};
 
 use super::{
     abi::{ContractKind, LogResolution, OpInteropRegistry, v1},
@@ -45,6 +45,38 @@ use super::{
 pub(super) enum TxAction {
     Send(SourceLeg),
     Relay(DestinationLeg),
+}
+
+impl TxAction {
+    /// Stamps the journal state of the leg (`process_batch` does it for the
+    /// read mode of the batch).
+    pub(super) fn set_state(&mut self, state: OpInteropEventState) {
+        match self {
+            Self::Send(leg) => leg.state = state,
+            Self::Relay(leg) => leg.state = state,
+        }
+    }
+}
+
+/// How a batch was read. `Confirmed`: at or below the confirmation tag
+/// (realtime, catch-up, retry, rescan). `Overlay`: above it (ADR-022).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ReadMode {
+    Confirmed,
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "wired by the OP overlay loop (slice 6c)")
+    )]
+    Overlay,
+}
+
+impl ReadMode {
+    pub(super) fn state(self) -> OpInteropEventState {
+        match self {
+            Self::Confirmed => OpInteropEventState::Confirmed,
+            Self::Overlay => OpInteropEventState::Provisional,
+        }
+    }
 }
 
 /// Why a message was not indexed. `as_str` is the `reason` metric label.
@@ -375,6 +407,7 @@ pub(super) fn plan_transaction(
                             ),
                             message: event.message,
                             payload_hash,
+                            state: OpInteropEventState::Confirmed,
                         }));
                     }
                     ChainRef::NotConfigured => plan
@@ -410,6 +443,7 @@ pub(super) fn plan_transaction(
                             executing: None,
                             executing_candidates,
                             relay_eth,
+                            state: OpInteropEventState::Confirmed,
                         }));
                     }
                     ChainRef::NotConfigured => plan
@@ -457,17 +491,22 @@ pub(super) struct EventContext<'a> {
     /// The chains of this bridge; what the skip rules test.
     pub(super) configured_chains: &'a HashSet<ChainId>,
     pub(super) buffer: &'a Arc<MessageBuffer<Message>>,
+    pub(super) mode: ReadMode,
 }
 
 /// Phase 1 plus its reporting: plans the transaction and emits the metrics
-/// and logs of what it observed. Touches neither the buffer nor the database.
+/// and logs of what it observed (in `Confirmed` mode only: the confirmed read
+/// reports every log once, the overlay would count each log twice). Touches
+/// neither the buffer nor the database.
 pub(super) fn plan_and_report(ctx: &EventContext<'_>, logs: &[&Log]) -> Result<TxPlan> {
     let plan = plan_transaction(ctx.registry, ctx.configured_chains, ctx.chain_id, logs)?;
     let tx_hash = logs.first().and_then(|log| log.transaction_hash);
     let block_number = logs.first().and_then(|log| log.block_number);
 
-    for observation in &plan.observations {
-        report_observation(ctx, *observation, tx_hash, block_number);
+    if ctx.mode == ReadMode::Confirmed {
+        for observation in &plan.observations {
+            report_observation(ctx, *observation, tx_hash, block_number);
+        }
     }
     Ok(plan)
 }
@@ -519,46 +558,76 @@ async fn apply_action(ctx: &EventContext<'_>, action: TxAction) -> Result<()> {
     };
     let key = key_from_message_hash(&message_hash, ctx.bridge_id)?;
 
-    // The mutators cannot fail: every expected condition is an outcome.
+    // The mutator cannot fail: every expected condition is an outcome.
     let mut outcome = None;
-    ctx.buffer
-        .alter(key, ctx.chain_id, log.block_number, |message| {
-            outcome = Some(match action {
-                TxAction::Send(leg) => message.apply_source(leg),
-                TxAction::Relay(leg) => message.apply_destination(leg),
-            });
-            Ok(())
-        })
-        .await
-        .map_err(|err| anyhow!(err))
-        .with_context(|| {
-            format!(
-                "failed to alter the buffer entry of OP interop message {message_hash} \
-                 (tx {}, log_index {})",
-                log.transaction_hash, log.log_index
-            )
-        })?;
-
-    let conflict = match outcome {
-        Some(LegOutcome::DuplicateLeg) => "duplicate_leg",
-        Some(LegOutcome::KeyCollision) => "key_collision",
-        Some(LegOutcome::Set | LegOutcome::Unchanged) | None => return Ok(()),
+    let mutator = |message: &mut Message| {
+        outcome = Some(match action {
+            TxAction::Send(leg) => message.apply_source(leg),
+            TxAction::Relay(leg) => message.apply_destination(leg),
+        });
+        Ok(())
     };
-    metrics::OP_INTEROP_LEG_CONFLICTS_TOTAL
-        .with_label_values(&[ctx.bridge_id.to_string().as_str(), conflict])
-        .inc();
-    tracing::warn!(
-        bridge_id = ctx.bridge_id,
-        chain_id = ctx.chain_id,
-        message_hash = %message_hash,
-        message_id = key.message_id,
-        tx_hash = %log.transaction_hash,
-        block_number = log.block_number,
-        block_hash = %log.block_hash,
-        log_index = log.log_index,
-        conflict,
-        "OP interop log conflicts with the buffered message; keeping the first observation"
-    );
+    // Only a confirmed observation records its block: an overlay block must
+    // never hold `realtime_cursor` (ADR-022).
+    let altered = match ctx.mode {
+        ReadMode::Confirmed => {
+            ctx.buffer
+                .alter(key, ctx.chain_id, log.block_number, mutator)
+                .await
+        }
+        ReadMode::Overlay => ctx.buffer.alter_unrecorded(key, mutator).await,
+    };
+    altered.map_err(|err| anyhow!(err)).with_context(|| {
+        format!(
+            "failed to alter the buffer entry of OP interop message {message_hash} \
+             (tx {}, log_index {})",
+            log.transaction_hash, log.log_index
+        )
+    })?;
+
+    if matches!(ctx.mode, ReadMode::Overlay) {
+        return Ok(());
+    }
+    match outcome {
+        Some(LegOutcome::DuplicateLeg) => {
+            metrics::OP_INTEROP_LEG_CONFLICTS_TOTAL
+                .with_label_values(&[ctx.bridge_id.to_string().as_str(), "duplicate_leg"])
+                .inc();
+            tracing::warn!(
+                bridge_id = ctx.bridge_id,
+                chain_id = ctx.chain_id,
+                message_hash = %message_hash,
+                message_id = key.message_id,
+                tx_hash = %log.transaction_hash,
+                block_number = log.block_number,
+                block_hash = %log.block_hash,
+                log_index = log.log_index,
+                conflict = "duplicate_leg",
+                "a second confirmed log for one side of an OP interop message; both are kept"
+            );
+        }
+        Some(LegOutcome::KeyCollision) => {
+            metrics::OP_INTEROP_LEG_CONFLICTS_TOTAL
+                .with_label_values(&[ctx.bridge_id.to_string().as_str(), "key_collision"])
+                .inc();
+            tracing::warn!(
+                bridge_id = ctx.bridge_id,
+                chain_id = ctx.chain_id,
+                message_hash = %message_hash,
+                message_id = key.message_id,
+                tx_hash = %log.transaction_hash,
+                block_number = log.block_number,
+                block_hash = %log.block_hash,
+                log_index = log.log_index,
+                conflict = "key_collision",
+                "OP interop log conflicts with the buffered message; keeping the first observation"
+            );
+        }
+        Some(
+            LegOutcome::Set | LegOutcome::Unchanged | LegOutcome::Confirmed | LegOutcome::Added,
+        )
+        | None => {}
+    }
 
     Ok(())
 }

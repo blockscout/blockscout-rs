@@ -9,8 +9,8 @@ use interchain_indexer_entity::{
 };
 use itertools::Itertools;
 use sea_orm::{
-    ActiveEnum, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbErr, EntityTrait,
-    Iterable, QueryFilter, QuerySelect,
+    ActiveEnum, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseTransaction, DbBackend, DbErr,
+    EntityTrait, FromQueryResult, Iterable, QueryFilter, QuerySelect, Statement,
     sea_query::{Expr, OnConflict},
 };
 use std::collections::HashSet;
@@ -290,6 +290,41 @@ fn amb_message_anomalies_on_conflict() -> OnConflict {
     OnConflict::new().do_nothing().to_owned()
 }
 
+/// Conflict policy for an unsettled entry (ADR-022, ADR-021 decision 9):
+/// overwrite every mutable column with the entry's value, but only while the
+/// stored row is neither terminal (`MessageStatus::is_terminal`) nor counted
+/// (`stats_processed = 0`). A refused row is left exactly as it is: no merge
+/// either, so a stale or leftover entry never touches a settled row. With no
+/// stored row it is a plain insert.
+///
+/// This is what clears `dst_tx_hash` and `last_update_timestamp` after a
+/// relay retraction, moves `init_timestamp` to a revived source (the merge
+/// keeps `LEAST`), and replaces `protocol_metadata` whole (the merge never
+/// removes a key). It is not `replace_existing`: it deletes nothing.
+fn crosschain_messages_overwrite_unsettled() -> OnConflict {
+    use crosschain_messages::Column;
+    OnConflict::columns([Column::Id, Column::BridgeId])
+        .update_columns([
+            Column::Status,
+            Column::InitTimestamp,
+            Column::LastUpdateTimestamp,
+            Column::SrcChainId,
+            Column::DstChainId,
+            Column::SrcTxHash,
+            Column::DstTxHash,
+            Column::SenderAddress,
+            Column::RecipientAddress,
+            Column::Payload,
+            Column::ProtocolMetadata,
+        ])
+        .action_and_where(Expr::cust(format!(
+            "crosschain_messages.status::text NOT IN ({}) \
+             AND crosschain_messages.stats_processed = 0",
+            terminal_statuses_sql()
+        )))
+        .to_owned()
+}
+
 /// Conflict policy for `op_interop_events`, shared by both writers: the
 /// maintenance flush and OP interop ingestion. Ingestion writes every leg
 /// (linked) and every execution (unlinked); the flush writes the legs again
@@ -477,8 +512,11 @@ async fn delete_replaced_messages(
     .await
 }
 
-pub(super) async fn offload_stale_to_pending<T: Consolidate>(
-    tx: &DatabaseTransaction,
+/// Upserts buffer entries into `pending_messages`. Serves the stale offload,
+/// the write-through of unsettled partial entries and
+/// `MessageBuffer::alter_existing_durably` (ADR-022).
+pub(super) async fn upsert_pending_entries<T: Consolidate>(
+    db: &impl ConnectionTrait,
     stale_entries: &[(Key, BufferItem<T>)],
 ) -> Result<(), DbErr> {
     let models: Vec<pending_messages::ActiveModel> = stale_entries
@@ -496,7 +534,108 @@ pub(super) async fn offload_stale_to_pending<T: Consolidate>(
         })
         .collect::<Result<_, DbErr>>()?;
 
-    batched_upsert(tx, &models, pending_messages_on_conflict()).await
+    batched_upsert(db, &models, pending_messages_on_conflict()).await
+}
+
+/// One provisional ledger row the sweep found.
+#[derive(Clone, Debug, PartialEq, Eq, FromQueryResult)]
+pub(crate) struct ProvisionalEvent {
+    pub block_hash: Vec<u8>,
+    pub log_index: i64,
+    pub block_number: i64,
+    pub event_kind: String,
+    pub message_id: Option<i64>,
+    pub message_hash: Option<Vec<u8>>,
+}
+
+/// Provisional rows of `(bridge_id, chain_id)` at or below `frontier`, outside
+/// every open `indexer_failures` range of the pair, lowest block first, at most
+/// `limit` (ADR-022). Served by `idx_op_interop_events_provisional`.
+pub(super) async fn provisional_op_interop_events(
+    db: &impl ConnectionTrait,
+    bridge_id: i32,
+    chain_id: i64,
+    frontier: i64,
+    limit: i64,
+) -> Result<Vec<ProvisionalEvent>, DbErr> {
+    use crate::protocol_metadata::OpInteropEventState;
+
+    ProvisionalEvent::find_by_statement(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        r"SELECT e.block_hash, e.log_index, e.block_number, e.event_kind,
+       e.message_id, e.message_hash
+FROM op_interop_events e
+WHERE e.bridge_id = $1
+  AND e.chain_id = $2
+  AND e.state = $3
+  AND e.block_number <= $4
+  AND NOT EXISTS (
+    SELECT 1 FROM indexer_failures f
+    WHERE f.bridge_id = e.bridge_id
+      AND f.chain_id = e.chain_id
+      AND e.block_number BETWEEN f.from_block AND f.to_block)
+ORDER BY e.block_number, e.log_index
+LIMIT $5",
+        [
+            bridge_id.into(),
+            chain_id.into(),
+            OpInteropEventState::Provisional.as_str().into(),
+            frontier.into(),
+            limit.into(),
+        ],
+    ))
+    .all(db)
+    .await
+}
+
+/// Marks the given provisional rows `retracted` and stamps
+/// `retracted_seen_at` once (UTC). A row that is no longer provisional is
+/// left alone. Never a delete. Returns the rows changed.
+pub(super) async fn retract_op_interop_events(
+    db: &impl ConnectionTrait,
+    bridge_id: i32,
+    chain_id: i64,
+    keys: &[(Vec<u8>, i64)], // (block_hash, log_index)
+) -> Result<u64, DbErr> {
+    use crate::protocol_metadata::OpInteropEventState;
+
+    let changed = std::sync::atomic::AtomicU64::new(0);
+    run_in_chunks(keys, bulk::ROW_IN_KEY_CHUNK, |chunk| {
+        let changed = &changed;
+        async move {
+            let result = op_interop_events::Entity::update_many()
+                .col_expr(
+                    op_interop_events::Column::State,
+                    Expr::value(OpInteropEventState::Retracted.as_str()),
+                )
+                .col_expr(
+                    op_interop_events::Column::RetractedSeenAt,
+                    Expr::cust("timezone('utc', now())"),
+                )
+                .col_expr(
+                    op_interop_events::Column::UpdatedAt,
+                    Expr::current_timestamp().into(),
+                )
+                .filter(op_interop_events::Column::BridgeId.eq(bridge_id))
+                .filter(op_interop_events::Column::ChainId.eq(chain_id))
+                .filter(
+                    op_interop_events::Column::State.eq(OpInteropEventState::Provisional.as_str()),
+                )
+                .filter(
+                    Expr::tuple([
+                        Expr::col(op_interop_events::Column::BlockHash).into(),
+                        Expr::col(op_interop_events::Column::LogIndex).into(),
+                    ])
+                    .in_tuples(chunk.iter().cloned()),
+                )
+                .exec(db)
+                .await?;
+            changed.fetch_add(result.rows_affected, std::sync::atomic::Ordering::Relaxed);
+            Ok(())
+        }
+    })
+    .await?;
+    Ok(changed.into_inner())
 }
 
 /// The single production write chokepoint for `crosschain_transfers` is this
@@ -536,6 +675,10 @@ fn reject_unset_asset_linkage(transfers: &[crosschain_transfers::ActiveModel]) {
     }
 }
 
+/// Writes the consolidated entries. Messages are partitioned by `unsettled`:
+/// settled ones go through the non-regressing merge, unsettled ones through the
+/// guarded overwrite (ADR-022); a flush holds one entry per key, so the two sets
+/// are disjoint.
 pub(super) async fn flush_to_final_storage(
     tx: &DatabaseTransaction,
     consolidated_entries: Vec<ConsolidatedMessage>,
@@ -556,7 +699,7 @@ pub(super) async fn flush_to_final_storage(
         .into_iter()
         .map(|c| {
             (
-                c.message,
+                (c.unsettled, c.message),
                 c.transfers,
                 c.amb_confirmations,
                 c.amb_anomalies,
@@ -572,7 +715,14 @@ pub(super) async fn flush_to_final_storage(
     reject_unset_asset_linkage(&transfers);
 
     delete_replaced_messages(tx, &replacement_pks).await?;
-    batched_upsert(tx, &messages, crosschain_messages_on_conflict()).await?;
+    let (unsettled, settled): (Vec<_>, Vec<_>) =
+        messages.into_iter().partition(|(unsettled, _)| *unsettled);
+    let settled: Vec<_> = settled.into_iter().map(|(_, message)| message).collect();
+    let unsettled: Vec<_> = unsettled.into_iter().map(|(_, message)| message).collect();
+    batched_upsert(tx, &settled, crosschain_messages_on_conflict()).await?;
+    // Through `batched_upsert`, never `Insert::exec`: a chunk whose every row
+    // the guard refuses must be `Ok`, not `DbErr::RecordNotInserted`.
+    batched_upsert(tx, &unsettled, crosschain_messages_overwrite_unsettled()).await?;
     // Empty for every indexer but OP interop: `batched_upsert` issues no
     // statement for an empty slice.
     upsert_op_interop_events(tx, op_interop_events).await?;
@@ -1474,6 +1624,7 @@ mod tests {
             amb_confirmations: vec![],
             amb_anomalies: vec![],
             op_interop_events: vec![],
+            unsettled: false,
         }
     }
 
@@ -1507,6 +1658,7 @@ mod tests {
             amb_confirmations: vec![],
             amb_anomalies: vec![],
             op_interop_events: vec![],
+            unsettled: false,
         }
     }
 
@@ -1901,6 +2053,7 @@ mod tests {
             amb_confirmations: vec![],
             amb_anomalies: vec![],
             op_interop_events: vec![],
+            unsettled: false,
         }
     }
 
@@ -2157,6 +2310,7 @@ mod tests {
             amb_confirmations: vec![],
             amb_anomalies: vec![],
             op_interop_events: vec![],
+            unsettled: false,
         }
     }
 
@@ -3814,5 +3968,271 @@ mod tests {
         let one = vec![detached_for(MESSAGE_ID, &[1], true)];
         assert!(attach_detached_confirmations(&tx, &one).await.is_err());
         tx.rollback().await.unwrap();
+    }
+
+    // --- Guarded overwrite of unsettled entries ---
+
+    fn overwrite_row(
+        status: MessageStatus,
+        dst_tx_hash: Option<Vec<u8>>,
+        init_secs: i64,
+        metadata: serde_json::Value,
+    ) -> ConsolidatedMessage {
+        let mut entry = merge_test_row(Some(DST_CHAIN), Some(metadata));
+        entry.message.status = ActiveValue::Set(status);
+        entry.message.init_timestamp = ActiveValue::Set(ts(init_secs));
+        entry.message.last_update_timestamp =
+            ActiveValue::Set(dst_tx_hash.as_ref().map(|_| ts(init_secs)));
+        entry.message.dst_tx_hash = ActiveValue::Set(dst_tx_hash);
+        entry
+    }
+
+    fn unsettled(mut entry: ConsolidatedMessage) -> ConsolidatedMessage {
+        entry.unsettled = true;
+        entry
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_overwrite_unsettled_rewrites_a_non_terminal_uncounted_row() {
+        let test_db = init_db("overwrite_unsettled_rewrites").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(
+            &db,
+            overwrite_row(
+                MessageStatus::PendingFinality,
+                Some(vec![0xD5; 32]),
+                1_000,
+                serde_json::json!({"op_interop": {"nonce": "0", "executing_message": {"log_index": 0}}}),
+            ),
+        )
+        .await;
+        flush(
+            &db,
+            unsettled(overwrite_row(
+                MessageStatus::Initiated,
+                None,
+                2_000,
+                serde_json::json!({"op_interop": {"nonce": "0"}}),
+            )),
+        )
+        .await;
+
+        let row = load(&db).await;
+        assert_eq!(row.status, MessageStatus::Initiated);
+        assert_eq!(row.dst_tx_hash, None);
+        assert_eq!(row.last_update_timestamp, None);
+        assert_eq!(row.init_timestamp, ts(2_000), "a revived source moves it");
+        assert_eq!(
+            row.protocol_metadata,
+            Some(serde_json::json!({"op_interop": {"nonce": "0"}})),
+            "the metadata is replaced whole"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_overwrite_unsettled_refuses_terminal_and_counted_rows() {
+        let test_db = init_db("overwrite_unsettled_refuses").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+        let stored_meta = serde_json::json!({"op_interop": {"nonce": "0", "executing_message": {"log_index": 0}}});
+
+        // A stored `completed` row.
+        flush(
+            &db,
+            overwrite_row(
+                MessageStatus::Completed,
+                Some(vec![0xD5; 32]),
+                1_000,
+                stored_meta.clone(),
+            ),
+        )
+        .await;
+        let before = load(&db).await;
+        flush(
+            &db,
+            unsettled(overwrite_row(
+                MessageStatus::Initiated,
+                None,
+                2_000,
+                serde_json::json!({"op_interop": {"nonce": "0"}}),
+            )),
+        )
+        .await;
+        let after = load(&db).await;
+        assert_eq!(after.status, MessageStatus::Completed);
+        assert_eq!(after.dst_tx_hash, before.dst_tx_hash);
+        assert_eq!(after.init_timestamp, before.init_timestamp);
+        assert_eq!(after.protocol_metadata, Some(stored_meta.clone()));
+
+        // A stored non-terminal row that is already counted.
+        db.db
+            .execute_unprepared(&format!(
+                "UPDATE crosschain_messages SET status = 'initiated', stats_processed = 1 \
+                 WHERE id = {MESSAGE_ID} AND bridge_id = {BRIDGE_ID}"
+            ))
+            .await
+            .unwrap();
+        let before = load(&db).await;
+        flush(
+            &db,
+            unsettled(overwrite_row(
+                MessageStatus::PendingFinality,
+                None,
+                3_000,
+                serde_json::json!({"op_interop": {"nonce": "9"}}),
+            )),
+        )
+        .await;
+        let after = load(&db).await;
+        assert_eq!(after.status, before.status);
+        assert_eq!(after.init_timestamp, before.init_timestamp);
+        assert_eq!(after.protocol_metadata, before.protocol_metadata);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_overwrite_unsettled_all_refused_batch_is_ok() {
+        let test_db = init_db("overwrite_unsettled_all_refused").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+        flush(
+            &db,
+            overwrite_row(
+                MessageStatus::Completed,
+                Some(vec![0xD5; 32]),
+                1_000,
+                serde_json::json!({}),
+            ),
+        )
+        .await;
+
+        // `flush` unwraps: it panics if the refused batch were an error.
+        flush(
+            &db,
+            unsettled(overwrite_row(
+                MessageStatus::Initiated,
+                None,
+                2_000,
+                serde_json::json!({}),
+            )),
+        )
+        .await;
+        assert_eq!(load(&db).await.status, MessageStatus::Completed);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_overwrite_unsettled_inserts_a_new_row() {
+        let test_db = init_db("overwrite_unsettled_inserts").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        flush(
+            &db,
+            unsettled(overwrite_row(
+                MessageStatus::Invalidated,
+                None,
+                1_000,
+                serde_json::json!({"op_interop": {"nonce": "0"}}),
+            )),
+        )
+        .await;
+
+        let row = load(&db).await;
+        assert_eq!(row.status, MessageStatus::Invalidated);
+        assert_eq!(row.init_timestamp, ts(1_000));
+    }
+
+    #[test]
+    fn test_overwrite_sql_has_the_guard() {
+        let sql = crosschain_messages::Entity::insert(crosschain_messages::ActiveModel {
+            id: ActiveValue::Set(MESSAGE_ID),
+            bridge_id: ActiveValue::Set(BRIDGE_ID),
+            status: ActiveValue::Set(MessageStatus::Initiated),
+            src_chain_id: ActiveValue::Set(SRC_CHAIN),
+            ..Default::default()
+        })
+        .on_conflict(super::crosschain_messages_overwrite_unsettled())
+        .build(DbBackend::Postgres)
+        .sql;
+
+        let (_, after_update) = sql
+            .split_once("DO UPDATE SET")
+            .expect("the policy updates on conflict");
+        assert!(
+            after_update.contains(
+                "WHERE crosschain_messages.status::text NOT IN ('completed', 'failed') \
+                 AND crosschain_messages.stats_processed = 0"
+            ),
+            "{sql}"
+        );
+    }
+
+    // --- Sweep statements ---
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_provisional_events_select_and_retract() {
+        use crate::indexer::failure_ledger::BlockRange;
+
+        let test_db = init_db("provisional_events_select_and_retract").await;
+        let db = InterchainDatabase::new(test_db.client());
+        seed_fk_prerequisites(&db).await;
+
+        let row_at = |log_index: i64, block: i64, state: OpInteropEventState| {
+            let mut leg = state_leg(log_index, state);
+            leg.block_number = ActiveValue::Set(block);
+            leg
+        };
+        upsert_ledger(
+            &db,
+            vec![
+                row_at(1, 10, OpInteropEventState::Provisional),
+                row_at(2, 20, OpInteropEventState::Provisional),
+                row_at(3, 15, OpInteropEventState::Confirmed),
+                row_at(4, 30, OpInteropEventState::Provisional),
+            ],
+        )
+        .await;
+        db.record_indexer_failures(
+            BRIDGE_ID,
+            SRC_CHAIN,
+            &[(BlockRange { from: 18, to: 22 }, "test".to_string())],
+        )
+        .await
+        .unwrap();
+
+        let rows =
+            super::provisional_op_interop_events(db.db.as_ref(), BRIDGE_ID, SRC_CHAIN, 25, 100)
+                .await
+                .unwrap();
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!((rows[0].block_number, rows[0].log_index), (10, 1));
+        assert_eq!(rows[0].event_kind, "sent_message");
+
+        let keys: Vec<(Vec<u8>, i64)> = rows
+            .iter()
+            .map(|row| (row.block_hash.clone(), row.log_index))
+            .collect();
+        let changed = super::retract_op_interop_events(db.db.as_ref(), BRIDGE_ID, SRC_CHAIN, &keys)
+            .await
+            .unwrap();
+        assert_eq!(changed, 1);
+        let stored = load_op_interop_events(&db).await;
+        let retracted = stored.iter().find(|row| row.log_index == 1).unwrap();
+        assert_eq!(retracted.state, "retracted");
+        assert!(retracted.retracted_seen_at.is_some());
+
+        let again = super::retract_op_interop_events(db.db.as_ref(), BRIDGE_ID, SRC_CHAIN, &keys)
+            .await
+            .unwrap();
+        assert_eq!(
+            again, 0,
+            "a row that is no longer provisional is left alone"
+        );
     }
 }

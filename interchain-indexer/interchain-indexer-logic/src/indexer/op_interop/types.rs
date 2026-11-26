@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
-use crate::message_buffer::Key;
+use crate::{message_buffer::Key, protocol_metadata::OpInteropEventState};
 
 /// Where a log was observed. Everything here comes from the `eth_getLogs`
 /// row itself: this indexer fetches no receipt and no block header.
@@ -47,6 +47,10 @@ pub(crate) struct SourceLeg {
     /// Hash of this `SentMessage` *log*; see [`payload_hash`]. An attribute
     /// and a cross-check input, never a key.
     pub(crate) payload_hash: B256,
+    /// Journal state of this log. Payloads stored before the overlay have none:
+    /// they were read at or below the confirmation tag.
+    #[serde(default)]
+    pub(crate) state: OpInteropEventState,
 }
 
 /// One `CrossL2Inbox.ExecutingMessage` log: the on-chain `Identifier`
@@ -97,6 +101,9 @@ pub(crate) struct DestinationLeg {
     /// stored before ETH transfers were read.
     #[serde(default)]
     pub(crate) relay_eth: Option<RelayEth>,
+    /// Journal state of this log; see [`SourceLeg::state`].
+    #[serde(default)]
+    pub(crate) state: OpInteropEventState,
 }
 
 impl DestinationLeg {
@@ -114,37 +121,168 @@ impl DestinationLeg {
 /// that touched it, forever.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub(crate) struct Message {
-    pub(crate) source: Option<SourceLeg>,
-    pub(crate) destination: Option<DestinationLeg>,
+    /// Every distinct `SentMessage` log seen for this message, by
+    /// `(block_hash, log_index)`, in arrival order: a re-included source is a
+    /// second candidate. Payloads stored before the overlay hold one `source`
+    /// object (or `null`) here.
+    #[serde(default, alias = "source", deserialize_with = "one_or_many")]
+    pub(crate) sources: Vec<SourceLeg>,
+    /// The same for `RelayedMessage` logs (a re-relay after a retraction).
+    #[serde(default, alias = "destination", deserialize_with = "one_or_many")]
+    pub(crate) destinations: Vec<DestinationLeg>,
+}
+
+/// `null` -> empty, an object -> one element, an array -> as is.
+fn one_or_many<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OneOrMany<T> {
+        Many(Vec<T>),
+        One(T),
+    }
+    Ok(match Option::<OneOrMany<T>>::deserialize(deserializer)? {
+        None => Vec::new(),
+        Some(OneOrMany::One(leg)) => vec![leg],
+        Some(OneOrMany::Many(legs)) => legs,
+    })
 }
 
 /// What applying a leg did. Returned, not raised: none of these is an error,
 /// and the caller decides what to count and log.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum LegOutcome {
-    /// The slot was empty; the leg is stored.
+    /// The side was empty; the leg is its first candidate.
     Set,
-    /// The slot already held this very log; it is overwritten with the
-    /// (identical) leg. A replayed block.
+    /// The side already holds this very log; data overwritten (identical),
+    /// state unchanged.
     Unchanged,
-    /// The slot holds a different log for the same side; the first is kept.
+    /// The side held this log as provisional; it is confirmed now.
+    Confirmed,
+    /// A different log for a side that already holds one: a re-inclusion, a
+    /// re-relay, or two hashes at one height. Added as a candidate.
+    Added,
+    /// A second confirmed log for a side that already holds a confirmed one.
+    /// Impossible on a canonical chain (nonces are unique per source, the
+    /// messenger rejects a second relay). Added and reported.
     DuplicateLeg,
-    /// The entry already holds a leg with a different message hash: two
-    /// messages share one 64-bit buffer key. The first is kept.
+    /// A leg with another message hash under the same 64-bit key. Dropped.
     KeyCollision,
+}
+
+/// What the apply and retract rules need from either side's leg.
+trait Leg {
+    fn log(&self) -> &LogRef;
+    fn state(&self) -> OpInteropEventState;
+    fn set_state(&mut self, state: OpInteropEventState);
+    fn message_hash(&self) -> B256;
+}
+
+impl Leg for SourceLeg {
+    fn log(&self) -> &LogRef {
+        &self.log
+    }
+    fn state(&self) -> OpInteropEventState {
+        self.state
+    }
+    fn set_state(&mut self, state: OpInteropEventState) {
+        self.state = state;
+    }
+    fn message_hash(&self) -> B256 {
+        self.message_hash
+    }
+}
+
+impl Leg for DestinationLeg {
+    fn log(&self) -> &LogRef {
+        &self.log
+    }
+    fn state(&self) -> OpInteropEventState {
+        self.state
+    }
+    fn set_state(&mut self, state: OpInteropEventState) {
+        self.state = state;
+    }
+    fn message_hash(&self) -> B256 {
+        self.message_hash
+    }
+}
+
+/// The apply rule of one side. The state only moves forward: a provisional
+/// candidate takes the incoming state; confirmed and retracted never change.
+fn apply_leg<L: Leg>(candidates: &mut Vec<L>, mut leg: L) -> LegOutcome {
+    if let Some(held) = candidates
+        .iter_mut()
+        .find(|held| held.log().is_same_log(leg.log()))
+    {
+        let held_state = held.state();
+        let state = match held_state {
+            OpInteropEventState::Provisional => leg.state(),
+            settled => settled,
+        };
+        leg.set_state(state);
+        *held = leg;
+        return if held_state == OpInteropEventState::Provisional
+            && state == OpInteropEventState::Confirmed
+        {
+            LegOutcome::Confirmed
+        } else {
+            LegOutcome::Unchanged
+        };
+    }
+    if candidates.is_empty() {
+        candidates.push(leg);
+        return LegOutcome::Set;
+    }
+    let second_confirmed = leg.state() == OpInteropEventState::Confirmed
+        && candidates
+            .iter()
+            .any(|held| held.state() == OpInteropEventState::Confirmed);
+    candidates.push(leg);
+    if second_confirmed {
+        LegOutcome::DuplicateLeg
+    } else {
+        LegOutcome::Added
+    }
+}
+
+fn retract_legs<L: Leg>(candidates: &mut [L], logs: &[(B256, u64)]) -> bool {
+    let mut changed = false;
+    for leg in candidates.iter_mut().filter(|leg| {
+        logs.iter().any(|(block_hash, log_index)| {
+            leg.log().block_hash == *block_hash && leg.log().log_index == *log_index
+        })
+    }) {
+        match leg.state() {
+            OpInteropEventState::Provisional => {
+                leg.set_state(OpInteropEventState::Retracted);
+                changed = true;
+            }
+            OpInteropEventState::Confirmed => {
+                // Unreachable: the confirmed stream writes the ledger before the
+                // buffer, and the sweep selects only provisional rows.
+                tracing::warn!(
+                    block_hash = %leg.log().block_hash,
+                    log_index = leg.log().log_index,
+                    "retraction names a confirmed OP interop leg; leaving it confirmed"
+                );
+            }
+            OpInteropEventState::Retracted => {}
+        }
+    }
+    changed
 }
 
 impl Message {
     /// The message hash of whichever leg the entry already holds.
     fn held_message_hash(&self) -> Option<B256> {
-        self.source
-            .as_ref()
-            .map(|source| source.message_hash)
-            .or_else(|| {
-                self.destination
-                    .as_ref()
-                    .map(|destination| destination.message_hash)
-            })
+        self.sources
+            .first()
+            .map(Leg::message_hash)
+            .or_else(|| self.destinations.first().map(Leg::message_hash))
     }
 
     fn collides_with(&self, message_hash: B256) -> bool {
@@ -156,34 +294,32 @@ impl Message {
         if self.collides_with(leg.message_hash) {
             return LegOutcome::KeyCollision;
         }
-        match &self.source {
-            None => {
-                self.source = Some(leg);
-                LegOutcome::Set
-            }
-            Some(existing) if existing.log.is_same_log(&leg.log) => {
-                self.source = Some(leg);
-                LegOutcome::Unchanged
-            }
-            Some(_) => LegOutcome::DuplicateLeg,
-        }
+        apply_leg(&mut self.sources, leg)
     }
 
     pub(crate) fn apply_destination(&mut self, leg: DestinationLeg) -> LegOutcome {
         if self.collides_with(leg.message_hash) {
             return LegOutcome::KeyCollision;
         }
-        match &self.destination {
-            None => {
-                self.destination = Some(leg);
-                LegOutcome::Set
-            }
-            Some(existing) if existing.log.is_same_log(&leg.log) => {
-                self.destination = Some(leg);
-                LegOutcome::Unchanged
-            }
-            Some(_) => LegOutcome::DuplicateLeg,
-        }
+        apply_leg(&mut self.destinations, leg)
+    }
+
+    /// Marks every provisional candidate on either side whose
+    /// `(block_hash, log_index)` is in `logs` as retracted. A matching confirmed
+    /// candidate is left as is. Returns whether anything changed.
+    pub(crate) fn retract(&mut self, logs: &[(B256, u64)]) -> bool {
+        let sources = retract_legs(&mut self.sources, logs);
+        let destinations = retract_legs(&mut self.destinations, logs);
+        sources || destinations
+    }
+
+    /// Any candidate on either side is not confirmed.
+    pub(crate) fn is_unsettled(&self) -> bool {
+        self.sources
+            .iter()
+            .map(Leg::state)
+            .chain(self.destinations.iter().map(Leg::state))
+            .any(|state| state != OpInteropEventState::Confirmed)
     }
 }
 
@@ -355,6 +491,7 @@ mod tests {
             message: bytes!("deadbeef"),
             message_hash,
             payload_hash: B256::repeat_byte(0xEE),
+            state: OpInteropEventState::Confirmed,
         }
     }
 
@@ -380,6 +517,7 @@ mod tests {
                 source_timestamp: U256::from(1_794_670_098_u64),
             }],
             relay_eth: None,
+            state: OpInteropEventState::Confirmed,
         }
     }
 
@@ -408,7 +546,11 @@ mod tests {
             }}"#
         );
         let message: Message = serde_json::from_str(&raw).expect("old payload deserializes");
-        let destination = message.destination.expect("destination present");
+        let destination = message
+            .destinations
+            .into_iter()
+            .next()
+            .expect("destination present");
         assert_eq!(destination.relay_eth, None);
         assert_eq!(destination.source_chain_id, SOURCE_CHAIN_ID);
     }
@@ -455,7 +597,11 @@ mod tests {
             }}"#
         );
         let message: Message = serde_json::from_str(&raw).expect("old payload deserializes");
-        let destination = message.destination.expect("destination present");
+        let destination = message
+            .destinations
+            .into_iter()
+            .next()
+            .expect("destination present");
         assert!(destination.executing_candidates.is_empty());
         let candidates: Vec<_> = destination.candidates().collect();
         assert_eq!(candidates.len(), 1);
@@ -478,7 +624,7 @@ mod tests {
         message.apply_destination(destination.clone());
         let restored: Message =
             serde_json::from_value(serde_json::to_value(&message).unwrap()).unwrap();
-        assert_eq!(restored.destination, Some(destination));
+        assert_eq!(restored.destinations, vec![destination]);
     }
 
     #[test]
@@ -490,13 +636,13 @@ mod tests {
         let json = serde_json::to_value(&message).expect("serializes");
         let restored: Message = serde_json::from_value(json).expect("deserializes");
 
-        assert_eq!(restored.source, message.source);
-        assert_eq!(restored.destination, message.destination);
+        assert_eq!(restored.sources, message.sources);
+        assert_eq!(restored.destinations, message.destinations);
 
         // An empty entry and a one-sided one round-trip as well.
         let empty: Message =
             serde_json::from_value(serde_json::to_value(Message::default()).unwrap()).unwrap();
-        assert!(empty.source.is_none() && empty.destination.is_none());
+        assert!(empty.sources.is_empty() && empty.destinations.is_empty());
 
         let mut destination_only = Message::default();
         let mut unpaired = destination_leg(MESSAGE_0_HASH, 2, 3);
@@ -504,8 +650,8 @@ mod tests {
         destination_only.apply_destination(unpaired.clone());
         let restored: Message =
             serde_json::from_value(serde_json::to_value(&destination_only).unwrap()).unwrap();
-        assert_eq!(restored.source, None);
-        assert_eq!(restored.destination, Some(unpaired));
+        assert!(restored.sources.is_empty());
+        assert_eq!(restored.destinations, vec![unpaired]);
     }
 
     #[test]
@@ -524,21 +670,25 @@ mod tests {
         assert_eq!(
             message.apply_source(source_leg(MESSAGE_0_HASH, 9, 1)),
             LegOutcome::DuplicateLeg,
-            "a different block hash is a different log"
+            "a different confirmed block hash is a different log"
         );
         assert_eq!(
             message.apply_source(source_leg(MESSAGE_0_HASH, 1, 2)),
             LegOutcome::DuplicateLeg,
-            "a different log index is a different log"
+            "a different confirmed log index is a different log"
         );
         assert_eq!(
             message.apply_source(source_leg(MESSAGE_1_HASH, 1, 1)),
             LegOutcome::KeyCollision
         );
         assert_eq!(
-            message.source,
-            Some(source_leg(MESSAGE_0_HASH, 1, 1)),
-            "the first source leg is kept through every conflict"
+            message.sources,
+            vec![
+                source_leg(MESSAGE_0_HASH, 1, 1),
+                source_leg(MESSAGE_0_HASH, 9, 1),
+                source_leg(MESSAGE_0_HASH, 1, 2),
+            ],
+            "every confirmed log is kept through a duplicate; a collision is dropped"
         );
 
         // Destination side, on the entry that already holds the source.
@@ -547,7 +697,7 @@ mod tests {
             LegOutcome::KeyCollision,
             "a destination for another message must not join this source"
         );
-        assert_eq!(message.destination, None);
+        assert!(message.destinations.is_empty());
         assert_eq!(
             message.apply_destination(destination_leg(MESSAGE_0_HASH, 2, 3)),
             LegOutcome::Set
@@ -561,8 +711,11 @@ mod tests {
             LegOutcome::DuplicateLeg
         );
         assert_eq!(
-            message.destination,
-            Some(destination_leg(MESSAGE_0_HASH, 2, 3))
+            message.destinations,
+            vec![
+                destination_leg(MESSAGE_0_HASH, 2, 3),
+                destination_leg(MESSAGE_0_HASH, 8, 3)
+            ]
         );
 
         // Destination first: the source of another message collides.
@@ -575,10 +728,167 @@ mod tests {
             destination_first.apply_source(source_leg(MESSAGE_1_HASH, 1, 1)),
             LegOutcome::KeyCollision
         );
-        assert_eq!(destination_first.source, None);
+        assert!(destination_first.sources.is_empty());
         assert_eq!(
             destination_first.apply_source(source_leg(MESSAGE_0_HASH, 1, 1)),
             LegOutcome::Set
+        );
+    }
+
+    fn with_state(mut leg: SourceLeg, state: OpInteropEventState) -> SourceLeg {
+        leg.state = state;
+        leg
+    }
+
+    fn log_of(leg: &SourceLeg) -> (B256, u64) {
+        (leg.log.block_hash, leg.log.log_index)
+    }
+
+    #[test]
+    fn test_message_old_payload_shapes_deserialize() {
+        let hash = format!("0x{}", "ab".repeat(32));
+        let leg = |log_index: u64| {
+            format!(
+                r#"{{
+                    "log": {{
+                        "chain_id": 420130019,
+                        "block_number": 100,
+                        "block_hash": "{hash}",
+                        "block_timestamp": "2026-11-16T10:00:00",
+                        "transaction_hash": "{hash}",
+                        "log_index": {log_index}
+                    }},
+                    "destination_chain_id": 420130020,
+                    "nonce": "0x7",
+                    "sender": "0x1111111111111111111111111111111111111111",
+                    "target": "0x2222222222222222222222222222222222222222",
+                    "message": "0xdeadbeef",
+                    "message_hash": "{hash}",
+                    "payload_hash": "{hash}"
+                }}"#
+            )
+        };
+
+        // One `source` object, no `state`, and a null `destination`.
+        let raw = format!(r#"{{"source": {}, "destination": null}}"#, leg(1));
+        let message: Message = serde_json::from_str(&raw).expect("old payload deserializes");
+        assert_eq!(message.sources.len(), 1);
+        assert_eq!(message.sources[0].state, OpInteropEventState::Confirmed);
+        assert!(message.destinations.is_empty());
+
+        // The new list form.
+        let raw = format!(
+            r#"{{"sources": [{}, {}], "destinations": []}}"#,
+            leg(1),
+            leg(2)
+        );
+        let message: Message = serde_json::from_str(&raw).expect("list payload deserializes");
+        assert_eq!(message.sources.len(), 2);
+
+        // A missing key is an empty list.
+        let message: Message = serde_json::from_str("{}").expect("empty payload deserializes");
+        assert!(message.sources.is_empty() && message.destinations.is_empty());
+    }
+
+    #[test]
+    fn test_apply_moves_state_forward_only() {
+        let provisional = with_state(
+            source_leg(MESSAGE_0_HASH, 1, 1),
+            OpInteropEventState::Provisional,
+        );
+        let confirmed = source_leg(MESSAGE_0_HASH, 1, 1);
+
+        let mut message = Message::default();
+        message.apply_source(provisional.clone());
+        assert_eq!(
+            message.apply_source(confirmed.clone()),
+            LegOutcome::Confirmed
+        );
+        assert_eq!(message.sources[0].state, OpInteropEventState::Confirmed);
+
+        // Confirmed, then provisional: stays confirmed.
+        assert_eq!(
+            message.apply_source(provisional.clone()),
+            LegOutcome::Unchanged
+        );
+        assert_eq!(message.sources[0].state, OpInteropEventState::Confirmed);
+
+        // Retracted stays retracted against either.
+        let mut message = Message::default();
+        message.apply_source(provisional.clone());
+        assert!(message.retract(&[log_of(&provisional)]));
+        for incoming in [confirmed, provisional] {
+            assert_eq!(message.apply_source(incoming), LegOutcome::Unchanged);
+            assert_eq!(message.sources[0].state, OpInteropEventState::Retracted);
+        }
+    }
+
+    #[test]
+    fn test_apply_adds_a_candidate_for_another_log() {
+        let mut message = Message::default();
+        let first = with_state(
+            source_leg(MESSAGE_0_HASH, 1, 1),
+            OpInteropEventState::Provisional,
+        );
+        let mut second = with_state(
+            source_leg(MESSAGE_0_HASH, 2, 1),
+            OpInteropEventState::Provisional,
+        );
+        second.log.block_number = first.log.block_number;
+        assert_eq!(message.apply_source(first), LegOutcome::Set);
+        assert_eq!(message.apply_source(second), LegOutcome::Added);
+        assert_eq!(message.sources.len(), 2);
+    }
+
+    #[test]
+    fn test_retract_marks_only_provisional_candidates() {
+        let provisional = with_state(
+            source_leg(MESSAGE_0_HASH, 1, 1),
+            OpInteropEventState::Provisional,
+        );
+        let confirmed = source_leg(MESSAGE_0_HASH, 2, 1);
+        let mut message = Message::default();
+        message.apply_source(provisional.clone());
+        message.apply_source(confirmed.clone());
+
+        // A log of another message is ignored.
+        assert!(!message.retract(&[(B256::repeat_byte(0x77), 1)]));
+        assert!(message.retract(&[log_of(&provisional), log_of(&confirmed)]));
+        assert!(
+            !message.retract(&[log_of(&provisional)]),
+            "a repeat changes nothing"
+        );
+        assert_eq!(message.sources[0].state, OpInteropEventState::Retracted);
+        assert_eq!(message.sources[1].state, OpInteropEventState::Confirmed);
+    }
+
+    #[test]
+    fn test_is_unsettled() {
+        let mut message = Message::default();
+        assert!(
+            !message.is_unsettled(),
+            "an empty entry holds nothing unsettled"
+        );
+        message.apply_source(source_leg(MESSAGE_0_HASH, 1, 1));
+        message.apply_destination(destination_leg(MESSAGE_0_HASH, 2, 3));
+        assert!(!message.is_unsettled());
+
+        message.apply_destination(DestinationLeg {
+            state: OpInteropEventState::Provisional,
+            ..destination_leg(MESSAGE_0_HASH, 5, 3)
+        });
+        assert!(message.is_unsettled());
+
+        let mut retracted = Message::default();
+        let leg = with_state(
+            source_leg(MESSAGE_0_HASH, 1, 1),
+            OpInteropEventState::Provisional,
+        );
+        retracted.apply_source(leg.clone());
+        retracted.retract(&[log_of(&leg)]);
+        assert!(
+            retracted.is_unsettled(),
+            "a retracted candidate is not confirmed"
         );
     }
 }

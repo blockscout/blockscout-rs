@@ -212,7 +212,9 @@ non-terminal value.
 
 A new path that deletes or rewrites a canonical row must refuse a terminal
 row and a row with `stats_processed > 0` (see `gotchas.md`, "`replace_existing`
-Bypasses The Terminal Status Guard").
+Bypasses The Terminal Status Guard") (pattern:
+`crosschain_messages_overwrite_unsettled`, an `ON CONFLICT DO UPDATE …
+WHERE` guard).
 
 ### Adding a value
 

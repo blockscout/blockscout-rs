@@ -66,6 +66,14 @@ called from `Message::consolidate`); the bridge's `SendETH` / `RelayETH`
 events (third contract kind `superchain_eth_bridge`) are cross-checks only
 (ADR-019).
 
+Every leg carries a state (`provisional | confirmed | retracted`) and a buffer
+entry holds a candidate list per side; the pure fold `lifecycle::status` gives
+the message status, including `pending_finality` and `invalidated`. An entry
+with any non-confirmed candidate is written with the guarded overwrite
+(`crosschain_messages_overwrite_unsettled`) and, while partial, persisted to
+`pending_messages` with its flush; `sweep::sweep` retracts provisional rows
+the confirmed stream passed (ADR-022).
+
 ### MessageBuffer
 
 Location: `interchain-indexer-logic/src/message_buffer/`

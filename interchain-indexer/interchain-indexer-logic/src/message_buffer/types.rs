@@ -52,6 +52,12 @@ pub struct ConsolidatedMessage {
     /// OP interop leg-ledger rows for this message. Empty for every other
     /// indexer (mirrors `amb_confirmations`).
     pub op_interop_events: Vec<op_interop_events::ActiveModel>,
+    /// The row was built from at least one leg that is not confirmed
+    /// (provisional or retracted; ADR-022). It is written with the guarded
+    /// overwrite instead of the merge (`flush_to_final_storage`), and a partial
+    /// entry is persisted to `pending_messages` in the same transaction
+    /// (maintenance). `false` for every indexer that reads confirmed data only.
+    pub unsettled: bool,
 }
 
 /// One observed destination-execution, in a form suitable for writing as an

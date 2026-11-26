@@ -61,6 +61,7 @@ impl Consolidate for Message {
             // indexing bug; there is no protocol-level collision to record.
             amb_anomalies: Vec::new(),
             op_interop_events: Vec::new(),
+            unsettled: false,
         }))
     }
 

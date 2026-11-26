@@ -64,9 +64,10 @@ lazy_static! {
 
     /// kind: unrecognized_payload, send_eth_missing, send_eth_unpaired,
     /// send_eth_mismatch, relay_eth_missing, relay_eth_mismatch. Zero is the
-    /// expected value. The two relay kinds are counted per consolidation
-    /// attempt; the other four are counted per ingestion of the transaction,
-    /// so a retried or rescanned block counts them again.
+    /// expected value. The two relay kinds are counted once per completing
+    /// consolidation (a provisional re-flush does not count the same pair
+    /// again); the other four are counted per ingestion of the transaction, so
+    /// a retried or rescanned block counts them again.
     pub static ref OP_INTEROP_ETH_TRANSFER_ANOMALIES_TOTAL: IntCounterVec =
         register_int_counter_vec!(
             "interchain_indexer_op_interop_eth_transfer_anomalies_total",
@@ -76,16 +77,27 @@ lazy_static! {
         .unwrap();
 
     /// Observations that contradict what the buffer already holds. `kind` is
-    /// a closed set: `duplicate_leg` (a different log for a side that is
-    /// already filled; impossible on a confirmed chain), `key_collision` (two
-    /// message hashes under one 64-bit buffer key) and `identifier_mismatch`
-    /// (a relay has candidates but none points at the indexed source log;
-    /// nothing is nested or linked).
-    /// The first observation always wins. Zero is the expected value.
+    /// a closed set: `duplicate_leg` (a second **confirmed** log for a side
+    /// that already holds a confirmed one; impossible on a canonical chain, both
+    /// are kept), `key_collision` (two message hashes under one 64-bit buffer
+    /// key; the later leg is dropped) and `identifier_mismatch` (a relay has
+    /// candidates but none points at the indexed source log; nothing is nested
+    /// or linked; counted once per completing consolidation). Zero is the
+    /// expected value.
     pub static ref OP_INTEROP_LEG_CONFLICTS_TOTAL: IntCounterVec = register_int_counter_vec!(
         "interchain_indexer_op_interop_leg_conflicts_total",
         "OP interop observations that conflict with the buffered message",
         &["bridge_id", "kind"],
+    )
+    .unwrap();
+
+    /// OP interop ledger rows the confirmation sweep retracted (ADR-022).
+    /// `event_kind` is a closed set: `sent_message`, `relayed_message`,
+    /// `executing_message`.
+    pub static ref OP_INTEROP_LEGS_RETRACTED_TOTAL: IntCounterVec = register_int_counter_vec!(
+        "interchain_indexer_op_interop_legs_retracted_total",
+        "OP interop ledger rows the confirmation sweep retracted",
+        &["bridge_id", "chain_id", "event_kind"],
     )
     .unwrap();
 }

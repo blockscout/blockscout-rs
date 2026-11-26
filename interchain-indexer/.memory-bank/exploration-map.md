@@ -103,6 +103,11 @@
   - infallible assembly, status, `op_interop_events` rows, `extra` metadata,
     the ETH transfer row and the `RelayETH` check; `delivering_execution`
     and `execution_row`
+- `interchain-indexer-logic/src/indexer/op_interop/lifecycle.rs`
+  - the status fold over leg candidates (`status`, `active`, `shown`)
+- `interchain-indexer-logic/src/indexer/op_interop/sweep.rs`
+  - the confirmation sweep: select provisional rows, retract in the buffer
+    (durably), then in the ledger
 - `interchain-indexer-logic/src/indexer/op_interop/eth_transfer.rs`
   - `classify` (the single payload decoder), the transfer model,
     `check_relay_eth`
@@ -114,6 +119,7 @@
 - `.memory-bank/adr/018-op-interop-confirmed-reading-and-leg-ledger.md`
 - `.memory-bank/adr/019-op-interop-eth-transfer-from-message-payload.md`
 - `.memory-bank/adr/020-op-interop-ledger-records-every-inbox-execution.md`
+- `.memory-bank/adr/022-op-interop-optimistic-overlay-and-retraction.md`
 
 ## If You Need to Understand Incoming ICTT Reconstruction / ICM Payload Decoding
 

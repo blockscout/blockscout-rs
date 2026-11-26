@@ -37,7 +37,7 @@ use crate::{
 use super::{
     abi::OpInteropRegistry,
     consolidation,
-    events::{self, EventContext, TxAction, TxPlan},
+    events::{self, EventContext, ReadMode, TxAction, TxPlan},
     settings::OpInteropIndexerSettings,
     types::{LogRef, Message, key_from_message_hash},
 };
@@ -79,14 +79,14 @@ pub struct OpInteropIndexer {
     error_count: Arc<AtomicU64>,
 }
 
-struct RunContext {
-    db: Arc<InterchainDatabase>,
-    bridge_id: i32,
-    chains: Vec<OpInteropChainConfig>,
-    registry: Arc<OpInteropRegistry>,
-    configured_chains: Arc<HashSet<ChainId>>,
-    settings: OpInteropIndexerSettings,
-    buffer: Arc<MessageBuffer<Message>>,
+pub(super) struct RunContext {
+    pub(super) db: Arc<InterchainDatabase>,
+    pub(super) bridge_id: i32,
+    pub(super) chains: Vec<OpInteropChainConfig>,
+    pub(super) registry: Arc<OpInteropRegistry>,
+    pub(super) configured_chains: Arc<HashSet<ChainId>>,
+    pub(super) settings: OpInteropIndexerSettings,
+    pub(super) buffer: Arc<MessageBuffer<Message>>,
 }
 
 impl OpInteropIndexer {
@@ -218,6 +218,7 @@ impl OpInteropIndexer {
         ctx: &RunContext,
         chain_id: i64,
         batch: &[Log],
+        mode: ReadMode,
     ) -> Result<(), BatchError> {
         if batch.is_empty() {
             return Ok(());
@@ -238,15 +239,28 @@ impl OpInteropIndexer {
             match events::log_ref(scanned_chain_id, log) {
                 Ok(_) => valid.push(log.clone()),
                 Err(err) => {
-                    tracing::warn!(
-                        err = ?err,
-                        bridge_id = ctx.bridge_id,
-                        chain_id,
-                        block_number = ?log.block_number,
-                        tx_hash = ?log.transaction_hash,
-                        log_index = ?log.log_index,
-                        "invalid OP interop log row; attributing its block as failed"
-                    );
+                    // The overlay reads the same logs the confirmed stream
+                    // reads next, which reports an invalid row at `warn`.
+                    match mode {
+                        ReadMode::Confirmed => tracing::warn!(
+                            err = ?err,
+                            bridge_id = ctx.bridge_id,
+                            chain_id,
+                            block_number = ?log.block_number,
+                            tx_hash = ?log.transaction_hash,
+                            log_index = ?log.log_index,
+                            "invalid OP interop log row; attributing its block as failed"
+                        ),
+                        ReadMode::Overlay => tracing::debug!(
+                            err = ?err,
+                            bridge_id = ctx.bridge_id,
+                            chain_id,
+                            block_number = ?log.block_number,
+                            tx_hash = ?log.transaction_hash,
+                            log_index = ?log.log_index,
+                            "invalid OP interop log row; attributing its block as failed"
+                        ),
+                    }
                     match log.block_number {
                         Some(block_number) => failed_blocks.push(block_number),
                         None => whole_range_failed = true,
@@ -278,6 +292,7 @@ impl OpInteropIndexer {
             registry: &ctx.registry,
             configured_chains: &ctx.configured_chains,
             buffer: &ctx.buffer,
+            mode,
         };
 
         // Phase 1 for every transaction: pure plans plus their metrics.
@@ -287,7 +302,12 @@ impl OpInteropIndexer {
             logs.sort_by_key(|log| log.log_index);
             let blocks: Vec<u64> = logs.iter().filter_map(|log| log.block_number).collect();
             match events::plan_and_report(&event_ctx, &logs) {
-                Ok(plan) => planned.push((hash, blocks, plan)),
+                Ok(mut plan) => {
+                    for action in &mut plan.actions {
+                        action.set_state(mode.state());
+                    }
+                    planned.push((hash, blocks, plan));
+                }
                 Err(err) => {
                     tracing::warn!(
                         err = ?err,
@@ -309,7 +329,7 @@ impl OpInteropIndexer {
         // flushed; with this order, every such block already has its rows
         // durable, or its failure is on the way to the failure ledger.
         let mut unwritten_blocks: BTreeSet<u64> = BTreeSet::new();
-        if let Err(err) = write_ledger_rows(ctx, &planned, OpInteropEventState::Confirmed).await {
+        if let Err(err) = write_ledger_rows(ctx, &planned, mode.state()).await {
             // Every block of every row: batched_upsert may have committed some
             // chunks and not others.
             unwritten_blocks = ledger_row_blocks(&planned);
@@ -415,9 +435,8 @@ fn ledger_row_blocks(planned: &[(B256, Vec<u64>, TxPlan)]) -> BTreeSet<u64> {
 /// Readers of a message's rows select by `(bridge_id, message_id,
 /// message_hash)`; no code handles it.
 ///
-/// Likewise, a leg the buffer will refuse as a duplicate (a second log for a
-/// side the entry already holds) still gets its linked row: the ledger keeps
-/// every observed leg, the buffer only the first per side.
+/// Likewise, a leg the buffer holds as a second candidate (a re-inclusion or a
+/// re-relay) gets its linked row: the ledger keeps every observed leg.
 async fn write_ledger_rows(
     ctx: &RunContext,
     planned: &[(B256, Vec<u64>, TxPlan)],
@@ -503,7 +522,7 @@ impl RangeProcessor for RunContext {
         if batch.logs.is_empty() {
             return Ok(());
         }
-        OpInteropIndexer::process_batch(self, chain_id, &batch.logs).await
+        OpInteropIndexer::process_batch(self, chain_id, &batch.logs, ReadMode::Confirmed).await
     }
 }
 
@@ -782,7 +801,7 @@ mod tests {
     }
 
     async fn feed(ctx: &RunContext, chain_id: i64, logs: Vec<Log>) {
-        OpInteropIndexer::process_batch(ctx, chain_id, &logs)
+        OpInteropIndexer::process_batch(ctx, chain_id, &logs, ReadMode::Confirmed)
             .await
             .unwrap_or_else(|err| panic!("process_batch failed: {:#}", err.error));
     }
@@ -850,6 +869,7 @@ mod tests {
             "block_number": SOURCE_BLOCK,
             "block_hash": "0x8580247817bcfdd8f258ebd2f9a73aeddb4b87953114a723da65206fa002c8b5",
             "log_index": 1,
+            "safety": "confirmed",
         })
     }
 
@@ -861,6 +881,7 @@ mod tests {
                 "block_number": 895_701,
                 "block_hash": "0x7ea9e26557b70150ae7360da608f0f231e30397b4e5b4c98f4edd431d6630c73",
                 "log_index": 3,
+                "safety": "confirmed",
             },
             "executing_message": {
                 "msg_hash": "0xbb39b9f3ce34b43c1ae2bcc42aa7a2ceb451b20cdd22f2396d2ea6ce16bf31fb",
@@ -1286,7 +1307,7 @@ mod tests {
         executing.block_hash = None;
         let block_number = executing.block_number.expect("fixture log has a block");
 
-        let err = OpInteropIndexer::process_batch(&ctx, DESTINATION, &logs)
+        let err = OpInteropIndexer::process_batch(&ctx, DESTINATION, &logs, ReadMode::Confirmed)
             .await
             .expect_err("an invalid log row is a processing error");
         assert_eq!(
@@ -1779,14 +1800,23 @@ mod tests {
         assert_eq!(pending_count(&db).await, 1);
         drop(first_buffer);
 
+        // Rewrite the stored payload into the old shape: one `source` /
+        // `destination` object, the destination with the legacy `executing`
+        // slot and neither `executing_candidates` nor `state`.
         let result = db
             .db
             .execute_unprepared(
                 "UPDATE pending_messages
                  SET payload = jsonb_set(
-                         payload #- '{inner,destination,executing_candidates}',
-                         '{inner,destination,executing}',
-                         payload #> '{inner,destination,executing_candidates,0}')
+                         jsonb_set(
+                             payload #- '{inner,sources}' #- '{inner,destinations}',
+                             '{inner,source}', 'null'::jsonb),
+                         '{inner,destination}',
+                         jsonb_set(
+                             (payload #> '{inner,destinations,0}')
+                                 #- '{executing_candidates}' #- '{state}',
+                             '{executing}',
+                             payload #> '{inner,destinations,0,executing_candidates,0}'))
                  WHERE bridge_id = 2004;",
             )
             .await
@@ -1797,10 +1827,10 @@ mod tests {
             .await
             .unwrap()
             .expect("one pending row");
+        let stored_destination = &stored.payload["inner"]["destination"];
         assert!(
-            stored.payload["inner"]["destination"]
-                .get("executing_candidates")
-                .is_none(),
+            stored_destination.get("executing_candidates").is_none()
+                && stored_destination.get("state").is_none(),
             "{}",
             stored.payload
         );
@@ -1885,9 +1915,10 @@ mod tests {
             .await
             .unwrap();
 
-        let err = OpInteropIndexer::process_batch(&ctx, DESTINATION, &relay_logs())
-            .await
-            .expect_err("the ledger write is refused");
+        let err =
+            OpInteropIndexer::process_batch(&ctx, DESTINATION, &relay_logs(), ReadMode::Confirmed)
+                .await
+                .expect_err("the ledger write is refused");
         assert_eq!(
             err.attributed,
             vec![BlockRange {
@@ -1896,7 +1927,7 @@ mod tests {
             }]
         );
         // The source batch now writes its `sent_message` row, so it fails too.
-        let err = OpInteropIndexer::process_batch(&ctx, SOURCE, &send_batch())
+        let err = OpInteropIndexer::process_batch(&ctx, SOURCE, &send_batch(), ReadMode::Confirmed)
             .await
             .expect_err("the source leg row is refused");
         assert_eq!(
@@ -1925,12 +1956,709 @@ mod tests {
         assert!(ledger_rows_of(&db, "relayed_message").await.is_empty());
 
         // The replay the failure ledger would run.
-        OpInteropIndexer::process_batch(&ctx, DESTINATION, &relay_logs())
+        OpInteropIndexer::process_batch(&ctx, DESTINATION, &relay_logs(), ReadMode::Confirmed)
             .await
             .unwrap_or_else(|err| panic!("the replay succeeds: {:#}", err.error));
         buffer.run().await.unwrap();
 
         assert_final_state(&db).await;
         assert_eq!(pending_count(&db).await, 0, "no one-sided leftover entry");
+    }
+
+    // --- Optimistic overlay: provisional legs, status fold, sweep ---
+
+    use super::super::{
+        lifecycle,
+        sweep::{self, SweepOutcome},
+    };
+
+    async fn feed_overlay(ctx: &RunContext, chain_id: i64, logs: Vec<Log>) {
+        OpInteropIndexer::process_batch(ctx, chain_id, &logs, ReadMode::Overlay)
+            .await
+            .unwrap_or_else(|err| panic!("overlay process_batch failed: {:#}", err.error));
+    }
+
+    async fn sweep_at(ctx: &RunContext, chain_id: i64, frontier: u64) -> SweepOutcome {
+        sweep::sweep(ctx, chain_id, frontier).await.unwrap()
+    }
+
+    /// The logs cloned into another block: a new hash and, when given, a new
+    /// number and timestamp.
+    fn in_block(
+        logs: Vec<Log>,
+        hash_byte: u8,
+        number: Option<u64>,
+        timestamp: Option<u64>,
+    ) -> Vec<Log> {
+        logs.into_iter()
+            .map(|mut log| {
+                log.block_hash = Some(B256::repeat_byte(hash_byte));
+                if let Some(number) = number {
+                    log.block_number = Some(number);
+                }
+                if let Some(timestamp) = timestamp {
+                    log.block_timestamp = Some(timestamp);
+                }
+                log
+            })
+            .collect()
+    }
+
+    async fn ledger(db: &InterchainDatabase) -> Vec<op_interop_events::Model> {
+        op_interop_events::Entity::find()
+            .order_by_asc(op_interop_events::Column::ChainId)
+            .order_by_asc(op_interop_events::Column::BlockNumber)
+            .order_by_asc(op_interop_events::Column::LogIndex)
+            .order_by_asc(op_interop_events::Column::BlockHash)
+            .all(db.db.as_ref())
+            .await
+            .unwrap()
+    }
+
+    async fn row_of(
+        db: &InterchainDatabase,
+        chain_id: i64,
+        block_hash: B256,
+        log_index: i64,
+    ) -> op_interop_events::Model {
+        op_interop_events::Entity::find()
+            .filter(op_interop_events::Column::BridgeId.eq(BRIDGE_ID))
+            .filter(op_interop_events::Column::ChainId.eq(chain_id))
+            .filter(op_interop_events::Column::BlockHash.eq(block_hash.to_vec()))
+            .filter(op_interop_events::Column::LogIndex.eq(log_index))
+            .one(db.db.as_ref())
+            .await
+            .unwrap()
+            .unwrap_or_else(|| panic!("no ledger row at {block_hash} #{log_index}"))
+    }
+
+    async fn message_0(db: &InterchainDatabase) -> Option<crosschain_messages::Model> {
+        let key = key_from_message_hash(&MESSAGE_0_ID_HASH, BRIDGE_ID).unwrap();
+        crosschain_messages::Entity::find_by_id((key.message_id, BRIDGE_ID))
+            .one(db.db.as_ref())
+            .await
+            .unwrap()
+    }
+
+    /// The stored status is the fold over the ledger rows of the message.
+    async fn assert_status_matches_fold(db: &InterchainDatabase) {
+        let key = key_from_message_hash(&MESSAGE_0_ID_HASH, BRIDGE_ID).unwrap();
+        let rows = op_interop_events::Entity::find()
+            .filter(op_interop_events::Column::MessageId.eq(key.message_id))
+            .filter(op_interop_events::Column::MessageHash.eq(MESSAGE_0_ID_HASH.to_vec()))
+            .all(db.db.as_ref())
+            .await
+            .unwrap();
+        assert_eq!(
+            message_0(db).await.map(|row| row.status),
+            lifecycle::status_of_ledger(&rows),
+            "stored status vs the fold over {rows:?}"
+        );
+    }
+
+    async fn setup(
+        name: &str,
+    ) -> (
+        blockscout_service_launcher::test_database::TestDbGuard,
+        InterchainDatabase,
+    ) {
+        let guard = init_db(name).await;
+        let db = InterchainDatabase::new(guard.client());
+        seed_bridge_and_chains(&db).await;
+        (guard, db)
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_overlay_source_removed_invalidates_the_message() {
+        let (_guard, db) = setup("op_overlay_source_removed").await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed_overlay(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+        let row = message_0(&db)
+            .await
+            .expect("the provisional source is shown");
+        assert_eq!(row.status, MessageStatus::Initiated);
+        assert_eq!(op_interop(&row)["source"]["safety"], "provisional");
+        assert_eq!(pending_count(&db).await, 1, "written through while hot");
+
+        // The sweep's own flush already moved the leg rows to `retracted`, so
+        // its ledger step has nothing left to change.
+        let outcome = sweep_at(&ctx, SOURCE, SOURCE_BLOCK).await;
+        assert_eq!(outcome.entries, 1);
+        buffer.run().await.unwrap();
+
+        let row = message_0(&db).await.expect("the message is kept");
+        assert_eq!(row.status, MessageStatus::Invalidated);
+        assert_eq!(op_interop(&row)["source"]["safety"], "retracted");
+        let sent = ledger_rows_of(&db, "sent_message").await;
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0].state, "retracted");
+        assert!(sent[0].retracted_seen_at.is_some());
+        assert_status_matches_fold(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_sweep_flushes_the_retracted_entry_before_the_ledger_step() {
+        let (_guard, db) = setup("op_overlay_sweep_flushes").await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed_overlay(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+        let row = message_0(&db).await.unwrap();
+        assert_eq!(row.status, MessageStatus::Initiated);
+        assert_eq!(op_interop(&row)["source"]["safety"], "provisional");
+
+        // No `buffer.run()` after the sweep: it flushed the entry itself.
+        sweep_at(&ctx, SOURCE, SOURCE_BLOCK).await;
+
+        assert_eq!(
+            message_0(&db).await.unwrap().status,
+            MessageStatus::Invalidated
+        );
+        assert_status_matches_fold(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_overlay_relay_removed_returns_to_initiated() {
+        let (_guard, db) = setup("op_overlay_relay_removed").await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        feed_overlay(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        let row = message_0(&db).await.unwrap();
+        assert_eq!(row.status, MessageStatus::PendingFinality);
+        assert_eq!(row.dst_tx_hash, Some(DESTINATION_TX.to_vec()));
+
+        let outcome = sweep_at(&ctx, DESTINATION, 895_701).await;
+        assert_eq!(outcome.entries, 1);
+        buffer.run().await.unwrap();
+        for row in ledger_rows_of(&db, "relayed_message").await {
+            assert_eq!(row.state, "retracted");
+        }
+        for row in execution_rows(&db).await {
+            assert_eq!(
+                row.state, "retracted",
+                "the executing row follows its relay"
+            );
+        }
+
+        let row = message_0(&db).await.unwrap();
+        assert_eq!(row.status, MessageStatus::Initiated);
+        assert_eq!(row.dst_tx_hash, None);
+        assert_eq!(row.last_update_timestamp, None);
+        let nested = op_interop(&row);
+        assert_eq!(nested["destination"]["safety"], "retracted");
+        assert_eq!(
+            nested["destination"]["tx_hash"],
+            json!(format!("{DESTINATION_TX:#x}"))
+        );
+        assert!(nested.get("executing_message").is_some());
+        assert_eq!(row.stats_processed, 0, "not counted");
+        assert_status_matches_fold(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_confirmed_batch_with_a_log_the_overlay_never_saw() {
+        let (_guard, db) = setup("op_overlay_confirmed_unseen").await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed_overlay(&ctx, DESTINATION, vec![foreign_read(5)]).await;
+        let mut destination_logs = relay_logs();
+        destination_logs.push(foreign_read(5));
+        feed(&ctx, DESTINATION, destination_logs).await;
+        feed(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+
+        let foreign = row_of(&db, DESTINATION, relay_logs()[0].block_hash.unwrap(), 5).await;
+        assert_eq!(foreign.state, "confirmed");
+        assert!(
+            foreign.confirmed_seen_at.is_some(),
+            "seen provisional first"
+        );
+        for row in ledger(&db).await {
+            if row.log_index != 5 {
+                assert_eq!(row.state, "confirmed");
+                assert_eq!(row.confirmed_seen_at, None, "first seen confirmed: {row:?}");
+            }
+        }
+        // `assert_final_state` would count the extra raw execution row.
+        assert_completed(&message_0(&db).await.unwrap());
+        assert_eq!(pending_count(&db).await, 0);
+        assert_eq!(sweep_at(&ctx, DESTINATION, 895_701).await.retracted, 0);
+        assert_status_matches_fold(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_two_hashes_at_one_height() {
+        let (_guard, db) = setup("op_overlay_two_hashes").await;
+        seed_native_tokens_into(&db, BRIDGE_ID, &[SOURCE, DESTINATION]).await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        feed_overlay(&ctx, DESTINATION, in_block(relay_logs(), 0xA1, None, None)).await;
+        buffer.run().await.unwrap();
+        assert_eq!(
+            message_0(&db).await.unwrap().status,
+            MessageStatus::PendingFinality
+        );
+
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        let row = message_0(&db).await.unwrap();
+        assert_eq!(row.status, MessageStatus::Completed, "the confirmed wins");
+        assert_counted_once(&db).await;
+        assert_eq!(pending_count(&db).await, 0);
+
+        let outcome = sweep_at(&ctx, DESTINATION, 895_701).await;
+        assert_eq!(outcome.retracted, 2, "the 0xA1 relayed and executing rows");
+        assert_eq!(outcome.entries, 0, "no entry is created");
+        assert_eq!(pending_count(&db).await, 0);
+        assert_eq!(ledger_rows_of(&db, "relayed_message").await.len(), 2);
+        assert_status_matches_fold(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_restart_between_optimistic_ingest_and_confirmation() {
+        let (_guard, db) = setup("op_overlay_restart_confirm").await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed_overlay(&ctx, SOURCE, send_batch()).await;
+        feed_overlay(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        assert_eq!(
+            message_0(&db).await.unwrap().status,
+            MessageStatus::PendingFinality
+        );
+        assert_eq!(pending_count(&db).await, 1);
+        let before = ledger(&db).await;
+        drop(ctx);
+        drop(buffer);
+
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+        feed(&ctx, SOURCE, send_batch()).await;
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+
+        assert_final_state(&db).await;
+        let after = ledger(&db).await;
+        assert_eq!(before.len(), after.len());
+        for (old, new) in before.iter().zip(&after) {
+            assert_eq!(new.state, "confirmed");
+            assert!(new.confirmed_seen_at.is_some(), "{new:?}");
+            assert_eq!(new.created_at, old.created_at);
+        }
+        assert_status_matches_fold(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_restart_between_optimistic_ingest_and_retraction() {
+        let (_guard, db) = setup("op_overlay_restart_retract").await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+        feed_overlay(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+        drop(ctx);
+        drop(buffer);
+
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+        let outcome = sweep_at(&ctx, SOURCE, SOURCE_BLOCK).await;
+        assert_eq!(outcome.entries, 1, "restored from the cold tier");
+        buffer.run().await.unwrap();
+
+        assert_eq!(
+            message_0(&db).await.unwrap().status,
+            MessageStatus::Invalidated
+        );
+        assert_status_matches_fold(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_retracted_raw_row_with_no_message() {
+        let (_guard, db) = setup("op_overlay_retracted_raw").await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed_overlay(&ctx, DESTINATION, vec![foreign_read(0)]).await;
+        let outcome = sweep_at(&ctx, DESTINATION, 895_701).await;
+        buffer.run().await.unwrap();
+
+        assert_eq!(outcome.retracted, 1);
+        assert_eq!(outcome.entries, 0);
+        let rows = ledger(&db).await;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].state, "retracted");
+        assert!(messages(&db).await.is_empty());
+        assert_eq!(pending_count(&db).await, 0);
+        assert_status_matches_fold(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_revival_adds_a_second_source_row() {
+        let (_guard, db) = setup("op_overlay_revival").await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed_overlay(&ctx, SOURCE, in_block(send_batch(), 0xB1, None, None)).await;
+        buffer.run().await.unwrap();
+        sweep_at(&ctx, SOURCE, SOURCE_BLOCK).await;
+        buffer.run().await.unwrap();
+        assert_eq!(
+            message_0(&db).await.unwrap().status,
+            MessageStatus::Invalidated
+        );
+
+        feed(
+            &ctx,
+            SOURCE,
+            in_block(send_batch(), 0xC1, Some(498_930), Some(1_794_670_114)),
+        )
+        .await;
+        buffer.run().await.unwrap();
+
+        let row = message_0(&db).await.unwrap();
+        assert_eq!(row.status, MessageStatus::Initiated);
+        assert_eq!(
+            row.init_timestamp,
+            chrono::DateTime::from_timestamp(1_794_670_114, 0)
+                .unwrap()
+                .naive_utc(),
+            "the merge alone would have kept the old one"
+        );
+        let nested = op_interop(&row);
+        assert_eq!(nested["source"]["block_number"], 498_930);
+        assert_eq!(nested["source"]["safety"], "confirmed");
+        let sent = ledger_rows_of(&db, "sent_message").await;
+        let mut states: Vec<&str> = sent.iter().map(|row| row.state.as_str()).collect();
+        states.sort();
+        assert_eq!(states, vec!["confirmed", "retracted"]);
+        assert_status_matches_fold(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_confirmed_leg_not_yet_flushed_is_not_swept() {
+        let (_guard, db) = setup("op_overlay_confirmed_not_swept").await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        assert!(message_0(&db).await.is_none());
+        assert_eq!(sweep_at(&ctx, DESTINATION, 900_000).await.retracted, 0);
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+        assert_final_state(&db).await;
+        assert_status_matches_fold(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_relay_read_before_source_then_replaced_ends_initiated() {
+        let (_guard, db) = setup("op_overlay_relay_before_source").await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed_overlay(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        assert!(message_0(&db).await.is_none());
+        sweep_at(&ctx, DESTINATION, 895_701).await;
+        feed(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+
+        let row = message_0(&db).await.unwrap();
+        assert_eq!(row.status, MessageStatus::Initiated);
+        assert_eq!(row.dst_tx_hash, None);
+        assert_eq!(op_interop(&row)["destination"]["safety"], "retracted");
+        assert_status_matches_fold(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_height_inside_an_open_failed_range_waits_for_its_retry() {
+        let (_guard, db) = setup("op_overlay_failed_range").await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+        let range = BlockRange {
+            from: 498_900,
+            to: 498_950,
+        };
+
+        feed_overlay(&ctx, SOURCE, send_batch()).await;
+        db.record_indexer_failures(BRIDGE_ID, SOURCE, &[(range, "test".to_string())])
+            .await
+            .unwrap();
+        assert_eq!(sweep_at(&ctx, SOURCE, 499_000).await.retracted, 0);
+
+        // The retry finds the log: it confirms, and nothing is retracted.
+        feed(&ctx, SOURCE, send_batch()).await;
+        db.resolve_indexer_failures(BRIDGE_ID, SOURCE, &[range])
+            .await
+            .unwrap();
+        assert_eq!(sweep_at(&ctx, SOURCE, 499_000).await.retracted, 0);
+        let sent = ledger_rows_of(&db, "sent_message").await;
+        assert_eq!(sent[0].state, "confirmed");
+        buffer.run().await.unwrap();
+        assert_status_matches_fold(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_height_inside_an_open_failed_range_variant_retry_finds_nothing() {
+        let (_guard, db) = setup("op_overlay_failed_range_nothing").await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+        let range = BlockRange {
+            from: 498_900,
+            to: 498_950,
+        };
+
+        feed_overlay(&ctx, SOURCE, send_batch()).await;
+        db.record_indexer_failures(BRIDGE_ID, SOURCE, &[(range, "test".to_string())])
+            .await
+            .unwrap();
+        assert_eq!(sweep_at(&ctx, SOURCE, 499_000).await.retracted, 0);
+
+        // The retry resolves without the confirmed feed: the log is gone.
+        db.resolve_indexer_failures(BRIDGE_ID, SOURCE, &[range])
+            .await
+            .unwrap();
+        assert_eq!(sweep_at(&ctx, SOURCE, 499_000).await.entries, 1);
+        buffer.run().await.unwrap();
+        assert_eq!(
+            message_0(&db).await.unwrap().status,
+            MessageStatus::Invalidated
+        );
+        assert_status_matches_fold(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_sweep_stopped_before_the_ledger_step() {
+        let (_guard, db) = setup("op_overlay_sweep_stopped").await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed_overlay(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+        let rows = sweep::select(&ctx, SOURCE, SOURCE_BLOCK).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        sweep::retract_in_buffer(&ctx, &rows).await.unwrap();
+        drop(ctx);
+        drop(buffer);
+
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+        let outcome = sweep_at(&ctx, SOURCE, SOURCE_BLOCK).await;
+        assert_eq!(outcome.entries, 1);
+        buffer.run().await.unwrap();
+
+        assert_eq!(
+            message_0(&db).await.unwrap().status,
+            MessageStatus::Invalidated
+        );
+        assert_status_matches_fold(&db).await;
+    }
+
+    /// Ledger rows without `updated_at`, which every write moves.
+    async fn ledger_snapshot(db: &InterchainDatabase) -> Vec<op_interop_events::Model> {
+        ledger(db)
+            .await
+            .into_iter()
+            .map(|mut row| {
+                row.updated_at = Default::default();
+                row
+            })
+            .collect()
+    }
+
+    async fn stats_snapshot(db: &InterchainDatabase) -> Vec<stats_messages::Model> {
+        stats_messages::Entity::find()
+            .all(db.db.as_ref())
+            .await
+            .unwrap()
+    }
+
+    async fn message_snapshot(db: &InterchainDatabase) -> Vec<crosschain_messages::Model> {
+        messages(db)
+            .await
+            .into_iter()
+            .map(|mut row| {
+                row.updated_at = Default::default();
+                row
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_replays_change_nothing() {
+        // A completed message replayed from both chains.
+        let (_guard, db) = setup("op_overlay_replay_completed").await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+        feed_overlay(&ctx, SOURCE, send_batch()).await;
+        feed_overlay(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        feed(&ctx, SOURCE, send_batch()).await;
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        assert_final_state(&db).await;
+        let ledger_before = ledger_snapshot(&db).await;
+        let messages_before = message_snapshot(&db).await;
+        let stats_before = stats_snapshot(&db).await;
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        assert_eq!(ledger_snapshot(&db).await, ledger_before);
+        assert_eq!(message_snapshot(&db).await, messages_before);
+        assert_eq!(stats_snapshot(&db).await, stats_before);
+        assert_status_matches_fold(&db).await;
+
+        // An invalidated message replayed from the overlay.
+        let (_guard2, db2) = setup("op_overlay_replay_invalidated").await;
+        let buffer = new_buffer(&db2, Duration::from_secs(60));
+        let ctx = run_context(&db2, buffer.clone());
+        feed_overlay(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+        sweep_at(&ctx, SOURCE, SOURCE_BLOCK).await;
+        buffer.run().await.unwrap();
+        let ledger_before = ledger_snapshot(&db2).await;
+        let messages_before = message_snapshot(&db2).await;
+        let stats_before = stats_snapshot(&db2).await;
+
+        feed_overlay(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+        assert_eq!(ledger_snapshot(&db2).await, ledger_before);
+        assert_eq!(message_snapshot(&db2).await, messages_before);
+        assert_eq!(stats_snapshot(&db2).await, stats_before);
+        assert_status_matches_fold(&db2).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_pending_finality_is_projected_once_after_completion() {
+        async fn messages_count(db: &InterchainDatabase) -> Option<i64> {
+            stats_messages::Entity::find()
+                .filter(stats_messages::Column::BridgeId.eq(BRIDGE_ID))
+                .one(db.db.as_ref())
+                .await
+                .unwrap()
+                .map(|row| row.messages_count)
+        }
+
+        let (_guard, db) = setup("op_overlay_projected_once").await;
+        seed_native_tokens_into(&db, BRIDGE_ID, &[SOURCE, DESTINATION]).await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+
+        feed_overlay(&ctx, SOURCE, send_batch()).await;
+        feed_overlay(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        assert_eq!(
+            message_0(&db).await.unwrap().status,
+            MessageStatus::PendingFinality
+        );
+        assert_eq!(messages_count(&db).await, None);
+        assert_eq!(transfers(&db).await[0].stats_processed, 0);
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        buffer.run().await.unwrap();
+        assert_eq!(
+            message_0(&db).await.unwrap().status,
+            MessageStatus::PendingFinality
+        );
+        assert_eq!(messages_count(&db).await, None, "still not counted");
+
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        assert_eq!(
+            message_0(&db).await.unwrap().status,
+            MessageStatus::Completed
+        );
+        assert_counted_once(&db).await;
+        assert_eq!(messages_count(&db).await, Some(1));
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        assert_counted_once(&db).await;
+        assert_eq!(messages_count(&db).await, Some(1));
+        assert_status_matches_fold(&db).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_realtime_cursor_never_passes_a_provisional_block() {
+        async fn realtime(db: &InterchainDatabase, chain_id: i64) -> Option<i64> {
+            db.get_checkpoint(BRIDGE_ID as u64, chain_id as u64)
+                .await
+                .unwrap()
+                .map(|checkpoint| checkpoint.realtime_cursor)
+        }
+        let message_1 = || {
+            in_block(
+                vec![sent_message_logs()[1].clone()],
+                0xD1,
+                Some(499_500),
+                None,
+            )
+        };
+
+        let (_guard, db) = setup("op_overlay_cursor").await;
+        // Every entry is offloaded at once.
+        let buffer = new_buffer(&db, Duration::ZERO);
+        let ctx = run_context(&db, buffer.clone());
+
+        feed(&ctx, SOURCE, send_batch()).await;
+        feed_overlay(&ctx, DESTINATION, relay_logs()).await;
+        feed_overlay(&ctx, SOURCE, message_1()).await;
+        buffer.run().await.unwrap();
+        assert!(
+            realtime(&db, SOURCE)
+                .await
+                .is_none_or(|cursor| cursor <= 498_922)
+        );
+        assert!(
+            realtime(&db, DESTINATION)
+                .await
+                .is_none_or(|cursor| cursor < 895_701)
+        );
+
+        // Restores message 1 from the cold tier.
+        feed_overlay(&ctx, SOURCE, message_1()).await;
+        buffer.run().await.unwrap();
+        assert!(
+            realtime(&db, SOURCE)
+                .await
+                .is_none_or(|cursor| cursor <= 498_922)
+        );
+
+        // The confirmed read of the relay records its block.
+        let source_cursor = realtime(&db, SOURCE).await;
+        feed(&ctx, DESTINATION, relay_logs()).await;
+        buffer.run().await.unwrap();
+        assert_eq!(realtime(&db, SOURCE).await, source_cursor);
+        assert_status_matches_fold(&db).await;
     }
 }

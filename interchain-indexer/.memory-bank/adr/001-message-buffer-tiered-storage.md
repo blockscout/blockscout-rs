@@ -35,6 +35,12 @@ Key implementation details:
 - Consolidation check on each maintenance pass
 - Metrics for buffer hits/misses/evictions
 
+## Amendments
+
+- *2026-11-26 (ADR-022):* buffer mutations that are not a block observation
+  record no block (`alter_unrecorded`, `alter_existing_durably`), and an
+  unsettled partial entry is written to the cold tier with its flush.
+
 ## References
 
 - `interchain-indexer-logic/src/message_buffer/` - Implementation

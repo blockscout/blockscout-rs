@@ -151,6 +151,98 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
         Ok(())
     }
 
+    /// Like `alter`, but records no block. For a mutation that is not an
+    /// observation of a block at or below the confirmation tag (ADR-022): an
+    /// overlay leg. Never for confirmed data: an unrecorded block cannot hold
+    /// `realtime_cursor` back, so a lost hot entry would not be re-read.
+    pub async fn alter_unrecorded(
+        &self,
+        key: Key,
+        mutator: impl FnOnce(&mut T) -> Result<()>,
+    ) -> Result<()>
+    where
+        T: Default,
+    {
+        let mut entry = self.get_mut_or_default(key).await?;
+        mutator(&mut entry.inner)?;
+        entry.touch()?;
+        Ok(())
+    }
+
+    /// Mutates the entries of `keys` that exist in the hot or the cold tier,
+    /// never creating one, recording no block, and persists every existing entry
+    /// it was given to `pending_messages` before returning (ADR-022: the sweep).
+    /// Holds the maintenance lock, so no maintenance cycle plans or offloads an
+    /// older snapshot in between. `mutator` returns whether it changed the entry;
+    /// only changed entries are touched (version bump). Returns the keys that
+    /// existed.
+    ///
+    /// Every existing entry is persisted, changed or not: a previous call may
+    /// have changed a hot entry and then failed to persist it, and only an
+    /// unconditional persist makes that state durable. An absent key is a
+    /// message already evicted as completed or one that never reached the
+    /// buffer; a default entry would become a `pending_messages` row that never
+    /// finalizes.
+    pub async fn alter_existing_durably(
+        &self,
+        keys: &[Key],
+        mutator: impl Fn(&mut T) -> bool,
+    ) -> Result<Vec<Key>> {
+        let _maintenance = self.maintenance_lock.write().await;
+
+        let mut seen = std::collections::HashSet::new();
+        let mut existing = Vec::new();
+        let mut snapshots: Vec<(Key, BufferItem<T>)> = Vec::new();
+        for key in keys.iter().copied().filter(|key| seen.insert(*key)) {
+            // The guard is dropped at the end of this block, before any await.
+            let hot = {
+                match self.inner.get_mut(&key) {
+                    Some(mut entry) => {
+                        if mutator(&mut entry.inner) {
+                            entry.touch()?;
+                        }
+                        Some(entry.clone())
+                    }
+                    None => None,
+                }
+            };
+            let snapshot = match hot {
+                Some(snapshot) => snapshot,
+                None => {
+                    let Some(restored) = self.restore(key).await? else {
+                        continue;
+                    };
+                    match self.inner.entry(key) {
+                        DashEntry::Occupied(occupied) => {
+                            // A concurrent `alter` won the race.
+                            let mut entry = occupied.into_ref();
+                            if mutator(&mut entry.inner) {
+                                entry.touch()?;
+                            }
+                            entry.clone()
+                        }
+                        DashEntry::Vacant(vacant) => {
+                            let mut entry = vacant.insert(restored);
+                            if mutator(&mut entry.inner) {
+                                entry.touch()?;
+                            }
+                            entry.clone()
+                        }
+                    }
+                }
+            };
+            existing.push(key);
+            snapshots.push((key, snapshot));
+        }
+
+        super::persistence::upsert_pending_entries(
+            self.stats.interchain_db().db.as_ref(),
+            &snapshots,
+        )
+        .await?;
+        Ok(existing)
+    }
+
     /// Test-only: whether `key` currently has a hot-tier entry. Lets tests outside
     /// `message_buffer` assert eviction/absence without widening `inner`.
     #[cfg(test)]
@@ -182,7 +274,7 @@ mod tests {
     use interchain_indexer_entity::{
         bridges, pending_messages, sea_orm_active_enums::MessageStatus,
     };
-    use sea_orm::ActiveValue;
+    use sea_orm::{ActiveValue, EntityTrait};
     use serde::{Deserialize, Serialize};
 
     use super::*;
@@ -215,6 +307,7 @@ mod tests {
                 amb_confirmations: vec![],
                 amb_anomalies: vec![],
                 op_interop_events: vec![],
+                unsettled: false,
             }))
         }
     }
@@ -474,5 +567,166 @@ mod tests {
             entry.hot_since,
             now
         );
+    }
+
+    async fn seed_bridge(db: &crate::InterchainDatabase, bridge_id: i32) {
+        db.upsert_bridges(vec![bridges::ActiveModel {
+            id: ActiveValue::Set(bridge_id),
+            name: ActiveValue::Set("test_bridge".to_string()),
+            enabled: ActiveValue::Set(true),
+            ..Default::default()
+        }])
+        .await
+        .unwrap();
+    }
+
+    async fn pending_row(
+        db: &crate::InterchainDatabase,
+        key: Key,
+    ) -> Option<pending_messages::Model> {
+        db.get_pending_message(key.message_id, key.bridge_id as i32)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to construct InterchainDatabase"]
+    async fn test_alter_unrecorded_records_no_block() {
+        let buffer = new_buffer("buffer_alter_unrecorded").await;
+        let key = Key::new(21, 1);
+
+        buffer
+            .alter_unrecorded(key, |m: &mut DummyMessage| {
+                m.counter += 1;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        let entry = buffer.inner.get(&key).expect("entry must exist");
+        assert_eq!(entry.inner.counter, 1);
+        assert_eq!(entry.version, 1, "the version is bumped");
+        assert!(entry.touched_blocks.is_empty(), "no block is recorded");
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to construct InterchainDatabase"]
+    async fn test_alter_existing_durably_never_creates() {
+        let test_db = init_db("buffer_durably_never_creates").await;
+        let db = crate::InterchainDatabase::new(test_db.client());
+        seed_bridge(&db, 1).await;
+        let buffer = MessageBuffer::<DummyMessage>::new(db.clone(), test_buffer_settings());
+        let key = Key::new(22, 1);
+
+        let existing = buffer
+            .alter_existing_durably(&[key], |_m| true)
+            .await
+            .unwrap();
+
+        assert!(existing.is_empty());
+        assert!(buffer.inner.get(&key).is_none(), "no hot entry");
+        assert!(pending_row(&db, key).await.is_none(), "no pending row");
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to construct InterchainDatabase"]
+    async fn test_alter_existing_durably_restores_and_persists() {
+        let test_db = init_db("buffer_durably_restores").await;
+        let db = crate::InterchainDatabase::new(test_db.client());
+        seed_bridge(&db, 1).await;
+        let buffer = MessageBuffer::<DummyMessage>::new(db.clone(), test_buffer_settings());
+
+        // A key only in the cold tier.
+        let cold_key = Key::new(23, 1);
+        let cold_entry = BufferItem::new(DummyMessage {
+            consolidatable: false,
+            is_final: false,
+            counter: 5,
+        });
+        db.upsert_pending_message(pending_messages::ActiveModel {
+            message_id: ActiveValue::Set(cold_key.message_id),
+            bridge_id: ActiveValue::Set(cold_key.bridge_id as i32),
+            payload: ActiveValue::Set(serde_json::to_value(&cold_entry).unwrap()),
+            created_at: ActiveValue::NotSet,
+        })
+        .await
+        .unwrap();
+
+        // A hot key whose mutator reports no change.
+        let hot_key = Key::new(24, 1);
+        buffer
+            .inner
+            .insert(hot_key, BufferItem::new(DummyMessage::default()));
+
+        let existing = buffer
+            .alter_existing_durably(&[cold_key, hot_key, cold_key], |m| {
+                if m.counter == 5 {
+                    m.counter = 6;
+                    true
+                } else {
+                    false
+                }
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(existing, vec![cold_key, hot_key], "distinct keys, in order");
+        let restored = buffer.inner.get(&cold_key).expect("restored into hot");
+        assert_eq!(restored.inner.counter, 6);
+        assert_eq!(restored.version, 1, "a changed entry is touched");
+        assert!(restored.touched_blocks.is_empty(), "no block is recorded");
+        drop(restored);
+        let hot = buffer.inner.get(&hot_key).unwrap();
+        assert_eq!(hot.version, 0, "an unchanged entry is not touched");
+        drop(hot);
+
+        let stored: BufferItem<DummyMessage> =
+            serde_json::from_value(pending_row(&db, cold_key).await.unwrap().payload).unwrap();
+        assert_eq!(stored.inner.counter, 6, "the change is durable");
+
+        // The unchanged hot entry is persisted too: delete its row, call again.
+        let hot_row = pending_row(&db, hot_key)
+            .await
+            .expect("hot entry persisted");
+        pending_messages::Entity::delete_by_id((hot_row.message_id, hot_row.bridge_id))
+            .exec(db.db.as_ref())
+            .await
+            .unwrap();
+        assert!(pending_row(&db, hot_key).await.is_none());
+        buffer
+            .alter_existing_durably(&[hot_key], |_m| false)
+            .await
+            .unwrap();
+        assert!(pending_row(&db, hot_key).await.is_some());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to construct InterchainDatabase"]
+    async fn test_alter_existing_durably_waits_for_maintenance() {
+        let test_db = init_db("buffer_durably_waits").await;
+        let db = crate::InterchainDatabase::new(test_db.client());
+        seed_bridge(&db, 1).await;
+        let buffer = MessageBuffer::<DummyMessage>::new(db.clone(), test_buffer_settings());
+        let key = Key::new(25, 1);
+        buffer
+            .inner
+            .insert(key, BufferItem::new(DummyMessage::default()));
+
+        let guard = buffer.maintenance_lock.write().await;
+        let task = tokio::spawn({
+            let buffer = buffer.clone();
+            async move { buffer.alter_existing_durably(&[key], |_m| true).await }
+        });
+        let mut task = std::pin::pin!(task);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), &mut task)
+                .await
+                .is_err(),
+            "blocked while maintenance holds the lock"
+        );
+
+        drop(guard);
+        let existing = task.await.unwrap().unwrap();
+        assert_eq!(existing, vec![key]);
     }
 }

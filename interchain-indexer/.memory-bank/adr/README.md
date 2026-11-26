@@ -35,6 +35,7 @@ An ADR captures the context, decision, and consequences of an architectural choi
 | [019](./019-op-interop-eth-transfer-from-message-payload.md) | OP Interop ETH Transfers Are Derived From The Message Payload | Accepted | 2026-11-16 |
 | [020](./020-op-interop-ledger-records-every-inbox-execution.md) | OP Interop Ledger Records Every CrossL2Inbox Execution And Is The Message Journal | Accepted | 2026-11-24 |
 | [021](./021-message-status-base-set-with-non-terminal-extensions.md) | Message Status Is A Shared Base Set With Non-Terminal Extensions | Accepted | 2026-11-25 |
+| [022](./022-op-interop-optimistic-overlay-and-retraction.md) | OP Interop Optimistic Overlay: Provisional Legs, Confirmation By Ledger Key, Retraction By Sweep | Accepted | 2026-11-26 |
 
 ## Creating a New ADR
 

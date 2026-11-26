@@ -102,6 +102,8 @@ pub struct OpInterop {
 }
 
 /// Where one leg's messenger log (`SentMessage` or `RelayedMessage`) was seen.
+/// Legs carry their safety; a retracted relay stays as `destination`, with its
+/// `tx_hash`, until a re-relay replaces it (ADR-022).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OpInteropLegRef {
     pub block_number: u64,
@@ -109,6 +111,14 @@ pub struct OpInteropLegRef {
     pub block_hash: String,
     /// Block-level log index.
     pub log_index: u64,
+    /// The leg's journal state. Stored metadata written before the overlay
+    /// has none; it was read at or below the confirmation tag.
+    #[serde(default)]
+    pub safety: OpInteropEventState,
+    /// The leg's transaction hash, 0x-hex. Only on a retracted destination,
+    /// whose transaction is no longer the message's `dst_tx_hash`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tx_hash: Option<String>,
 }
 
 /// The `CrossL2Inbox.ExecutingMessage` log a relay was paired with. Absent for
@@ -373,6 +383,10 @@ impl OpInteropLegRef {
         out.insert("block_number".to_string(), self.block_number.into());
         out.insert("block_hash".to_string(), self.block_hash.clone().into());
         out.insert("log_index".to_string(), self.log_index.into());
+        out.insert("safety".to_string(), self.safety.as_str().into());
+        if let Some(tx_hash) = &self.tx_hash {
+            out.insert("tx_hash".to_string(), tx_hash.clone().into());
+        }
         Value::Object(out)
     }
 }
@@ -713,6 +727,8 @@ mod tests {
             block_hash: "0x8580247817bcfdd8f258ebd2f9a73aeddb4b87953114a723da65206fa002c8b5"
                 .to_string(),
             log_index: 1,
+            safety: OpInteropEventState::Confirmed,
+            tx_hash: None,
         }
     }
 
@@ -739,6 +755,8 @@ mod tests {
                         "0x7ea9e26557b70150ae7360da608f0f231e30397b4e5b4c98f4edd431d6630c73"
                             .to_string(),
                     log_index: 3,
+                    safety: OpInteropEventState::Confirmed,
+                    tx_hash: None,
                 }),
                 executing_message: Some(OpInteropExecutingMessage {
                     msg_hash: "0xbb39b9f3ce34b43c1ae2bcc42aa7a2ceb451b20cdd22f2396d2ea6ce16bf31fb"
@@ -765,12 +783,14 @@ mod tests {
             "source": {
                 "block_number": 498922,
                 "block_hash": "0x8580247817bcfdd8f258ebd2f9a73aeddb4b87953114a723da65206fa002c8b5",
-                "log_index": 1
+                "log_index": 1,
+                "safety": "confirmed"
             },
             "destination": {
                 "block_number": 895701,
                 "block_hash": "0x7ea9e26557b70150ae7360da608f0f231e30397b4e5b4c98f4edd431d6630c73",
-                "log_index": 3
+                "log_index": 3,
+                "safety": "confirmed"
             },
             "executing_message": {
                 "msg_hash": "0xbb39b9f3ce34b43c1ae2bcc42aa7a2ceb451b20cdd22f2396d2ea6ce16bf31fb",
@@ -799,7 +819,8 @@ mod tests {
                     "source": {
                         "block_number": 498922,
                         "block_hash": "0x8580247817bcfdd8f258ebd2f9a73aeddb4b87953114a723da65206fa002c8b5",
-                        "log_index": 1
+                        "log_index": 1,
+                        "safety": "confirmed"
                     }
                 }
             }),
@@ -828,8 +849,10 @@ mod tests {
         let unpaired = serde_json::json!({
             "op_interop": {
                 "nonce": "7",
-                "source": {"block_number": 1, "block_hash": "0x01", "log_index": 0},
-                "destination": {"block_number": 2, "block_hash": "0x02", "log_index": 5}
+                "source": {"block_number": 1, "block_hash": "0x01", "log_index": 0,
+                           "safety": "confirmed"},
+                "destination": {"block_number": 2, "block_hash": "0x02", "log_index": 5,
+                                "safety": "confirmed"}
             }
         });
         let decoded = ProtocolMetadata::from_json_value(Some(unpaired.clone())).expect("decodes");
@@ -854,6 +877,37 @@ mod tests {
         assert_eq!(rendered["source"]["log_index"], 1);
         assert!(rendered.get("destination").is_none());
         assert!(rendered.get("executing_message").is_none());
+    }
+
+    #[test]
+    fn test_op_interop_leg_safety_renders() {
+        for (state, name) in [
+            (OpInteropEventState::Provisional, "provisional"),
+            (OpInteropEventState::Confirmed, "confirmed"),
+            (OpInteropEventState::Retracted, "retracted"),
+        ] {
+            let leg = OpInteropLegRef {
+                safety: state,
+                ..op_interop_source()
+            };
+            let rendered = leg.extra_value();
+            assert_eq!(rendered["safety"], name);
+            assert!(rendered.get("tx_hash").is_none(), "no tx_hash when None");
+        }
+        let retracted = OpInteropLegRef {
+            safety: OpInteropEventState::Retracted,
+            tx_hash: Some("0x7155".to_string()),
+            ..op_interop_source()
+        };
+        assert_eq!(retracted.extra_value()["tx_hash"], "0x7155");
+
+        // Stored JSON written before the overlay has no `safety`.
+        let old: OpInteropLegRef = serde_json::from_value(serde_json::json!({
+            "block_number": 1, "block_hash": "0x01", "log_index": 0
+        }))
+        .expect("old leg ref decodes");
+        assert_eq!(old.safety, OpInteropEventState::Confirmed);
+        assert_eq!(old.tx_hash, None);
     }
 
     #[test]

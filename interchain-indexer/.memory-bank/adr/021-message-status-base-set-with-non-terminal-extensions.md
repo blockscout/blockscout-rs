@@ -64,6 +64,8 @@
 9. **Deleting or rewriting a canonical row.** A new path that does it must
    refuse a row with a terminal status or with `stats_processed > 0`. AMB's
    `replace_existing` predates this rule and stays as it is.
+   *Amended 2026-11-26:* its first user is the OP guarded overwrite
+   (`crosschain_messages_overwrite_unsettled`, ADR-022).
 10. **Terminal is relative to the indexer's confirmation boundary.** An
     indexer stores a terminal status only for data it treats as final (for
     OP interop: every leg at or below the confirmation tag, ADR-018). A

@@ -3299,6 +3299,9 @@ the shallow merge. See ADR-018.
 
 ## A One-Sided Replay Of A Finalized OP Interop Message Leaves A `pending_messages` Row
 
+(An unsettled leftover against a terminal row is refused by the guarded
+overwrite, never merged; ADR-022.)
+
 If a retry or rescan re-reads only one chain's block of an already finalized
 OP interop message (for example only the source block), the new buffer entry
 holds one leg, consolidates as `initiated`, is flushed (non-regressing, so the
@@ -3334,7 +3337,7 @@ rescan both chains' ranges; a source-only rescan also works (it upserts the
 transfer and the projection counts it once) but leaves one `pending_messages`
 row per message, as described above.
 
-## `op_interop_events` Has Two Writers; The Link Is Never Cleared
+## `op_interop_events` Writers; The Link Is Never Cleared
 
 Ingestion writes every leg (linked) and every execution (unlinked); the flush
 writes the legs again and links the delivering execution. Both go through
@@ -3345,7 +3348,10 @@ replay; the one-level `op_interop` metadata merge never removes a key either.
 
 `state` has its own rule: it moves only away from `provisional`, and the
 `*_seen_at` stamps are set once. A new column still needs a rule that holds in
-every write order. Never write the table outside that function. See ADR-020.
+every write order. The table has four writers: confirmed ingestion, overlay
+ingestion, the flush, and the sweep's `UPDATE`. Never write it outside
+`upsert_op_interop_events` and `retract_op_interop_events`. See ADR-020 and
+ADR-022.
 
 ## Every OP Interop Ledger Row Is Written At Ingestion, Before The Buffer Actions
 
@@ -3394,3 +3400,46 @@ therefore leaves the old destination on the row, and a client that reads
 needs a dedicated statement that clears those columns and refuses terminal
 or counted rows (ADR-021). The status-merge matrix test in `persistence.rs`
 pins this.
+
+For OP interop an unsettled entry is that dedicated statement: the guarded
+overwrite `crosschain_messages_overwrite_unsettled` (ADR-022).
+
+## Only The Overlay Writes `provisional`; Only The Confirmed Stream Writes `confirmed`
+
+`process_batch` takes a `ReadMode`: `Confirmed` stamps legs `confirmed`,
+`Overlay` stamps them `provisional`. A confirmed write over a block that is
+later replaced would be permanent: confirmed rows and legs never move back, and
+nothing retracts them. A new caller of `process_batch` must pick the mode by
+where it reads (at or below the confirmation tag, or above it). See ADR-022.
+
+## An Overlay Or Sweep Mutation Must Never Record A Block
+
+`MessageBuffer::alter` records the block, and `realtime_cursor` passes cold
+blocks, so a provisional block recorded through `alter` can move the cursor past
+the confirmed head. It cannot be undone (cursors are forward-only) and a lost
+hot entry would never be re-read. Overlay legs use `alter_unrecorded`; the sweep
+uses `alter_existing_durably`. See ADR-022.
+
+## Unsettled Entries Are Persisted With Their Flush
+
+A partial entry whose consolidation is `unsettled` is written to
+`pending_messages` in the same maintenance transaction as its canonical row, so
+the row never reflects a buffer state a crash could lose. As a result,
+`pending_messages` may hold a row for an entry that is still hot. The persisted
+copy is marked flushed at the version consolidated, so a restored copy does not
+re-flush an older state over a newer row. See ADR-022.
+
+## `invalidated` And Relay-Retracted Entries Stay In `pending_messages`
+
+Expected, not a leak: such an entry stays partial (a revival or a re-relay can
+still arrive) and is offloaded when stale. The count is bounded by the reorg
+rate. See ADR-022.
+
+## The Guarded Overwrite Must Stay On `batched_upsert`
+
+`crosschain_messages_overwrite_unsettled` refuses terminal and counted rows
+with `ON CONFLICT DO UPDATE … WHERE`. When every row of a statement is refused,
+PostgreSQL reports zero affected rows; `Insert::exec` turns that into
+`DbErr::RecordNotInserted`, which would roll back the whole maintenance
+transaction on every cycle. `batched_upsert` goes through `TryInsert`, which
+maps it to a normal `Conflicted` result. Never call `Insert::exec` for it.

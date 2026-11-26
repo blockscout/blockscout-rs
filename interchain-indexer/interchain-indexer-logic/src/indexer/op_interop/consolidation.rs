@@ -21,6 +21,7 @@ use crate::{
 
 use super::{
     eth_transfer::{EthPayload, RelayEthCheck, check_relay_eth, classify, transfer_model},
+    lifecycle::{self, LegView},
     metrics,
     types::{DestinationLeg, ExecutingLeg, LogRef, Message, SourceLeg},
     version::OpInteropEvent,
@@ -30,27 +31,53 @@ use super::{
 /// whole bridge on every cycle, so every conversion that can fail is done at
 /// ingestion (`events::log_ref`, `events::classify_chain`).
 ///
-/// | `source` | `destination` | Result |
+/// The status is the fold over the entry's candidates
+/// (`lifecycle::status`, ADR-022):
+///
+/// | `sources` | relays | Result |
 /// | --- | --- | --- |
-/// | none | none | not ready |
-/// | none | some | not ready: the source chain is always configured, so its `SentMessage` can still arrive |
-/// | some | none | `initiated`, flushed and kept |
-/// | some | some | `completed`, flushed and evicted |
+/// | none | any | not ready: the source chain is always configured, so its `SentMessage` can still arrive |
+/// | all retracted | any | `invalidated`, flushed and kept |
+/// | an active one | none active | `initiated`, flushed and kept |
+/// | active, confirmed | active, confirmed | `completed`, flushed and evicted |
+/// | active | active, one of them provisional | `pending_finality`, flushed and kept |
 ///
 /// Waiting for the source before the first flush is what makes the row
 /// well-formed: `src_tx_hash`, sender, payload and `init_timestamp` are all
 /// source facts.
 impl Consolidate for Message {
     fn consolidate(&self, key: &Key) -> Result<Option<ConsolidatedMessage>> {
-        let Some(source) = &self.source else {
+        let source_views: Vec<LegView> = self.sources.iter().map(LegView::of_source).collect();
+        let relay_views: Vec<LegView> = self
+            .destinations
+            .iter()
+            .map(LegView::of_destination)
+            .collect();
+        let Some(status) = lifecycle::status(&source_views, &relay_views) else {
             return Ok(None);
         };
-        let destination = self.destination.as_ref();
+        let Some(source) = lifecycle::shown(&source_views).map(|index| &self.sources[index]) else {
+            return Ok(None);
+        };
+        let destination = lifecycle::shown(&relay_views).map(|index| &self.destinations[index]);
+        let active_destination =
+            lifecycle::active(&relay_views).map(|index| &self.destinations[index]);
+        let is_final = status == MessageStatus::Completed;
 
         let executing =
             destination.and_then(|destination| delivering_execution(destination, source));
 
-        let Some(rows) = StorageRows::build(source, destination, executing) else {
+        let rows = StorageRows::build(source, executing);
+        let legs = rows.as_ref().and_then(|rows| {
+            rows.leg_models(
+                key,
+                &self.sources,
+                &self.destinations,
+                destination,
+                executing,
+            )
+        });
+        let (Some(rows), Some(legs)) = (rows, legs) else {
             // Unreachable for an entry built by this indexer: ingestion only
             // stores values that fit the storage types. Reported instead of
             // raised, so that one malformed entry cannot stop the bridge.
@@ -64,58 +91,47 @@ impl Consolidate for Message {
             return Ok(None);
         };
 
-        if let Some(destination) = destination
-            && executing.is_none()
-            && destination.candidates().next().is_some()
-        {
-            metrics::OP_INTEROP_LEG_CONFLICTS_TOTAL
-                .with_label_values(&[key.bridge_id.to_string().as_str(), "identifier_mismatch"])
-                .inc();
-            tracing::warn!(
-                bridge_id = key.bridge_id,
-                message_id = key.message_id,
-                message_hash = %source.message_hash,
-                src_tx_hash = %source.log.transaction_hash,
-                dst_tx_hash = %destination.log.transaction_hash,
-                candidates = destination.candidates().count(),
-                "OP interop relay has ExecutingMessage candidates but none points at the \
-                 indexed SentMessage log; the message completes without its \
-                 executing_message detail"
-            );
-        }
-
         let payload = classify(source.sender, source.target, &source.message);
 
-        if let Some(destination) = destination {
-            let check = check_relay_eth(
-                &payload,
-                source.log.chain_id,
-                destination.relay_eth.as_ref(),
-            );
-            let kind = match check {
-                RelayEthCheck::Ok => None,
-                RelayEthCheck::Missing => Some("relay_eth_missing"),
-                RelayEthCheck::Mismatch => Some("relay_eth_mismatch"),
-            };
-            if let Some(kind) = kind {
-                metrics::OP_INTEROP_ETH_TRANSFER_ANOMALIES_TOTAL
-                    .with_label_values(&[key.bridge_id.to_string().as_str(), kind])
-                    .inc();
-                tracing::warn!(
-                    bridge_id = key.bridge_id,
-                    message_id = key.message_id,
-                    message_hash = %source.message_hash,
-                    src_tx_hash = %source.log.transaction_hash,
-                    dst_tx_hash = %destination.log.transaction_hash,
-                    kind,
-                    "OP interop RelayETH event is missing or disagrees with the ETH transfer \
-                     payload; the message completes anyway"
-                );
+        for kind in completion_anomalies(is_final, source, destination, executing, &payload) {
+            let dst_tx_hash = destination.map(|destination| destination.log.transaction_hash);
+            match kind {
+                "identifier_mismatch" => {
+                    metrics::OP_INTEROP_LEG_CONFLICTS_TOTAL
+                        .with_label_values(&[key.bridge_id.to_string().as_str(), kind])
+                        .inc();
+                    tracing::warn!(
+                        bridge_id = key.bridge_id,
+                        message_id = key.message_id,
+                        message_hash = %source.message_hash,
+                        src_tx_hash = %source.log.transaction_hash,
+                        dst_tx_hash = ?dst_tx_hash,
+                        candidates = destination.map_or(0, |destination| destination.candidates().count()),
+                        "OP interop relay has ExecutingMessage candidates but none points at the \
+                         indexed SentMessage log; the message completes without its \
+                         executing_message detail"
+                    );
+                }
+                _ => {
+                    metrics::OP_INTEROP_ETH_TRANSFER_ANOMALIES_TOTAL
+                        .with_label_values(&[key.bridge_id.to_string().as_str(), kind])
+                        .inc();
+                    tracing::warn!(
+                        bridge_id = key.bridge_id,
+                        message_id = key.message_id,
+                        message_hash = %source.message_hash,
+                        src_tx_hash = %source.log.transaction_hash,
+                        dst_tx_hash = ?dst_tx_hash,
+                        kind,
+                        "OP interop RelayETH event is missing or disagrees with the ETH transfer \
+                         payload; the message completes anyway"
+                    );
+                }
             }
         }
 
-        // Derived from the payload alone, at `initiated` and `completed` alike;
-        // the bridge events never change it.
+        // Derived from the payload alone, at every status; the bridge events
+        // never change it.
         let transfers = match &payload {
             EthPayload::Transfer(transfer) => transfer_model(
                 key,
@@ -128,25 +144,23 @@ impl Consolidate for Message {
             EthPayload::NotBridgeMessage | EthPayload::Unrecognized => Vec::new(),
         };
 
-        let (status, is_final) = match destination {
-            Some(_) => (MessageStatus::Completed, true),
-            None => (MessageStatus::Initiated, false),
-        };
-
         let message = crosschain_messages::ActiveModel {
             id: ActiveValue::Set(key.message_id),
             bridge_id: ActiveValue::Set(key.bridge_id as i32),
             status: ActiveValue::Set(status),
             init_timestamp: ActiveValue::Set(source.log.block_timestamp),
+            // The relay columns follow the *active* relay only: a retracted
+            // relay leaves them empty. `dst_chain_id` and the recipient are
+            // source facts (`SentMessage.destination`, `target`).
             last_update_timestamp: ActiveValue::Set(
-                destination.map(|destination| destination.log.block_timestamp),
+                active_destination.map(|destination| destination.log.block_timestamp),
             ),
             src_chain_id: ActiveValue::Set(rows.source.chain_id),
             dst_chain_id: ActiveValue::Set(Some(rows.destination_chain_id)),
             native_id: ActiveValue::Set(Some(source.message_hash.to_vec())),
             src_tx_hash: ActiveValue::Set(Some(source.log.transaction_hash.to_vec())),
             dst_tx_hash: ActiveValue::Set(
-                destination.map(|destination| destination.log.transaction_hash.to_vec()),
+                active_destination.map(|destination| destination.log.transaction_hash.to_vec()),
             ),
             // The `sendMessage` caller (`msg.sender` in the messenger), not
             // the transaction origin: no transaction is fetched. It is a
@@ -173,9 +187,37 @@ impl Consolidate for Message {
             transfers,
             amb_confirmations: Vec::new(),
             amb_anomalies: Vec::new(),
-            op_interop_events: rows.leg_models(key, source, destination, executing),
+            op_interop_events: legs,
+            unsettled: self.is_unsettled(),
         }))
     }
+}
+
+/// The consolidation-time anomalies to report: only for the consolidation
+/// that completes the message, so provisional re-flushes do not count the
+/// same pair again. Kinds: `identifier_mismatch` (`OP_INTEROP_LEG_CONFLICTS_TOTAL`),
+/// `relay_eth_missing` / `relay_eth_mismatch`
+/// (`OP_INTEROP_ETH_TRANSFER_ANOMALIES_TOTAL`).
+fn completion_anomalies(
+    is_final: bool,
+    source: &SourceLeg,
+    destination: Option<&DestinationLeg>,
+    executing: Option<&ExecutingLeg>,
+    payload: &EthPayload,
+) -> Vec<&'static str> {
+    let Some(destination) = destination.filter(|_| is_final) else {
+        return Vec::new();
+    };
+    let mut kinds = Vec::new();
+    if executing.is_none() && destination.candidates().next().is_some() {
+        kinds.push("identifier_mismatch");
+    }
+    match check_relay_eth(payload, source.log.chain_id, destination.relay_eth.as_ref()) {
+        RelayEthCheck::Ok => {}
+        RelayEthCheck::Missing => kinds.push("relay_eth_missing"),
+        RelayEthCheck::Mismatch => kinds.push("relay_eth_mismatch"),
+    }
+    kinds
 }
 
 /// A [`LogRef`] in storage types.
@@ -200,23 +242,14 @@ impl StoredLogRef {
 struct StorageRows {
     source: StoredLogRef,
     destination_chain_id: i64,
-    destination: Option<StoredLogRef>,
     executing: Option<StoredLogRef>,
 }
 
 impl StorageRows {
-    fn build(
-        source: &SourceLeg,
-        destination: Option<&DestinationLeg>,
-        executing: Option<&ExecutingLeg>,
-    ) -> Option<Self> {
+    fn build(source: &SourceLeg, executing: Option<&ExecutingLeg>) -> Option<Self> {
         Some(Self {
             source: StoredLogRef::new(&source.log)?,
             destination_chain_id: i64::try_from(source.destination_chain_id).ok()?,
-            destination: match destination {
-                Some(destination) => Some(StoredLogRef::new(&destination.log)?),
-                None => None,
-            },
             executing: match executing {
                 Some(executing) => Some(StoredLogRef::new(&executing.log)?),
                 None => None,
@@ -224,10 +257,12 @@ impl StorageRows {
         })
     }
 
-    /// One ledger row per log the entry holds: `sent_message`; with a
-    /// destination, `relayed_message` and, if a candidate delivered the
-    /// message, `executing_message`. The other candidates are raw executions
-    /// that ingestion already wrote.
+    /// One ledger row per log the entry holds: a `sent_message` per source
+    /// candidate, the delivering `executing_message` of the shown pair (its
+    /// state is the shown relay's), and a `relayed_message` per destination
+    /// candidate. The other execution candidates are raw executions that
+    /// ingestion already wrote. `None` if any of them does not fit its storage
+    /// type.
     ///
     /// Every model sets the same columns and leaves `created_at` /
     /// `updated_at` unset: SeaORM cannot mix `Set` and `NotSet` for one column
@@ -235,46 +270,37 @@ impl StorageRows {
     fn leg_models(
         &self,
         key: &Key,
-        source: &SourceLeg,
-        destination: Option<&DestinationLeg>,
+        sources: &[SourceLeg],
+        destinations: &[DestinationLeg],
+        shown_destination: Option<&DestinationLeg>,
         executing: Option<&ExecutingLeg>,
-    ) -> Vec<op_interop_events::ActiveModel> {
+    ) -> Option<Vec<op_interop_events::ActiveModel>> {
         let bridge_id = key.bridge_id as i32;
-        let link = Some((key.message_id, source.message_hash));
-        let mut models = vec![leg_model(
-            bridge_id,
-            link,
-            &source.log,
-            &self.source,
-            OpInteropEvent::SentMessage,
-            SentMessageData::new(source).to_json(),
-            StoredIdentifier::default(),
-            OpInteropEventState::Confirmed,
-        )];
+        let mut models = sources
+            .iter()
+            .map(|source| sent_row(bridge_id, key.message_id, source, source.state))
+            .collect::<Option<Vec<_>>>()?;
 
-        if let (Some(destination), Some(stored)) = (destination, &self.destination) {
-            if let (Some(executing), Some(stored)) = (executing, &self.executing) {
-                models.push(executing_model(
-                    bridge_id,
-                    executing,
-                    stored,
-                    link,
-                    OpInteropEventState::Confirmed,
-                ));
-            }
-            models.push(leg_model(
+        if let (Some(destination), Some(executing), Some(stored)) =
+            (shown_destination, executing, &self.executing)
+        {
+            models.push(executing_model(
                 bridge_id,
-                link,
-                &destination.log,
+                executing,
                 stored,
-                OpInteropEvent::RelayedMessage,
-                RelayedMessageData::new(destination).to_json(),
-                StoredIdentifier::default(),
-                OpInteropEventState::Confirmed,
+                Some((key.message_id, destination.message_hash)),
+                destination.state,
             ));
         }
-
-        models
+        for destination in destinations {
+            models.push(relayed_row(
+                bridge_id,
+                key.message_id,
+                destination,
+                destination.state,
+            )?);
+        }
+        Some(models)
     }
 }
 
@@ -517,17 +543,20 @@ fn identifier(executing: &ExecutingLeg) -> OpInteropIdentifier {
     }
 }
 
-fn leg_ref(log: &LogRef) -> OpInteropLegRef {
+fn leg_ref(log: &LogRef, safety: OpInteropEventState, retracted_tx_hash: bool) -> OpInteropLegRef {
     OpInteropLegRef {
         block_number: log.block_number,
         block_hash: hex_hash(log.block_hash),
         log_index: log.log_index,
+        safety,
+        tx_hash: retracted_tx_hash.then(|| hex_hash(log.transaction_hash)),
     }
 }
 
 /// The `op_interop` namespace of `protocol_metadata`: `nonce` and `source`
-/// from the first flush on, `destination` once the relay is indexed, and
-/// `executing_message` only when a candidate delivered the message.
+/// from the first flush on, `destination` once the relay is indexed (a
+/// retracted one stays, with its `tx_hash`), and `executing_message` only when
+/// a candidate delivered the message. Legs carry their `safety`.
 fn metadata(
     source: &SourceLeg,
     destination: Option<&DestinationLeg>,
@@ -535,8 +564,14 @@ fn metadata(
 ) -> OpInterop {
     OpInterop {
         nonce: source.nonce.to_string(),
-        source: Some(leg_ref(&source.log)),
-        destination: destination.map(|destination| leg_ref(&destination.log)),
+        source: Some(leg_ref(&source.log, source.state, false)),
+        destination: destination.map(|destination| {
+            leg_ref(
+                &destination.log,
+                destination.state,
+                destination.state == OpInteropEventState::Retracted,
+            )
+        }),
         executing_message: executing.map(|executing| OpInteropExecutingMessage {
             msg_hash: hex_hash(executing.msg_hash),
             log_index: executing.log.log_index,
@@ -647,8 +682,8 @@ mod tests {
     #[test]
     fn test_consolidate_destination_only_returns_none() {
         let message = Message {
-            source: None,
-            destination: Some(fixture_destination()),
+            sources: vec![],
+            destinations: vec![fixture_destination()],
         };
         assert!(
             message.consolidate(&key()).unwrap().is_none(),
@@ -660,8 +695,8 @@ mod tests {
     fn test_consolidate_source_only_is_initiated_and_partial() {
         let source = fixture_source();
         let message = Message {
-            source: Some(source.clone()),
-            destination: None,
+            sources: vec![source.clone()],
+            destinations: vec![],
         };
 
         let consolidated = consolidated(&message);
@@ -707,7 +742,8 @@ mod tests {
                     "source": {
                         "block_number": 498922,
                         "block_hash": "0x8580247817bcfdd8f258ebd2f9a73aeddb4b87953114a723da65206fa002c8b5",
-                        "log_index": 1
+                        "log_index": 1,
+                        "safety": "confirmed"
                     }
                 }
             })
@@ -744,8 +780,8 @@ mod tests {
     fn test_consolidate_eth_source_only_has_one_transfer_and_keeps_bridge_addresses() {
         let source = fixture_source();
         let consolidated = consolidated(&Message {
-            source: Some(source.clone()),
-            destination: None,
+            sources: vec![source.clone()],
+            destinations: vec![],
         });
         assert_fixture_transfer(&consolidated);
         assert_eq!(
@@ -758,8 +794,8 @@ mod tests {
     #[test]
     fn test_consolidate_eth_both_legs_has_the_same_transfer() {
         let consolidated = consolidated(&Message {
-            source: Some(fixture_source()),
-            destination: Some(fixture_destination()),
+            sources: vec![fixture_source()],
+            destinations: vec![fixture_destination()],
         });
         assert!(consolidated.is_final);
         assert_fixture_transfer(&consolidated);
@@ -770,8 +806,8 @@ mod tests {
         let mut destination = fixture_destination();
         destination.relay_eth = None;
         let consolidated = consolidated(&Message {
-            source: Some(fixture_source()),
-            destination: Some(destination),
+            sources: vec![fixture_source()],
+            destinations: vec![destination],
         });
         assert_eq!(
             value(&consolidated.message.status),
@@ -785,8 +821,8 @@ mod tests {
         let mut source = fixture_source();
         source.sender = Address::repeat_byte(0x11);
         let consolidated = consolidated(&Message {
-            source: Some(source),
-            destination: None,
+            sources: vec![source],
+            destinations: vec![],
         });
         assert!(consolidated.transfers.is_empty());
     }
@@ -798,8 +834,8 @@ mod tests {
         message[0] ^= 0xff;
         source.message = message.into();
         let consolidated = consolidated(&Message {
-            source: Some(source),
-            destination: Some(fixture_destination()),
+            sources: vec![source],
+            destinations: vec![fixture_destination()],
         });
         assert!(consolidated.transfers.is_empty());
         assert_eq!(
@@ -813,8 +849,8 @@ mod tests {
         let source = fixture_source();
         let destination = fixture_destination();
         let message = Message {
-            source: Some(source.clone()),
-            destination: Some(destination.clone()),
+            sources: vec![source.clone()],
+            destinations: vec![destination.clone()],
         };
 
         let consolidated = consolidated(&message);
@@ -849,8 +885,8 @@ mod tests {
         let mut destination = fixture_destination();
         destination.executing_candidates.clear();
         let message = Message {
-            source: Some(fixture_source()),
-            destination: Some(destination),
+            sources: vec![fixture_source()],
+            destinations: vec![destination],
         };
 
         let consolidated = consolidated(&message);
@@ -877,8 +913,8 @@ mod tests {
     #[test]
     fn test_consolidate_leg_rows_and_metadata_match_fixture() {
         let message = Message {
-            source: Some(fixture_source()),
-            destination: Some(fixture_destination()),
+            sources: vec![fixture_source()],
+            destinations: vec![fixture_destination()],
         };
 
         let consolidated = consolidated(&message);
@@ -892,12 +928,14 @@ mod tests {
                     "source": {
                         "block_number": 498922,
                         "block_hash": "0x8580247817bcfdd8f258ebd2f9a73aeddb4b87953114a723da65206fa002c8b5",
-                        "log_index": 1
+                        "log_index": 1,
+                        "safety": "confirmed"
                     },
                     "destination": {
                         "block_number": 895701,
                         "block_hash": "0x7ea9e26557b70150ae7360da608f0f231e30397b4e5b4c98f4edd431d6630c73",
-                        "log_index": 3
+                        "log_index": 3,
+                        "safety": "confirmed"
                     },
                     "executing_message": {
                         "msg_hash": "0xbb39b9f3ce34b43c1ae2bcc42aa7a2ceb451b20cdd22f2396d2ea6ce16bf31fb",
@@ -1046,8 +1084,8 @@ mod tests {
 
     fn complete_with(destination: DestinationLeg) -> ConsolidatedMessage {
         consolidated(&Message {
-            source: Some(fixture_source()),
-            destination: Some(destination),
+            sources: vec![fixture_source()],
+            destinations: vec![destination],
         })
     }
 
@@ -1195,8 +1233,8 @@ mod tests {
         let source = fixture_source();
         let destination = fixture_destination();
         let consolidated = consolidated(&Message {
-            source: Some(source.clone()),
-            destination: Some(destination.clone()),
+            sources: vec![source.clone()],
+            destinations: vec![destination.clone()],
         });
         let message_id = key().message_id;
         let confirmed = OpInteropEventState::Confirmed;
@@ -1216,5 +1254,251 @@ mod tests {
             find("relayed_message"),
             &relayed_row(BRIDGE_ID, message_id, &destination, confirmed).expect("fits")
         );
+    }
+
+    // --- Overlay states ---
+
+    const P: OpInteropEventState = OpInteropEventState::Provisional;
+    const C: OpInteropEventState = OpInteropEventState::Confirmed;
+    const R: OpInteropEventState = OpInteropEventState::Retracted;
+
+    fn source_in(state: OpInteropEventState, hash_byte: u8, block: u64, secs: i64) -> SourceLeg {
+        let mut leg = fixture_source();
+        leg.state = state;
+        leg.log.block_hash = B256::repeat_byte(hash_byte);
+        leg.log.block_number = block;
+        leg.log.block_timestamp = chrono::DateTime::from_timestamp(secs, 0)
+            .unwrap()
+            .naive_utc();
+        leg
+    }
+
+    fn relay_in(state: OpInteropEventState, hash_byte: u8) -> DestinationLeg {
+        let mut leg = fixture_destination();
+        leg.state = state;
+        leg.log.block_hash = B256::repeat_byte(hash_byte);
+        leg
+    }
+
+    fn fixture_source_in(state: OpInteropEventState) -> SourceLeg {
+        SourceLeg {
+            state,
+            ..fixture_source()
+        }
+    }
+
+    fn ledger_states(consolidated: &ConsolidatedMessage) -> Vec<(String, String)> {
+        consolidated
+            .op_interop_events
+            .iter()
+            .map(|leg| (value(&leg.event_kind), value(&leg.state)))
+            .collect()
+    }
+
+    struct Expect {
+        status: MessageStatus,
+        is_final: bool,
+        unsettled: bool,
+    }
+
+    fn check(message: &Message, expect: Expect) -> ConsolidatedMessage {
+        let consolidated = consolidated(message);
+        assert_eq!(value(&consolidated.message.status), expect.status);
+        assert_eq!(consolidated.is_final, expect.is_final);
+        assert_eq!(consolidated.unsettled, expect.unsettled);
+        consolidated
+    }
+
+    fn op_interop_of(consolidated: &ConsolidatedMessage) -> serde_json::Value {
+        value(&consolidated.message.protocol_metadata).expect("metadata")["op_interop"].clone()
+    }
+
+    #[test]
+    fn test_consolidate_source_provisional_only_is_initiated_and_unsettled() {
+        let consolidated = check(
+            &Message {
+                sources: vec![fixture_source_in(P)],
+                destinations: vec![],
+            },
+            Expect {
+                status: MessageStatus::Initiated,
+                is_final: false,
+                unsettled: true,
+            },
+        );
+        assert_eq!(
+            op_interop_of(&consolidated)["source"]["safety"],
+            "provisional"
+        );
+        assert_eq!(
+            ledger_states(&consolidated),
+            vec![("sent_message".to_string(), "provisional".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_consolidate_relay_provisional_is_pending_finality() {
+        let consolidated = check(
+            &Message {
+                sources: vec![fixture_source()],
+                destinations: vec![relay_in(P, 0x7E)],
+            },
+            Expect {
+                status: MessageStatus::PendingFinality,
+                is_final: false,
+                unsettled: true,
+            },
+        );
+        let row = &consolidated.message;
+        assert!(value(&row.dst_tx_hash).is_some());
+        assert!(value(&row.last_update_timestamp).is_some());
+        assert_eq!(
+            op_interop_of(&consolidated)["destination"]["safety"],
+            "provisional"
+        );
+        let states: Vec<String> = ledger_states(&consolidated)
+            .into_iter()
+            .map(|(_, state)| state)
+            .collect();
+        assert_eq!(states, vec!["confirmed", "provisional", "provisional"]);
+    }
+
+    #[test]
+    fn test_consolidate_both_confirmed_is_completed_and_settled() {
+        check(
+            &Message {
+                sources: vec![fixture_source()],
+                destinations: vec![fixture_destination()],
+            },
+            Expect {
+                status: MessageStatus::Completed,
+                is_final: true,
+                unsettled: false,
+            },
+        );
+    }
+
+    #[test]
+    fn test_consolidate_only_source_retracted_is_invalidated() {
+        let consolidated = check(
+            &Message {
+                sources: vec![fixture_source_in(R)],
+                destinations: vec![],
+            },
+            Expect {
+                status: MessageStatus::Invalidated,
+                is_final: false,
+                unsettled: true,
+            },
+        );
+        assert_eq!(
+            op_interop_of(&consolidated)["source"]["safety"],
+            "retracted"
+        );
+    }
+
+    #[test]
+    fn test_consolidate_relay_retracted_returns_to_initiated() {
+        let retracted = relay_in(R, 0x7E);
+        let tx_hash = hex_hash(retracted.log.transaction_hash);
+        let consolidated = check(
+            &Message {
+                sources: vec![fixture_source()],
+                destinations: vec![retracted],
+            },
+            Expect {
+                status: MessageStatus::Initiated,
+                is_final: false,
+                unsettled: true,
+            },
+        );
+        let row = &consolidated.message;
+        assert_eq!(value(&row.dst_tx_hash), None);
+        assert_eq!(value(&row.last_update_timestamp), None);
+        let op_interop = op_interop_of(&consolidated);
+        assert_eq!(op_interop["destination"]["safety"], "retracted");
+        assert_eq!(op_interop["destination"]["tx_hash"], tx_hash);
+        assert!(
+            op_interop["source"].get("tx_hash").is_none(),
+            "only a retracted destination carries its tx_hash"
+        );
+        assert!(
+            op_interop.get("executing_message").is_some(),
+            "the retracted relay's execution stays"
+        );
+    }
+
+    #[test]
+    fn test_consolidate_revival_shows_the_later_confirmed_source() {
+        let first = source_in(R, 0xB1, 498_922, 1_794_670_098);
+        let revived = source_in(C, 0xC1, 498_930, 1_794_670_114);
+        let consolidated = check(
+            &Message {
+                sources: vec![first, revived.clone()],
+                destinations: vec![],
+            },
+            Expect {
+                status: MessageStatus::Initiated,
+                is_final: false,
+                unsettled: true,
+            },
+        );
+        assert_eq!(
+            value(&consolidated.message.init_timestamp),
+            revived.log.block_timestamp
+        );
+        let op_interop = op_interop_of(&consolidated);
+        assert_eq!(op_interop["source"]["block_number"], 498_930);
+        assert_eq!(op_interop["source"]["safety"], "confirmed");
+        let states = ledger_states(&consolidated);
+        assert_eq!(
+            states,
+            vec![
+                ("sent_message".to_string(), "retracted".to_string()),
+                ("sent_message".to_string(), "confirmed".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_consolidate_two_relays_confirmed_one_wins_but_stays_unsettled() {
+        let consolidated = check(
+            &Message {
+                sources: vec![fixture_source()],
+                destinations: vec![relay_in(P, 0xA1), fixture_destination()],
+            },
+            Expect {
+                status: MessageStatus::Completed,
+                is_final: true,
+                unsettled: true,
+            },
+        );
+        let op_interop = op_interop_of(&consolidated);
+        assert_eq!(op_interop["destination"]["safety"], "confirmed");
+        assert_eq!(
+            op_interop["destination"]["block_hash"],
+            hex_hash(fixture_destination().log.block_hash)
+        );
+    }
+
+    #[test]
+    fn test_completion_anomalies_only_on_the_completing_consolidation() {
+        let source = fixture_source();
+        let mut destination = fixture_destination();
+        // No candidate points at the source log.
+        for candidate in &mut destination.executing_candidates {
+            candidate.source_log_index += U256::from(1);
+        }
+        let executing = delivering_execution(&destination, &source);
+        assert!(executing.is_none());
+        let payload = classify(source.sender, source.target, &source.message);
+
+        let kinds = completion_anomalies(true, &source, Some(&destination), executing, &payload);
+        assert_eq!(kinds, vec!["identifier_mismatch"]);
+        assert!(
+            completion_anomalies(false, &source, Some(&destination), executing, &payload)
+                .is_empty()
+        );
+        assert!(completion_anomalies(true, &source, None, None, &payload).is_empty());
     }
 }

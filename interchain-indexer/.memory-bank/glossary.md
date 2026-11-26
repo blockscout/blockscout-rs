@@ -257,3 +257,33 @@ carries no status and is not listed.
 The messenger-origin `ExecutingMessage`s of a transaction since the previous
 `RelayedMessage`. Those of the relay's source chain are its candidates, and
 consolidation picks the delivering one by content.
+
+## Provisional / Confirmed / Retracted (OP Interop Leg State)
+
+The journal state of one `op_interop_events` row and of the buffered leg it
+mirrors. `provisional` is read above the confirmation tag; it moves only to
+`confirmed` (the confirmed stream wrote the same `(bridge_id, chain_id,
+block_hash, log_index)`) or `retracted` (the sweep). Never back (ADR-022).
+
+## Unsettled Entry
+
+A buffer entry holding at least one non-confirmed candidate
+(`Message::is_unsettled`, `ConsolidatedMessage.unsettled`). It is written with
+the guarded overwrite instead of the merge and, while partial, persisted to
+`pending_messages` in the maintenance transaction.
+
+## `pending_finality`
+
+Non-terminal message status: relayed, with an active source or relay leg that
+is not yet confirmed.
+
+## `invalidated`
+
+Non-terminal message status: every source candidate was retracted. The row is
+kept visible, never deleted, and a later confirmed source revives it.
+
+## Confirmation Sweep
+
+`op_interop::sweep::sweep`: retracts the provisional ledger rows at or below a
+frontier and outside open failed ranges, in the buffer (durably) first, then in
+the ledger.

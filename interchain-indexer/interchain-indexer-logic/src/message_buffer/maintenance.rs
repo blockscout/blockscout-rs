@@ -189,6 +189,10 @@ fn is_complete(message: &ConsolidatedMessage) -> bool {
 struct MaintenancePlan<T: Consolidate + Default> {
     consolidated_entries: Vec<ConsolidatedMessage>,
     stale_entries: Vec<(Key, BufferItem<T>)>,
+    /// Non-stale partial entries whose consolidation is `unsettled`: written to
+    /// `pending_messages` in the maintenance transaction, marked flushed at the
+    /// version consolidated (the flush of that very version commits with them).
+    persisted_entries: Vec<(Key, BufferItem<T>)>,
     finalized_keys: Vec<Key>,
     keys_to_mark_flushed: Vec<(Key, BufferItemVersion)>,
     hot_evictions: Vec<(Key, BufferItemVersion, HotEvictionReason)>,
@@ -243,9 +247,16 @@ impl<T: Consolidate + Default> MaintenancePlan<T> {
                 self.stats.entry(bridge_id).not_consolidatable += 1;
             }
             ConsolidationOutcome::Partial(message) => {
+                let unsettled = message.unsettled;
                 self.consolidated_entries.push(message);
                 self.keys_to_mark_flushed.push((key, item.version));
                 self.stats.entry(bridge_id).consolidated_not_final += 1;
+                // A stale entry is offloaded by `collect_stale` below, so it is
+                // never persisted twice.
+                if unsettled && !is_stale {
+                    self.persisted_entries
+                        .push((key, item.clone().flushed_at(item.version)));
+                }
             }
             ConsolidationOutcome::Complete(message) => {
                 let transfer_count = message.transfers.len();
@@ -280,6 +291,10 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
     /// 2. **Flush** consolidatable entries to `crosschain_messages` and
     ///    `crosschain_transfers`.
     /// 3. **Update** `indexer_checkpoints` based on hot/cold cursors.
+    ///
+    /// A partial entry whose consolidation is `unsettled` is also written to
+    /// `pending_messages` in the maintenance transaction: a canonical row never
+    /// reflects a buffer state that a crash could lose (ADR-022).
     ///
     /// After commit, hot entries are removed using CAS to avoid racing with
     /// concurrent updates. Non-final consolidated entries remain in the hot
@@ -383,6 +398,7 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
     async fn commit_maintenance(&self, plan: &MaintenancePlan<T>) -> Result<Vec<Key>> {
         let mut consolidated_entries = plan.consolidated_entries.clone();
         let stale_entries = plan.stale_entries.clone();
+        let persisted_entries = plan.persisted_entries.clone();
         let finalized_keys = plan.finalized_keys.clone();
         let cursor_builder = plan.cursor_builder.clone();
         let observations: Vec<(Key, Vec<DestinationExecution>)> = plan
@@ -431,7 +447,11 @@ impl<T: Consolidate + Default> MessageBuffer<T> {
             .transaction::<_, (Cursors, Vec<Key>), DbErr>(move |tx| {
                 let stats = stats.clone();
                 Box::pin(async move {
-                    persistence::offload_stale_to_pending(tx, &stale_entries).await?;
+                    persistence::upsert_pending_entries(tx, &stale_entries).await?;
+                    // Unsettled partial entries: the canonical row this
+                    // transaction writes never reflects a buffer state a crash
+                    // could lose (ADR-022). No eviction, no cursor change.
+                    persistence::upsert_pending_entries(tx, &persisted_entries).await?;
 
                     // Reads the stored destination state, decides promotion
                     // and retention per key, and neutralizes
@@ -729,6 +749,7 @@ mod tests {
                 amb_confirmations: vec![],
                 amb_anomalies: vec![],
                 op_interop_events: vec![],
+                unsettled: false,
             }))
         }
     }
@@ -1065,6 +1086,7 @@ mod tests {
             amb_confirmations: vec![],
             amb_anomalies: vec![],
             op_interop_events: vec![],
+            unsettled: false,
         }
     }
 
@@ -1485,5 +1507,76 @@ mod tests {
         assert!(buffer.inner.get(&key).is_some(), "still hot");
         assert!(pending_row_exists(&db, key).await, "pending row intact");
         assert_eq!(confirmation_count(&db, key).await, 0);
+    }
+
+    fn unsettled_partial(key: &Key, unsettled: bool) -> ConsolidatedMessage {
+        let mut message = completed_without_transfers(key);
+        message.is_final = false;
+        message.message.status = ActiveValue::Set(MessageStatus::Initiated);
+        message.unsettled = unsettled;
+        message
+    }
+
+    fn dirty_item() -> BufferItem<TransferDummyMessage> {
+        let mut item = BufferItem::new(TransferDummyMessage::default());
+        item.version = 3;
+        item.last_flushed_version = 1;
+        item
+    }
+
+    #[test]
+    fn test_collect_persists_an_unsettled_partial_entry() {
+        let key = Key::new(9301, 1);
+        let item = dirty_item();
+        let mut plan = MaintenancePlan::<TransferDummyMessage>::new();
+
+        plan.collect(
+            key,
+            &item,
+            super::ConsolidationOutcome::Partial(unsettled_partial(&key, true)),
+            false,
+        );
+
+        assert_eq!(plan.persisted_entries.len(), 1);
+        let (persisted_key, persisted) = &plan.persisted_entries[0];
+        assert_eq!(*persisted_key, key);
+        assert_eq!(
+            persisted.last_flushed_version, 3,
+            "marked flushed at its version"
+        );
+        assert!(plan.stale_entries.is_empty());
+    }
+
+    #[test]
+    fn test_collect_persists_nothing_for_a_settled_partial_entry() {
+        let key = Key::new(9302, 1);
+        let item = dirty_item();
+        let mut plan = MaintenancePlan::<TransferDummyMessage>::new();
+
+        plan.collect(
+            key,
+            &item,
+            super::ConsolidationOutcome::Partial(unsettled_partial(&key, false)),
+            false,
+        );
+
+        assert!(plan.persisted_entries.is_empty());
+    }
+
+    #[test]
+    fn test_collect_persists_a_stale_unsettled_entry_only_through_the_offload() {
+        let key = Key::new(9303, 1);
+        let item = dirty_item();
+        let mut plan = MaintenancePlan::<TransferDummyMessage>::new();
+
+        plan.collect(
+            key,
+            &item,
+            super::ConsolidationOutcome::Partial(unsettled_partial(&key, true)),
+            true,
+        );
+
+        assert_eq!(plan.stale_entries.len(), 1, "offloaded once");
+        assert!(plan.persisted_entries.is_empty(), "not persisted twice");
     }
 }

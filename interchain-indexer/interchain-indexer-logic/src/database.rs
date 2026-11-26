@@ -147,17 +147,23 @@ pub struct InterchainDatabase {
 /// `sea_query` has no ergonomic way to express a `MATERIALIZED` CTE feeding two
 /// grouped arms combined with `UNION ALL`.
 ///
-/// No status filter, no transfer-to-message join, NULL addresses excluded —
-/// same inclusion rules as before this task.
+/// No status filter except `invalidated`: a message whose source block was
+/// replaced has no canonical sender (ADR-022). No transfer-to-message join,
+/// NULL addresses excluded. The recompute is a periodic full refresh, so a
+/// revived message counts again at the next run. Provisional rows
+/// (`pending_finality`, `initiated` with an unconfirmed source) still count
+/// until they resolve: the sender of a retracted relay is real, and an
+/// unconfirmed source either confirms or becomes `invalidated`.
 const STATS_CHAINS_MESSAGE_USER_COUNTS_SQL: &str = r#"
 WITH bridge_user_pairs AS MATERIALIZED (
   SELECT bridge_id, src_chain_id AS chain_id, sender_address AS addr
   FROM crosschain_messages
-  WHERE sender_address IS NOT NULL
+  WHERE sender_address IS NOT NULL AND status <> 'invalidated'
   UNION
   SELECT bridge_id, dst_chain_id AS chain_id, recipient_address AS addr
   FROM crosschain_messages
   WHERE dst_chain_id IS NOT NULL AND recipient_address IS NOT NULL
+    AND status <> 'invalidated'
 )
 SELECT NULL::integer AS bridge_id, chain_id, COUNT(DISTINCT addr)::bigint AS user_count
 FROM bridge_user_pairs
@@ -169,16 +175,26 @@ GROUP BY bridge_id, chain_id
 "#;
 
 /// Transfer-domain counterpart of [`STATS_CHAINS_MESSAGE_USER_COUNTS_SQL`]: same
-/// shape, over `crosschain_transfers` token src/dst roles.
+/// shape, over `crosschain_transfers` token src/dst roles. No status filter
+/// except `invalidated`: the transfers of an `invalidated` message are excluded
+/// (ADR-022).
 const STATS_CHAINS_TRANSFER_USER_COUNTS_SQL: &str = r#"
 WITH bridge_user_pairs AS MATERIALIZED (
-  SELECT bridge_id, token_src_chain_id AS chain_id, sender_address AS addr
-  FROM crosschain_transfers
-  WHERE sender_address IS NOT NULL
+  SELECT t.bridge_id, t.token_src_chain_id AS chain_id, t.sender_address AS addr
+  FROM crosschain_transfers t
+  WHERE t.sender_address IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM crosschain_messages m
+      WHERE m.id = t.message_id AND m.bridge_id = t.bridge_id
+        AND m.status = 'invalidated')
   UNION
-  SELECT bridge_id, token_dst_chain_id AS chain_id, recipient_address AS addr
-  FROM crosschain_transfers
-  WHERE recipient_address IS NOT NULL
+  SELECT t.bridge_id, t.token_dst_chain_id AS chain_id, t.recipient_address AS addr
+  FROM crosschain_transfers t
+  WHERE t.recipient_address IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM crosschain_messages m
+      WHERE m.id = t.message_id AND m.bridge_id = t.bridge_id
+        AND m.status = 'invalidated')
 )
 SELECT NULL::integer AS bridge_id, chain_id, COUNT(DISTINCT addr)::bigint AS user_count
 FROM bridge_user_pairs
@@ -17612,5 +17628,122 @@ mod tests {
             .unwrap();
         assert_eq!(updated.token_icon.as_deref(), Some(TOKEN_ICON_X));
         assert_eq!(updated, stored_token(db, &address).await);
+    }
+
+    #[test]
+    fn test_stats_chains_sql_excludes_the_invalidated_status() {
+        use sea_orm::ActiveEnum;
+
+        assert_eq!(MessageStatus::Invalidated.to_value(), "invalidated");
+        assert!(super::STATS_CHAINS_MESSAGE_USER_COUNTS_SQL.contains("'invalidated'"));
+        assert!(super::STATS_CHAINS_TRANSFER_USER_COUNTS_SQL.contains("'invalidated'"));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database to run"]
+    async fn test_stats_chains_excludes_invalidated_messages_and_their_transfers() {
+        use interchain_indexer_entity::bridges;
+
+        let _db = init_db("stats_chains_excludes_invalidated").await;
+        let conn = _db.client();
+        let interchain_db = InterchainDatabase::new(conn.clone());
+        let (c1, c2) = (92_001i64, 92_002i64);
+
+        chains::Entity::insert_many([
+            chains::ActiveModel {
+                id: Set(c1),
+                name: Set("inv_c1".to_string()),
+                ..Default::default()
+            },
+            chains::ActiveModel {
+                id: Set(c2),
+                name: Set("inv_c2".to_string()),
+                ..Default::default()
+            },
+        ])
+        .exec(conn.as_ref())
+        .await
+        .unwrap();
+        bridges::Entity::insert(bridges::ActiveModel {
+            id: Set(1),
+            name: Set("inv_bridge".to_string()),
+            enabled: Set(true),
+            ..Default::default()
+        })
+        .exec(conn.as_ref())
+        .await
+        .unwrap();
+
+        let message =
+            |id: i64, status: MessageStatus, sender: u8| crosschain_messages::ActiveModel {
+                id: Set(id),
+                bridge_id: Set(1),
+                status: Set(status),
+                src_chain_id: Set(c1),
+                dst_chain_id: Set(Some(c2)),
+                sender_address: Set(Some(vec![sender; 20])),
+                recipient_address: Set(None),
+                stats_processed: Set(0),
+                ..Default::default()
+            };
+        crosschain_messages::Entity::insert_many([
+            message(1, MessageStatus::Invalidated, 0x0A),
+            message(2, MessageStatus::Completed, 0x0B),
+        ])
+        .exec(conn.as_ref())
+        .await
+        .unwrap();
+        crosschain_transfers::Entity::insert(crosschain_transfers::ActiveModel {
+            id: Set(1),
+            message_id: Set(1),
+            bridge_id: Set(1),
+            index: Set(0),
+            token_src_chain_id: Set(c1),
+            token_dst_chain_id: Set(c2),
+            src_amount: Set(Some(BigDecimal::from(1u64))),
+            dst_amount: Set(Some(BigDecimal::from(1u64))),
+            token_src_address: Set(Some(vec![0x11; 20])),
+            token_dst_address: Set(Some(vec![0x11; 20])),
+            sender_address: Set(Some(vec![0x0C; 20])),
+            recipient_address: Set(None),
+            stats_processed: Set(0),
+            asset_linkage: Set(Some(TransferAssetLinkage::Mirror)),
+            ..Default::default()
+        })
+        .exec(conn.as_ref())
+        .await
+        .unwrap();
+
+        interchain_db.recompute_stats_chains().await.unwrap();
+        let row = stats_chains::Entity::find_by_id(c1)
+            .one(conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            row.unique_message_users_count, 1,
+            "only the completed sender"
+        );
+        assert_eq!(row.unique_transfer_users_count, 0);
+
+        // The message is revived: it counts again at the next recompute.
+        crosschain_messages::Entity::update_many()
+            .col_expr(
+                crosschain_messages::Column::Status,
+                sea_orm::sea_query::Expr::val("initiated")
+                    .cast_as(sea_orm::sea_query::Alias::new("message_status")),
+            )
+            .filter(crosschain_messages::Column::Id.eq(1))
+            .exec(conn.as_ref())
+            .await
+            .unwrap();
+        interchain_db.recompute_stats_chains().await.unwrap();
+        let row = stats_chains::Entity::find_by_id(c1)
+            .one(conn.as_ref())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.unique_message_users_count, 2);
+        assert_eq!(row.unique_transfer_users_count, 1);
     }
 }
