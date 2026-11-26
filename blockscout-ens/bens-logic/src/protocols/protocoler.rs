@@ -119,6 +119,10 @@ pub struct EnsLikeProtocol {
     pub registry_contract: Option<Address>,
     pub empty_label_hash: Option<B256>,
     pub native_token_contract: Option<Address>,
+    /// Use the domain namehash as the native ERC-721 token ID. By default,
+    /// ENS-like protocols use the second-level labelhash.
+    #[serde(default)]
+    pub native_token_id_is_namehash: bool,
     #[serde(default)]
     pub try_offchain_resolve: bool,
 }
