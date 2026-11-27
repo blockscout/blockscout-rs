@@ -3484,3 +3484,17 @@ service excludes `invalidated`. See ADR-022.
 Provisional and retracted rows and their detection times exist only because the
 overlay saw them live. A reindex reads confirmed blocks only; dropping the
 database loses those observations for good.
+
+## Indexer Metrics Need The Launcher's `prometheus` Version
+
+The indexer metrics (`lazy_static` + `register_*!`) go into the default
+registry of the `prometheus` version the logic crate links. `/metrics` is
+served by `blockscout-service-launcher`, from the default registry of the
+version *it* links. Two versions in the tree means two registries: everything
+compiles and runs, and `/metrics` shows only the HTTP middleware metrics. The
+workspace pinned `0.13` against the launcher's `0.14` from the service's
+first commit, so no indexer metric was ever exported until the pin moved.
+
+When bumping `blockscout-service-launcher`, bump the workspace `prometheus` to
+the version it uses (`cargo tree -d -e normal` must not list `prometheus`).
+`tests/metrics_endpoint.rs` in the server crate fails when they diverge.
