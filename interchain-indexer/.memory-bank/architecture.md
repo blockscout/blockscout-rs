@@ -72,7 +72,11 @@ the message status, including `pending_finality` and `invalidated`. An entry
 with any non-confirmed candidate is written with the guarded overwrite
 (`crosschain_messages_overwrite_unsettled`) and, while partial, persisted to
 `pending_messages` with its flush; `sweep::sweep` retracts provisional rows
-the confirmed stream passed (ADR-022).
+the confirmed stream passed (ADR-022). One overlay
+loop per chain (`overlay.rs`) always runs the sweep, and with
+`optimistic_overlay` it also reads above the confirmed reach up to `latest`;
+the per-chain `ChainProgress` holds the reach (raised before a confirmed batch
+writes) and the sweep frontier (raised after its failures are recorded).
 
 ### MessageBuffer
 

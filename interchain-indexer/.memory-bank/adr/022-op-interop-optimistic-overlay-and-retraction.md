@@ -87,7 +87,36 @@ The runtime (overlay loop, frontier, setting) is described below.
 
 ### Runtime
 
-Added with the overlay loop.
+- **The overlay loop:** one future per chain inside the indexer's run future,
+  next to the `RangeDriver`, dropped with it. Each `pull_interval_ms` tick:
+  1. sweep to `sweep_frontier` (always);
+  2. if `optimistic_overlay` is on, resolve `latest`; on the first tick after
+     a start, resolve the confirmation tag head once and start above it
+     (reading nothing until that succeeds);
+  3. read `[max(next_from, confirmed_reach + 1), …]` with no lock held;
+  4. drop logs at or below the reach;
+  5. `process_batch(Overlay)` under the reach lock.
+
+  No persisted cursor; each height is read once per process lifetime.
+- **Two progress values:** `confirmed_reach` (raised under its lock before a
+  realtime batch writes) and `sweep_frontier` (raised by `range_processed`,
+  after failures are recorded, also for empty ranges via
+  `yield_empty_realtime`). Both start at `realtime_cursor − 1`;
+  `reach ≥ frontier`. Why both: a sweep to the reach would retract in-flight
+  legs, and an overlay apply below the reach could recreate an evicted
+  message's entry.
+- **The overlay is not a scanner of record:** no checkpoint, no
+  `indexer_failures`, errors counted and dropped.
+- **The setting:** `optimistic_overlay` (default `false`), the rollout lever
+  for the frontend and the stats service.
+- **RPC:** about double the `eth_getLogs` per chain; paced by the pool's
+  limiter.
+- **Consequences:** the external stats service counts a provisional relay as
+  received (`dst_tx_hash IS NOT NULL`) until its retraction clears it and that
+  day is recomputed. A day whose only received message was retracted keeps its
+  value until a full recompute. Its all-message charts count `invalidated`
+  rows. Metrics: `sweep_frontier`, `overlay_errors_total`,
+  `legs_retracted_total`.
 
 ## Alternatives Considered
 

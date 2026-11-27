@@ -3443,3 +3443,44 @@ PostgreSQL reports zero affected rows; `Insert::exec` turns that into
 `DbErr::RecordNotInserted`, which would roll back the whole maintenance
 transaction on every cycle. `batched_upsert` goes through `TryInsert`, which
 maps it to a normal `Conflicted` result. Never call `Insert::exec` for it.
+
+## The OP Sweep Frontier Is Not The Tagged Head
+
+The sweep retracts provisional rows at or below `sweep_frontier`, the end of
+the last confirmed realtime range whose failures are recorded
+(`RangeProcessor::range_processed`). The RPC tag head would retract a leg whose
+confirming batch is not yet read or committed, and nodes of one pool can
+disagree about it. `confirmed_reach` is raised before a batch writes and the
+frontier after it, so `reach >= frontier`. Both start at `realtime_cursor - 1`,
+one block late after a restart (the safe side). Heights inside an open failed
+range are not swept until their retry succeeds. See ADR-022.
+
+## The OP Overlay Never Writes At Or Below The Confirmed Reach
+
+While running, the overlay can fall behind the confirmed stream (fetch errors,
+slow ticks, a node whose tag head runs ahead), so both streams can read the
+same heights. An overlay apply of a log the confirmed stream already applied, after maintenance evicted the completed
+message, would create a fresh buffer entry that never finalizes. The overlay
+therefore drops logs at or below the reach and holds the reach lock through its
+write and apply; the confirmed path raises the reach under the same lock before
+its write. The lock is never held across an RPC call. See ADR-022.
+
+## With A Stalled Confirmation Tag, Every OP Message Stays `pending_finality`
+
+On the Lagoon devnets the `finalized` tag stalled for more than a day. With
+`optimistic_overlay` on, every relayed message there stays `pending_finality`
+until the tag passes its block. That is correct, not a bug.
+
+## The External Stats Service Counts Provisional Relays And `invalidated` Rows
+
+It counts a provisional relay as received (`dst_tx_hash IS NOT NULL`) until its
+retraction clears it and that day is recomputed; a day whose only received
+message was retracted keeps its value until a full recompute; its all-message
+charts count `invalidated` rows. Keep `optimistic_overlay` off until the stats
+service excludes `invalidated`. See ADR-022.
+
+## OP Ledger Observations Cannot Be Rebuilt By A Reindex
+
+Provisional and retracted rows and their detection times exist only because the
+overlay saw them live. A reindex reads confirmed blocks only; dropping the
+database loses those observations for good.

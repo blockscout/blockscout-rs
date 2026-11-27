@@ -108,6 +108,9 @@
 - `interchain-indexer-logic/src/indexer/op_interop/sweep.rs`
   - the confirmation sweep: select provisional rows, retract in the buffer
     (durably), then in the ledger
+- `interchain-indexer-logic/src/indexer/op_interop/overlay.rs`
+  - the per-chain overlay loop and its tick: sweep, read above the reach,
+    process in overlay mode under the reach lock
 - `interchain-indexer-logic/src/indexer/op_interop/eth_transfer.rs`
   - `classify` (the single payload decoder), the transfer model,
     `check_relay_eth`

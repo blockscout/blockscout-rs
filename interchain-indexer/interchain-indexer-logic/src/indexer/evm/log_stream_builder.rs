@@ -32,6 +32,7 @@ pub(crate) async fn build_log_stream_for_chain(
         poll_interval,
         batch_size,
         HeadBlockTag::Latest,
+        false,
     )
     .await
 }
@@ -50,6 +51,7 @@ pub(crate) async fn build_log_stream_for_chain_with_head(
     poll_interval: Duration,
     batch_size: u64,
     head_tag: HeadBlockTag,
+    yield_empty_realtime: bool,
 ) -> Result<BoxStream<'static, (i64, LogBatch)>> {
     let checkpoint = db.get_checkpoint(bridge_id as u64, chain_id as u64).await?;
 
@@ -117,6 +119,7 @@ pub(crate) async fn build_log_stream_for_chain_with_head(
         .bridge_id(bridge_id)
         .chain_id(chain_id)
         .head_tag(head_tag)
+        .yield_empty_realtime(yield_empty_realtime)
         .db(Arc::new(db.clone()))
         .catchup()
         .realtime()
@@ -155,6 +158,7 @@ mod tests {
                     poll_interval,
                     100,
                     head_tag,
+                    false,
                 )
                 .await
             }

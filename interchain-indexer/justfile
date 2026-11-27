@@ -81,6 +81,7 @@ run-op-devnet:
     INTERCHAIN_INDEXER__DATABASE__RUN_MIGRATIONS=true \
     INTERCHAIN_INDEXER__CHAINS_CONFIG=config/op-interop/chains-devnet.json \
     INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/op-interop/bridges-devnet.json \
+    INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__OPTIMISTIC_OVERLAY=true \
     cargo run --bin interchain-indexer-server
 
 run-op-demo:
@@ -89,6 +90,7 @@ run-op-demo:
     INTERCHAIN_INDEXER__CHAINS_CONFIG=config/op-interop/chains-demo.json \
     INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/op-interop/bridges-demo.json \
     INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__BATCH_SIZE=10000 \
+    INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__OPTIMISTIC_OVERLAY=true \
     cargo run --bin interchain-indexer-server
 
 run-dev:

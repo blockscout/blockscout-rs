@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-Blockscout
 
 use lazy_static::lazy_static;
-use prometheus::{IntCounterVec, register_int_counter_vec};
+use prometheus::{IntCounterVec, IntGaugeVec, register_int_counter_vec, register_int_gauge_vec};
 
 // OP interop metrics. Keep labels low-cardinality: bridge_id, chain_id and a
 // closed set of reasons. Wrong-version drops are not here: they use the shared
@@ -98,6 +98,27 @@ lazy_static! {
         "interchain_indexer_op_interop_legs_retracted_total",
         "OP interop ledger rows the confirmation sweep retracted",
         &["bridge_id", "chain_id", "event_kind"],
+    )
+    .unwrap();
+
+    /// The OP confirmation sweep's frontier per chain: the end of the last
+    /// confirmed realtime range whose failures are recorded. The sweep never
+    /// looks above it; it trails the confirmation tag head by up to one batch.
+    pub static ref OP_INTEROP_SWEEP_FRONTIER: IntGaugeVec = register_int_gauge_vec!(
+        "interchain_indexer_op_interop_sweep_frontier",
+        "OP interop confirmation sweep frontier per chain",
+        &["bridge_id", "chain_id"],
+    )
+    .unwrap();
+
+    /// Overlay ticks that failed a step, by `stage`: `head` (latest or the
+    /// first-tick tag head unavailable), `fetch` (`eth_getLogs`), `process`
+    /// (the overlay write or apply), `sweep`. Never retried by the failure
+    /// ledger: the confirmed stream delivers the same logs later.
+    pub static ref OP_INTEROP_OVERLAY_ERRORS_TOTAL: IntCounterVec = register_int_counter_vec!(
+        "interchain_indexer_op_interop_overlay_errors_total",
+        "OP interop overlay tick steps that failed",
+        &["bridge_id", "chain_id", "stage"],
     )
     .unwrap();
 }

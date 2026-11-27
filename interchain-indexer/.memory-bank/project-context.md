@@ -89,7 +89,8 @@ current production logic is concentrated in the Avalanche path.
     `finalized` (or `safe`) blocks only, no receipts, writes the
     `op_interop_events` ledger, including every `CrossL2Inbox` execution; three contract kinds per chain
     (`cross_l2_inbox`, `l2_to_l2_messenger`, `superchain_eth_bridge`); ETH
-    transfers are derived from the message payload in `eth_transfer.rs`
+    transfers are derived from the message payload in `eth_transfer.rs`; optional
+    optimistic overlay (`optimistic_overlay`)
   - source: `interchain-indexer-logic/src/indexer/op_interop/`
 - `LogStream`
   - catchup + realtime log streaming with checkpoint-aware cursors

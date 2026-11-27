@@ -63,10 +63,6 @@ impl TxAction {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ReadMode {
     Confirmed,
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "wired by the OP overlay loop (slice 6c)")
-    )]
     Overlay,
 }
 

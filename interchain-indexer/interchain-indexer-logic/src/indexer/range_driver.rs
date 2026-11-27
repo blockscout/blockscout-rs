@@ -63,6 +63,19 @@ pub trait RangeProcessor: Send + Sync {
     fn batch_size(&self) -> u64;
 
     async fn process(&self, chain_id: i64, batch: &LogBatch) -> Result<(), BatchError>;
+
+    /// Called by `RangeDriver::run` after a stream batch (catch-up or
+    /// realtime) is fully handled: processed and its range resolved, or its
+    /// failure recorded in the failure ledger. Not called when recording
+    /// escalates, and never for retry chunks. Default: nothing.
+    async fn range_processed(
+        &self,
+        _chain_id: i64,
+        _direction: ScanDirection,
+        _from_block: u64,
+        _to_block: u64,
+    ) {
+    }
 }
 
 /// `err.attributed`, or the whole yielded/retried range when empty.
@@ -154,7 +167,12 @@ impl<P: RangeProcessor> RangeDriver<P> {
                         stream_chain_id, chain_id,
                         "per-chain stream tagged with the wrong chain id"
                     );
+                    let (direction, from_block, to_block) =
+                        (batch.direction, batch.from_block, batch.to_block);
                     this.handle_batch(bridge_id, chain_id, batch).await?;
+                    this.processor
+                        .range_processed(chain_id, direction, from_block, to_block)
+                        .await;
                 }
                 tracing::warn!(bridge_id, chain_id, "per-chain log stream ended");
                 anyhow::Ok(())
@@ -674,6 +692,9 @@ mod tests {
             ProviderBuilder::new().connect_client(client).erased()
         }
 
+        /// `(chain_id, direction, from, to, covered by an open failure)`.
+        type ProcessedRange = (i64, ScanDirection, u64, u64, bool);
+
         /// A minimal `RangeProcessor` adopting only the driver: no
         /// protocol-specific decoding, just a configurable pass/fail decision
         /// per exact `(chain_id, from_block, to_block)`. Everything else
@@ -706,6 +727,12 @@ mod tests {
             /// as it happens so a test can assert progress *while* another
             /// chain is still working rather than on final totals.
             completed_tx: Option<tokio::sync::mpsc::UnboundedSender<(i64, u64, u64)>>,
+            /// Every `range_processed` call: `(chain_id, direction, from, to,
+            /// covered)`, where `covered` says whether an open
+            /// `indexer_failures` row covered `[from, to]` at that moment
+            /// (`false` without a db).
+            processed: Arc<Mutex<Vec<ProcessedRange>>>,
+            db: Option<Arc<InterchainDatabase>>,
         }
 
         impl TestRangeProcessor {
@@ -725,7 +752,14 @@ mod tests {
                     blocked_chains: Arc::new(Mutex::new(HashSet::new())),
                     process_entries: Arc::new(AtomicUsize::new(0)),
                     completed_tx: None,
+                    processed: Arc::new(Mutex::new(Vec::new())),
+                    db: None,
                 }
+            }
+
+            fn with_db(mut self, db: Arc<InterchainDatabase>) -> Self {
+                self.db = Some(db);
+                self
             }
 
             fn with_provider(mut self, chain_id: i64, provider: DynProvider<Ethereum>) -> Self {
@@ -781,6 +815,31 @@ mod tests {
 
             fn batch_size(&self) -> u64 {
                 self.batch_size
+            }
+
+            async fn range_processed(
+                &self,
+                chain_id: i64,
+                direction: ScanDirection,
+                from_block: u64,
+                to_block: u64,
+            ) {
+                // Read the db into a value before locking: never hold the
+                // guard across an `.await`.
+                let covered = match &self.db {
+                    Some(db) => db
+                        .open_indexer_failures(&[(self.bridge_id, chain_id)])
+                        .await
+                        .unwrap()
+                        .iter()
+                        .any(|(_, _, interval)| {
+                            interval.range.from <= from_block && to_block <= interval.range.to
+                        }),
+                    None => false,
+                };
+                self.processed
+                    .lock()
+                    .push((chain_id, direction, from_block, to_block, covered));
             }
 
             async fn process(&self, chain_id: i64, batch: &LogBatch) -> Result<(), BatchError> {
@@ -975,6 +1034,90 @@ mod tests {
                 1,
                 "the driver must not request the next batch after escalating"
             );
+        }
+
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn range_processed_runs_after_a_successful_batch() {
+            let db = init_db("range_driver_range_processed_after_success").await;
+            fill_mock_interchain_database(&db).await;
+            let interchain_db = Arc::new(InterchainDatabase::new(db.client()));
+            let ledger = Arc::new(FailureLedger::new(interchain_db));
+
+            let processor = TestRangeProcessor::new(1, vec![1], 1000);
+            let processed = processor.processed.clone();
+            let settings = FailureRetrySettings {
+                enabled: false,
+                ..Default::default()
+            };
+
+            let stream = futures::stream::iter(vec![(1i64, empty_batch(1, 10))]);
+            RangeDriver::new(processor, ledger, settings)
+                .run(vec![(1i64, stream)])
+                .await
+                .unwrap();
+
+            assert_eq!(
+                *processed.lock(),
+                vec![(1, ScanDirection::Realtime, 1, 10, false)]
+            );
+        }
+
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn range_processed_runs_after_the_failure_is_recorded() {
+            let db = init_db("range_driver_range_processed_after_record").await;
+            fill_mock_interchain_database(&db).await;
+            let interchain_db = Arc::new(InterchainDatabase::new(db.client()));
+            let ledger = Arc::new(FailureLedger::new(interchain_db.clone()));
+
+            let processor = TestRangeProcessor::new(1, vec![1], 1000).with_db(interchain_db);
+            processor.fail_range(1, 1, 10);
+            let processed = processor.processed.clone();
+            let settings = FailureRetrySettings {
+                enabled: false,
+                ..Default::default()
+            };
+
+            let stream = futures::stream::iter(vec![(1i64, empty_batch(1, 10))]);
+            RangeDriver::new(processor, ledger, settings)
+                .run(vec![(1i64, stream)])
+                .await
+                .unwrap();
+
+            assert_eq!(
+                *processed.lock(),
+                vec![(1, ScanDirection::Realtime, 1, 10, true)]
+            );
+        }
+
+        #[tokio::test]
+        #[ignore = "needs database to run"]
+        async fn range_processed_is_not_called_after_an_escalation() {
+            const UNSEEDED_CHAIN_ID: i64 = 999_999_999;
+
+            let db = init_db("range_driver_range_processed_not_after_escalation").await;
+            fill_mock_interchain_database(&db).await;
+            let interchain_db = Arc::new(InterchainDatabase::new(db.client()));
+            let ledger = Arc::new(FailureLedger::new(interchain_db));
+
+            let processor = TestRangeProcessor::new(1, vec![UNSEEDED_CHAIN_ID], 1000);
+            processor.fail_range(UNSEEDED_CHAIN_ID, 1, 10);
+            let processed = processor.processed.clone();
+            let settings = FailureRetrySettings {
+                enabled: false,
+                record_retry_attempts: 2,
+                record_retry_initial_backoff: Duration::from_millis(1),
+                ..Default::default()
+            };
+
+            let stream = futures::stream::iter(vec![(UNSEEDED_CHAIN_ID, empty_batch(1, 10))]);
+            let result = RangeDriver::new(processor, ledger, settings)
+                .run(vec![(UNSEEDED_CHAIN_ID, stream)])
+                .await;
+
+            assert!(result.is_err(), "an unrecordable failure must escalate");
+            assert!(processed.lock().is_empty());
         }
 
         /// PRIMARY ACCEPTANCE TEST for per-chain range drivers.

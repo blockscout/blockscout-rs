@@ -287,3 +287,21 @@ kept visible, never deleted, and a later confirmed source revives it.
 `op_interop::sweep::sweep`: retracts the provisional ledger rows at or below a
 frontier and outside open failed ranges, in the buffer (durably) first, then in
 the ledger.
+
+## Optimistic Overlay (OP Interop)
+
+The per-chain loop (`op_interop::overlay`) that reads `(confirmed head, latest]`
+when `optimistic_overlay` is on and shows its messages as provisional. It is
+not a scanner of record: no checkpoint, no failure rows (ADR-022).
+
+## Confirmed Reach
+
+`ChainProgress.confirmed_reach`: the highest block of any realtime batch the
+confirmed stream has started to apply. Raised under a lock before the batch
+writes; the overlay never writes or applies at or below it.
+
+## Sweep Frontier
+
+`ChainProgress.sweep_frontier`: the end of the last confirmed realtime range
+that is fully handled (processed, failures recorded). The sweep never looks
+above it. Never the RPC tag head.

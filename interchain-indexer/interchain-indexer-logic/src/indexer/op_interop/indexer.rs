@@ -28,7 +28,7 @@ use crate::{
         range_driver::{BatchError, RangeDriver, RangeProcessor},
         xdai::NATIVE_SENTINEL,
     },
-    log_stream::LogBatch,
+    log_stream::{LogBatch, ScanDirection},
     message_buffer::MessageBuffer,
     protocol_metadata::OpInteropEventState,
     secret::redact_urls,
@@ -38,6 +38,8 @@ use super::{
     abi::OpInteropRegistry,
     consolidation,
     events::{self, EventContext, ReadMode, TxAction, TxPlan},
+    metrics::OP_INTEROP_SWEEP_FRONTIER,
+    overlay,
     settings::OpInteropIndexerSettings,
     types::{LogRef, Message, key_from_message_hash},
 };
@@ -79,6 +81,60 @@ pub struct OpInteropIndexer {
     error_count: Arc<AtomicU64>,
 }
 
+/// Per-chain progress of the confirmed stream, shared with the overlay loop
+/// (ADR-022).
+pub(super) struct ChainProgress {
+    /// The highest block of any realtime batch the confirmed stream has
+    /// started to apply. Raised under this lock before the batch's ledger
+    /// write; the overlay holds the lock while it writes and applies, and
+    /// never writes or applies a block at or below it.
+    pub(super) confirmed_reach: tokio::sync::Mutex<u64>,
+    /// The end of the last realtime range that is fully handled: processed,
+    /// its failures recorded. The sweep never looks above it.
+    pub(super) sweep_frontier: AtomicU64,
+}
+
+impl ChainProgress {
+    pub(super) fn new(start: u64) -> Self {
+        Self {
+            confirmed_reach: tokio::sync::Mutex::new(start),
+            sweep_frontier: AtomicU64::new(start),
+        }
+    }
+
+    pub(super) async fn reset(&self, start: u64) {
+        *self.confirmed_reach.lock().await = start;
+        self.sweep_frontier.store(start, Ordering::SeqCst);
+    }
+
+    pub(super) async fn raise_reach(&self, to_block: u64) {
+        let mut reach = self.confirmed_reach.lock().await;
+        *reach = (*reach).max(to_block);
+    }
+
+    /// Returns the new frontier.
+    pub(super) fn raise_frontier(&self, to_block: u64) -> u64 {
+        self.sweep_frontier
+            .fetch_max(to_block, Ordering::SeqCst)
+            .max(to_block)
+    }
+}
+
+/// The persisted `realtime_cursor − 1`, or 0 without a checkpoint. On a
+/// restart `realtime_cursor` is processed, so this is one block late, the
+/// safe side. On a first start the checkpoint was just seeded with
+/// `realtime_cursor` = the tag head, which realtime has not read yet, so
+/// the value is `head − 1`; the overlay's first tick starts above a freshly
+/// resolved tag head.
+async fn initial_progress(db: &InterchainDatabase, bridge_id: i32, chain_id: i64) -> Result<u64> {
+    let checkpoint = db
+        .get_checkpoint(bridge_id as u64, chain_id as u64)
+        .await
+        .with_context(|| format!("failed to read the checkpoint of chain {chain_id}"))?;
+    Ok(checkpoint.map_or(0, |cp| cp.validated_realtime_cursor().saturating_sub(1)))
+}
+
+#[derive(Clone)]
 pub(super) struct RunContext {
     pub(super) db: Arc<InterchainDatabase>,
     pub(super) bridge_id: i32,
@@ -87,6 +143,7 @@ pub(super) struct RunContext {
     pub(super) configured_chains: Arc<HashSet<ChainId>>,
     pub(super) settings: OpInteropIndexerSettings,
     pub(super) buffer: Arc<MessageBuffer<Message>>,
+    pub(super) progress: Arc<HashMap<i64, ChainProgress>>,
 }
 
 impl OpInteropIndexer {
@@ -104,6 +161,10 @@ impl OpInteropIndexer {
         ensure!(
             settings.batch_size >= 1,
             "OP interop indexer batch_size must be at least 1"
+        );
+        ensure!(
+            !settings.pull_interval_ms.is_zero(),
+            "OP interop indexer pull_interval_ms must be non-zero"
         );
         settings
             .failure_retry
@@ -162,6 +223,12 @@ impl OpInteropIndexer {
             configured_chains: self.configured_chains.clone(),
             settings: self.settings.clone(),
             buffer: self.buffer.clone(),
+            progress: Arc::new(
+                self.chains
+                    .iter()
+                    .map(|chain| (chain.chain_id, ChainProgress::new(0)))
+                    .collect(),
+            ),
         }
     }
 
@@ -187,17 +254,38 @@ impl OpInteropIndexer {
                 ctx.settings.pull_interval_ms,
                 ctx.settings.batch_size,
                 ctx.settings.confirmation_block_tag.into(),
+                true,
             )
             .await?;
             streams.push((chain_id, stream));
         }
 
+        // After every stream is built: building seeds a missing checkpoint.
+        for chain in &ctx.chains {
+            let start = initial_progress(&ctx.db, ctx.bridge_id, chain.chain_id).await?;
+            if let Some(progress) = ctx.progress.get(&chain.chain_id) {
+                progress.reset(start).await;
+            }
+            OP_INTEROP_SWEEP_FRONTIER
+                .with_label_values(&[&ctx.bridge_id.to_string(), &chain.chain_id.to_string()])
+                .set(i64::try_from(start).unwrap_or(i64::MAX));
+        }
+
         let ledger = Arc::new(FailureLedger::new(ctx.db.clone()));
         let failure_retry_settings = ctx.settings.failure_retry.clone();
 
-        RangeDriver::new(ctx, ledger, failure_retry_settings)
-            .run(streams)
-            .await
+        let overlays = futures::future::join_all(
+            ctx.chains
+                .iter()
+                .map(|chain| overlay::run_chain(ctx.clone(), chain.chain_id)),
+        );
+        let driver = RangeDriver::new(ctx, ledger, failure_retry_settings).run(streams);
+        tokio::select! {
+            result = driver => result,
+            // `run_chain` never returns; this arm only keeps the loops polled
+            // alongside the driver, and drops them with it.
+            _ = overlays => Ok(()),
+        }
     }
 
     /// Makes no RPC call: everything comes from the log rows. It makes one
@@ -214,7 +302,7 @@ impl OpInteropIndexer {
     /// returned as single-block ranges, exactly as
     /// `XDaiIndexer::process_batch` does, so the retry path replays only
     /// them.
-    async fn process_batch(
+    pub(super) async fn process_batch(
         ctx: &RunContext,
         chain_id: i64,
         batch: &[Log],
@@ -519,10 +607,35 @@ impl RangeProcessor for RunContext {
     }
 
     async fn process(&self, chain_id: i64, batch: &LogBatch) -> Result<(), BatchError> {
+        // Before the empty-batch return and before any write: the overlay
+        // never writes at or below this block from now on.
+        if batch.direction == ScanDirection::Realtime
+            && let Some(progress) = self.progress.get(&chain_id)
+        {
+            progress.raise_reach(batch.to_block).await;
+        }
         if batch.logs.is_empty() {
             return Ok(());
         }
         OpInteropIndexer::process_batch(self, chain_id, &batch.logs, ReadMode::Confirmed).await
+    }
+
+    async fn range_processed(
+        &self,
+        chain_id: i64,
+        direction: ScanDirection,
+        _from_block: u64,
+        to_block: u64,
+    ) {
+        if direction != ScanDirection::Realtime {
+            return;
+        }
+        if let Some(progress) = self.progress.get(&chain_id) {
+            let frontier = progress.raise_frontier(to_block);
+            OP_INTEROP_SWEEP_FRONTIER
+                .with_label_values(&[&self.bridge_id.to_string(), &chain_id.to_string()])
+                .set(i64::try_from(frontier).unwrap_or(i64::MAX));
+        }
     }
 }
 
@@ -629,6 +742,10 @@ impl CrosschainIndexer for OpInteropIndexer {
                 "confirmation_block_tag".to_string(),
                 serde_json::json!(self.settings.confirmation_block_tag.as_str()),
             ),
+            (
+                "optimistic_overlay".to_string(),
+                serde_json::json!(self.settings.optimistic_overlay),
+            ),
         ]);
 
         CrosschainIndexerStatus {
@@ -670,7 +787,7 @@ async fn seed_native_tokens_into(db: &InterchainDatabase, bridge_id: i32, chain_
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     //! DB-backed replay tests over the simulated devnet fixtures: log batches
     //! go through `process_batch`, one maintenance cycle (`buffer.run()`)
     //! flushes them, and the assertions read the resulting rows.
@@ -709,9 +826,9 @@ mod tests {
         write_api,
     };
 
-    const BRIDGE_ID: i32 = 2004;
-    const SOURCE: i64 = SOURCE_CHAIN_ID as i64;
-    const DESTINATION: i64 = DESTINATION_CHAIN_ID as i64;
+    pub(in super::super) const BRIDGE_ID: i32 = 2004;
+    pub(in super::super) const SOURCE: i64 = SOURCE_CHAIN_ID as i64;
+    pub(in super::super) const DESTINATION: i64 = DESTINATION_CHAIN_ID as i64;
     const MESSAGE_0_ID_HASH: B256 =
         b256!("274fa1e522d77c94a725679b973bd3070ac910488a6a5cf023c1469f94655eaa");
     const SOURCE_TX: B256 =
@@ -756,7 +873,10 @@ mod tests {
 
     /// A buffer wired to a `StatsService` that indexes both chains, so an
     /// `initiated` message is not countable but a `completed` one is.
-    fn new_buffer(db: &InterchainDatabase, hot_ttl: Duration) -> Arc<MessageBuffer<Message>> {
+    pub(in super::super) fn new_buffer(
+        db: &InterchainDatabase,
+        hot_ttl: Duration,
+    ) -> Arc<MessageBuffer<Message>> {
         let stats = Arc::new(StatsService::new(
             Arc::new(db.clone()),
             None,
@@ -767,7 +887,10 @@ mod tests {
     }
 
     /// `process_batch` makes no RPC call, so the providers are never used.
-    fn run_context(db: &InterchainDatabase, buffer: Arc<MessageBuffer<Message>>) -> RunContext {
+    pub(in super::super) fn run_context(
+        db: &InterchainDatabase,
+        buffer: Arc<MessageBuffer<Message>>,
+    ) -> RunContext {
         let provider = HeadMockService::new(0, vec![]).provider();
         let chains = vec![
             OpInteropChainConfig {
@@ -791,12 +914,18 @@ mod tests {
             chains,
             settings: OpInteropIndexerSettings::default(),
             buffer,
+            progress: Arc::new(
+                [SOURCE, DESTINATION]
+                    .into_iter()
+                    .map(|chain_id| (chain_id, ChainProgress::new(0)))
+                    .collect(),
+            ),
         }
     }
 
     /// The logs of the first call of the send fixture (`sendETH` plus the
     /// message-0 `SentMessage`).
-    fn send_batch() -> Vec<Log> {
+    pub(in super::super) fn send_batch() -> Vec<Log> {
         send_calls().remove(0)
     }
 
@@ -806,7 +935,9 @@ mod tests {
             .unwrap_or_else(|err| panic!("process_batch failed: {:#}", err.error));
     }
 
-    async fn messages(db: &InterchainDatabase) -> Vec<crosschain_messages::Model> {
+    pub(in super::super) async fn messages(
+        db: &InterchainDatabase,
+    ) -> Vec<crosschain_messages::Model> {
         crosschain_messages::Entity::find()
             .all(db.db.as_ref())
             .await
@@ -1972,7 +2103,7 @@ mod tests {
         sweep::{self, SweepOutcome},
     };
 
-    async fn feed_overlay(ctx: &RunContext, chain_id: i64, logs: Vec<Log>) {
+    pub(in super::super) async fn feed_overlay(ctx: &RunContext, chain_id: i64, logs: Vec<Log>) {
         OpInteropIndexer::process_batch(ctx, chain_id, &logs, ReadMode::Overlay)
             .await
             .unwrap_or_else(|err| panic!("overlay process_batch failed: {:#}", err.error));
@@ -2004,7 +2135,7 @@ mod tests {
             .collect()
     }
 
-    async fn ledger(db: &InterchainDatabase) -> Vec<op_interop_events::Model> {
+    pub(in super::super) async fn ledger(db: &InterchainDatabase) -> Vec<op_interop_events::Model> {
         op_interop_events::Entity::find()
             .order_by_asc(op_interop_events::Column::ChainId)
             .order_by_asc(op_interop_events::Column::BlockNumber)
@@ -2056,7 +2187,7 @@ mod tests {
         );
     }
 
-    async fn setup(
+    pub(in super::super) async fn setup(
         name: &str,
     ) -> (
         blockscout_service_launcher::test_database::TestDbGuard,
@@ -2660,5 +2791,222 @@ mod tests {
         buffer.run().await.unwrap();
         assert_eq!(realtime(&db, SOURCE).await, source_cursor);
         assert_status_matches_fold(&db).await;
+    }
+
+    // --- Confirmed progress: reach and frontier ---
+
+    /// Begins a transaction that blocks every write to `op_interop_events`
+    /// until the test calls `rollback()`; reads do not wait.
+    pub(in super::super) async fn lock_ledger(
+        db: &InterchainDatabase,
+    ) -> sea_orm::DatabaseTransaction {
+        let txn = db.db.begin().await.unwrap();
+        txn.execute_unprepared("LOCK TABLE op_interop_events IN EXCLUSIVE MODE")
+            .await
+            .unwrap();
+        txn
+    }
+
+    /// Statements currently waiting for a lock while touching the ledger.
+    pub(in super::super) async fn ledger_lock_waiters(db: &InterchainDatabase) -> i64 {
+        db.db
+            .query_one(sea_orm::Statement::from_string(
+                sea_orm::DatabaseBackend::Postgres,
+                "SELECT count(*) AS n FROM pg_stat_activity \
+                 WHERE datname = current_database() AND wait_event_type = 'Lock' \
+                 AND query ILIKE '%op_interop_events%'",
+            ))
+            .await
+            .unwrap()
+            .unwrap()
+            .try_get("", "n")
+            .unwrap()
+    }
+
+    pub(in super::super) async fn wait_for_ledger_lock_waiters(
+        db: &InterchainDatabase,
+        expected: i64,
+    ) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            if ledger_lock_waiters(db).await == expected {
+                return;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the ledger lock never had {expected} waiter(s)"
+            );
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    async fn reach_of(ctx: &RunContext, chain_id: i64) -> u64 {
+        *ctx.progress[&chain_id].confirmed_reach.lock().await
+    }
+
+    fn realtime_batch(from_block: u64, to_block: u64, logs: Vec<Log>) -> LogBatch {
+        LogBatch {
+            from_block,
+            to_block,
+            direction: ScanDirection::Realtime,
+            logs,
+        }
+    }
+
+    #[test]
+    fn test_new_rejects_a_zero_pull_interval() {
+        // Validation precedes everything that needs a database.
+        let settings = OpInteropIndexerSettings {
+            pull_interval_ms: Duration::ZERO,
+            ..Default::default()
+        };
+        let db = sea_orm::DatabaseConnection::Disconnected;
+        let stats = Arc::new(StatsService::new(
+            Arc::new(InterchainDatabase::new(Arc::new(db))),
+            None,
+            Default::default(),
+            IndexedChains::from_pairs([(BRIDGE_ID, SOURCE)]),
+        ));
+        let provider = HeadMockService::new(0, vec![]).provider();
+        let chains = vec![OpInteropChainConfig {
+            chain_id: SOURCE,
+            provider,
+            start_block: 0,
+            contracts: contracts(0),
+        }];
+        let err = OpInteropIndexer::new(
+            stats,
+            BRIDGE_ID,
+            chains,
+            &settings,
+            &buffer_settings(Duration::from_secs(60)),
+        )
+        .err()
+        .expect("a zero pull interval is rejected");
+        assert!(err.to_string().contains("pull_interval_ms"), "{err:#}");
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_initial_progress_is_one_below_the_persisted_realtime_cursor() {
+        let (_guard, db) = setup("op_progress_initial").await;
+        interchain_indexer_entity::indexer_checkpoints::Entity::insert(
+            interchain_indexer_entity::indexer_checkpoints::ActiveModel {
+                bridge_id: Set(BRIDGE_ID),
+                chain_id: Set(SOURCE),
+                catchup_min_cursor: Set(0),
+                catchup_max_cursor: Set(0),
+                finality_cursor: Set(0),
+                realtime_cursor: Set(1000),
+                ..Default::default()
+            },
+        )
+        .exec(db.db.as_ref())
+        .await
+        .unwrap();
+
+        assert_eq!(initial_progress(&db, BRIDGE_ID, SOURCE).await.unwrap(), 999);
+        assert_eq!(
+            initial_progress(&db, BRIDGE_ID, DESTINATION).await.unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_realtime_batches_raise_the_reach_even_when_empty_or_failed() {
+        let (_guard, db) = setup("op_progress_reach_raised").await;
+        let ctx = run_context(&db, new_buffer(&db, Duration::from_secs(60)));
+
+        db.db
+            .execute_unprepared(
+                "CREATE FUNCTION test_refuse_op_interop_events() RETURNS trigger LANGUAGE plpgsql AS
+                   $$ BEGIN RAISE EXCEPTION 'test: op_interop_events write refused'; END $$;
+                 CREATE TRIGGER test_refuse_op_interop_events BEFORE INSERT ON op_interop_events
+                   FOR EACH ROW EXECUTE FUNCTION test_refuse_op_interop_events();",
+            )
+            .await
+            .unwrap();
+
+        ctx.process(DESTINATION, &realtime_batch(895_700, 895_710, relay_logs()))
+            .await
+            .expect_err("the ledger write is refused");
+        assert_eq!(reach_of(&ctx, DESTINATION).await, 895_710);
+
+        ctx.process(DESTINATION, &realtime_batch(895_711, 895_720, vec![]))
+            .await
+            .unwrap_or_else(|err| panic!("{:#}", err.error));
+        assert_eq!(reach_of(&ctx, DESTINATION).await, 895_720);
+
+        for direction in [ScanDirection::Catchup, ScanDirection::Retry] {
+            ctx.process(
+                DESTINATION,
+                &LogBatch {
+                    from_block: 1,
+                    to_block: 999_999,
+                    direction,
+                    logs: vec![],
+                },
+            )
+            .await
+            .unwrap_or_else(|err| panic!("{:#}", err.error));
+        }
+        assert_eq!(reach_of(&ctx, DESTINATION).await, 895_720);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_realtime_batch_reach_is_raised_while_its_ledger_write_waits() {
+        let (_guard, db) = setup("op_progress_reach_before_write").await;
+        let buffer = new_buffer(&db, Duration::from_secs(60));
+        let ctx = run_context(&db, buffer.clone());
+        ctx.progress[&DESTINATION].reset(895_600).await;
+
+        let locker = lock_ledger(&db).await;
+        let task_ctx = ctx.clone();
+        let confirmed = tokio::spawn(async move {
+            task_ctx
+                .process(DESTINATION, &realtime_batch(895_700, 895_710, relay_logs()))
+                .await
+        });
+        wait_for_ledger_lock_waiters(&db, 1).await;
+
+        let reach = tokio::time::timeout(Duration::from_secs(5), reach_of(&ctx, DESTINATION))
+            .await
+            .expect("the confirmed path holds the reach lock across its write");
+        assert_eq!(reach, 895_710);
+        assert!(!confirmed.is_finished());
+
+        locker.rollback().await.unwrap();
+        confirmed
+            .await
+            .unwrap()
+            .unwrap_or_else(|err| panic!("{:#}", err.error));
+        for row in ledger_rows_of(&db, "relayed_message")
+            .await
+            .into_iter()
+            .chain(execution_rows(&db).await)
+        {
+            assert_eq!(row.state, "confirmed");
+        }
+        assert!(!ledger(&db).await.is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "needs database"]
+    async fn test_range_processed_raises_the_frontier_for_realtime_only() {
+        let (_guard, db) = setup("op_progress_frontier").await;
+        let ctx = run_context(&db, new_buffer(&db, Duration::from_secs(60)));
+        let frontier = || ctx.progress[&SOURCE].sweep_frontier.load(Ordering::SeqCst);
+
+        ctx.range_processed(SOURCE, ScanDirection::Realtime, 10, 20)
+            .await;
+        assert_eq!(frontier(), 20);
+        ctx.range_processed(SOURCE, ScanDirection::Realtime, 5, 8)
+            .await;
+        assert_eq!(frontier(), 20);
+        ctx.range_processed(SOURCE, ScanDirection::Catchup, 100, 200)
+            .await;
+        assert_eq!(frontier(), 20);
     }
 }

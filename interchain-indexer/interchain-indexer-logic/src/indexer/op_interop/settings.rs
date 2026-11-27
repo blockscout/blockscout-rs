@@ -20,6 +20,13 @@ pub struct OpInteropIndexerSettings {
     pub confirmation_block_tag: ConfirmationBlockTag,
     #[serde(default)]
     pub failure_retry: FailureRetrySettings,
+    /// Read the unsafe window above the confirmation tag and show its messages
+    /// as provisional (`pending_finality`), retracting them if their block is
+    /// replaced (ADR-022). Off by default: turn it on only where the frontend
+    /// shows `pending_finality` / `invalidated` and the stats service excludes
+    /// `invalidated`. The confirmation sweep runs either way.
+    #[serde(default)]
+    pub optimistic_overlay: bool,
 }
 
 impl Default for OpInteropIndexerSettings {
@@ -29,6 +36,7 @@ impl Default for OpInteropIndexerSettings {
             batch_size: default_batch_size(),
             confirmation_block_tag: ConfirmationBlockTag::default(),
             failure_retry: FailureRetrySettings::default(),
+            optimistic_overlay: false,
         }
     }
 }
@@ -89,6 +97,7 @@ mod tests {
             ConfirmationBlockTag::Finalized
         );
         assert_eq!(settings.failure_retry, FailureRetrySettings::default());
+        assert!(!settings.optimistic_overlay);
         assert_eq!(
             HeadBlockTag::from(settings.confirmation_block_tag),
             HeadBlockTag::Finalized
@@ -112,6 +121,18 @@ mod tests {
             assert_eq!(settings.confirmation_block_tag.as_str(), raw);
             assert_eq!(HeadBlockTag::from(settings.confirmation_block_tag), head);
         }
+    }
+
+    #[test]
+    fn test_op_interop_settings_accepts_optimistic_overlay_and_rejects_unknown_keys() {
+        let settings: OpInteropIndexerSettings =
+            serde_json::from_value(serde_json::json!({"optimistic_overlay": true}))
+                .expect("overlay flag deserializes");
+        assert!(settings.optimistic_overlay);
+
+        let result: Result<OpInteropIndexerSettings, _> =
+            serde_json::from_value(serde_json::json!({"optimistic_overlays": true}));
+        assert!(result.is_err());
     }
 
     #[test]

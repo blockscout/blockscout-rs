@@ -128,6 +128,10 @@ So **one scanner per `(bridge, chain)`**, covering every configured address at
 the lowest configured floor. Over-scanning is cheap; splitting a scan under a
 shared key loses data with no failure signal anywhere.
 
+*Amended 2026-11-26:* the OP overlay (ADR-022) reads the same pairs but is not
+a scanner of record. It writes no checkpoint and no `indexer_failures` row, so
+the rule holds.
+
 ### Forward constraint
 
 `catchup_min_cursor` is seeded at startup and lowered by a startup reconciliation

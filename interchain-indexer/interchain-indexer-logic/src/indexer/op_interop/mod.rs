@@ -11,11 +11,8 @@ mod events;
 pub mod indexer;
 mod lifecycle;
 pub(crate) mod metrics;
+mod overlay;
 pub mod settings;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "wired by the OP overlay loop (slice 6c)")
-)]
 mod sweep;
 mod types;
 mod version;

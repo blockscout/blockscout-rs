@@ -40,6 +40,10 @@ a `null` head, or a head behind the cursor means wait; there is **no fallback
 to `latest`**. All other indexers keep the `Latest` default with the same RPC
 call as before.
 
+*Amended 2026-11-26 by ADR-022:* with `optimistic_overlay`, a second read goes
+up to `latest`. It writes only provisional ledger rows and buffer legs, records
+no block and moves no checkpoint; only the confirmed stream confirms.
+
 ### 2. Fetch logs only
 
 No receipts and no block headers. Block hash and block timestamp come from the
@@ -137,6 +141,8 @@ ledger deliberately has no link to the message table.
 ### Positive
 
 - Nothing written can be retracted by a reorg of an unconfirmed block.
+  *Amended 2026-11-26 by ADR-022:* confirmed rows still cannot be; provisional
+  rows are retracted by the confirmation sweep.
 - No receipt or header RPC load: one `eth_getLogs` per range per chain.
 - Per-leg evidence, with block hashes, is kept for a sent message even if it
   never completes. A relay seen before its source is not in the ledger yet:

@@ -104,6 +104,12 @@ pub struct LogStream {
     /// by that tag's block and never falls back to `latest`.
     #[builder(default)]
     head_tag: HeadBlockTag,
+    /// Yield a realtime range that returned no logs as an empty `LogBatch`,
+    /// so a consumer learns that the range is done (the OP sweep frontier,
+    /// ADR-022). Off by default: every other stream yields non-empty batches
+    /// only, as before.
+    #[builder(default)]
+    yield_empty_realtime: bool,
     /// Database handle used to persist the `catchup_max_cursor` checkpoint
     /// when the catchup stream finishes scanning down to `genesis_block`.
     /// Required for catchup completion to survive restarts.
@@ -269,6 +275,7 @@ impl LogStream {
         let bridge_id = self.bridge_id;
         let chain_id = self.chain_id;
         let head_tag = self.head_tag;
+        let yield_empty_realtime = self.yield_empty_realtime;
         // Only a tagged head is exported: the metric surface of every stream
         // that reads to `latest` stays exactly what it was.
         let head_metric_labels = (head_tag != HeadBlockTag::Latest).then(|| {
@@ -342,7 +349,7 @@ impl LogStream {
                 tracing::info!(bridge_id, chain_id, from_block, to_block, size =? (to_block - from_block + 1), "scanning REALTIME logs");
                 match fetch_logs(provider.clone(), &filter, from_block, to_block).await {
                     Ok(logs) => {
-                        if !logs.is_empty() {
+                        if !logs.is_empty() || yield_empty_realtime {
                             tracing::debug!(
                                 bridge_id,
                                 chain_id,
@@ -437,7 +444,7 @@ pub(crate) async fn fetch_logs(
     Ok(logs)
 }
 
-fn is_get_logs_error_silent(err: &Error) -> bool {
+pub(crate) fn is_get_logs_error_silent(err: &Error) -> bool {
     err.chain().any(|cause| {
         cause
             .to_string()
@@ -508,7 +515,10 @@ pub(crate) mod test_support {
     use std::{
         collections::VecDeque,
         future,
-        sync::{Arc, Mutex},
+        sync::{
+            Arc, Mutex,
+            atomic::{AtomicU64, Ordering},
+        },
         task::{Context as TaskContext, Poll},
     };
 
@@ -533,24 +543,68 @@ pub(crate) mod test_support {
         Error,
     }
 
+    /// One scripted answer to `eth_getLogs`.
+    #[derive(Clone, Debug)]
+    pub(crate) enum ScriptedLogs {
+        Logs(Vec<Log>),
+        Error,
+        /// Answers like `Logs`, but only once the test opens the gate: the mock
+        /// signals `entered`, then waits for `release`.
+        Gated(Vec<Log>, LogsGate),
+    }
+
+    /// Holds one scripted `eth_getLogs` answer until the test releases it.
+    #[derive(Clone, Debug, Default)]
+    pub(crate) struct LogsGate {
+        entered: Arc<tokio::sync::Notify>,
+        release: Arc<tokio::sync::Notify>,
+    }
+
+    impl LogsGate {
+        /// Resolves once the mock has received the gated request.
+        pub(crate) async fn entered(&self) {
+            self.entered.notified().await;
+        }
+
+        /// Lets the gated answer go.
+        pub(crate) fn release(&self) {
+            self.release.notify_one();
+        }
+    }
+
     /// `eth_blockNumber` always answers `latest`. `eth_getBlockByNumber`
     /// answers from the scripted queue, repeating the last entry once the
-    /// queue is down to one. `eth_getLogs` answers one dummy log per call,
-    /// because a `LogStream` yields only non-empty batches.
+    /// queue is down to one. `eth_getLogs` answers from the scripted queue
+    /// (`with_logs`), front first; once it is empty, one dummy log per call,
+    /// because a `LogStream` yields only non-empty batches unless it is built with
+    /// `yield_empty_realtime`.
     #[derive(Clone)]
     pub(crate) struct HeadMockService {
-        latest: u64,
+        latest: Arc<AtomicU64>,
         tagged_heads: Arc<Mutex<VecDeque<TaggedHead>>>,
+        logs_script: Arc<Mutex<VecDeque<ScriptedLogs>>>,
         calls: Arc<Mutex<Vec<(String, Value)>>>,
     }
 
     impl HeadMockService {
         pub(crate) fn new(latest: u64, tagged_heads: Vec<TaggedHead>) -> Self {
             Self {
-                latest,
+                latest: Arc::new(AtomicU64::new(latest)),
                 tagged_heads: Arc::new(Mutex::new(tagged_heads.into())),
+                logs_script: Arc::new(Mutex::new(VecDeque::new())),
                 calls: Arc::new(Mutex::new(Vec::new())),
             }
+        }
+
+        /// `eth_getLogs` answers from this queue, front first; once it is
+        /// empty, the default single dummy log at `fromBlock`.
+        pub(crate) fn with_logs(self, script: Vec<ScriptedLogs>) -> Self {
+            *self.logs_script.lock().expect("lock poisoned") = script.into();
+            self
+        }
+
+        pub(crate) fn set_latest(&self, latest: u64) {
+            self.latest.store(latest, Ordering::SeqCst);
         }
 
         /// Every `(method, params)` received so far, in order.
@@ -583,6 +637,7 @@ pub(crate) mod test_support {
         }
 
         fn call(&mut self, req: RequestPacket) -> Self::Future {
+            let mut gated: Option<(Id, Vec<Log>, LogsGate)> = None;
             let result = match req.as_single() {
                 Some(request) => {
                     let method = request.method().to_string();
@@ -596,9 +651,10 @@ pub(crate) mod test_support {
                         .push((method.clone(), params.clone()));
                     let id = request.id().clone();
                     match method.as_str() {
-                        "eth_blockNumber" => {
-                            Ok(json_response(id, &json!(format!("{:#x}", self.latest))))
-                        }
+                        "eth_blockNumber" => Ok(json_response(
+                            id,
+                            &json!(format!("{:#x}", self.latest.load(Ordering::SeqCst))),
+                        )),
                         "eth_getBlockByNumber" => match self.next_tagged_head() {
                             Some(TaggedHead::Block(number)) => Ok(json_response(
                                 id,
@@ -617,12 +673,27 @@ pub(crate) mod test_support {
                             )),
                         },
                         "eth_getLogs" => {
-                            let log: Log = Log {
-                                block_number: requested_range(&params).map(|(from, _)| from),
-                                log_index: Some(0),
-                                ..Default::default()
-                            };
-                            Ok(json_response(id, &vec![log]))
+                            let scripted =
+                                self.logs_script.lock().expect("lock poisoned").pop_front();
+                            match scripted {
+                                Some(ScriptedLogs::Logs(logs)) => Ok(json_response(id, &logs)),
+                                Some(ScriptedLogs::Error) => Err(TransportErrorKind::custom_str(
+                                    "HeadMockService: scripted logs error",
+                                )),
+                                Some(ScriptedLogs::Gated(logs, gate)) => {
+                                    gated = Some((id, logs, gate));
+                                    Err(TransportErrorKind::custom_str("unreachable"))
+                                }
+                                None => {
+                                    let log: Log = Log {
+                                        block_number: requested_range(&params)
+                                            .map(|(from, _)| from),
+                                        log_index: Some(0),
+                                        ..Default::default()
+                                    };
+                                    Ok(json_response(id, &vec![log]))
+                                }
+                            }
                         }
                         other => Err(TransportErrorKind::custom_str(&format!(
                             "HeadMockService: unexpected method {other}"
@@ -633,6 +704,13 @@ pub(crate) mod test_support {
                     "HeadMockService: expected a single request",
                 )),
             };
+            if let Some((id, logs, gate)) = gated {
+                return Box::pin(async move {
+                    gate.entered.notify_one();
+                    gate.release.notified().await;
+                    Ok(json_response(id, &logs))
+                });
+            }
             Box::pin(future::ready(result))
         }
     }
@@ -660,7 +738,7 @@ mod tests {
     use anyhow::Context;
 
     use super::{
-        test_support::{HeadMockService, TaggedHead, requested_range},
+        test_support::{HeadMockService, ScriptedLogs, TaggedHead, requested_range},
         *,
     };
 
@@ -673,12 +751,22 @@ mod tests {
         cursor: u64,
         head_tag: Option<HeadBlockTag>,
     ) -> stream::BoxStream<'static, LogBatch> {
+        realtime_only_stream_with(mock, cursor, head_tag, false)
+    }
+
+    fn realtime_only_stream_with(
+        mock: &HeadMockService,
+        cursor: u64,
+        head_tag: Option<HeadBlockTag>,
+        yield_empty_realtime: bool,
+    ) -> stream::BoxStream<'static, LogBatch> {
         let builder = LogStream::builder(mock.provider())
             .genesis_block(cursor)
             .realtime_cursor(cursor)
             .catchup_cursor(cursor - 1)
             .poll_interval(Duration::from_millis(5))
-            .batch_size(100);
+            .batch_size(100)
+            .yield_empty_realtime(yield_empty_realtime);
         match head_tag {
             Some(head_tag) => builder.head_tag(head_tag).catchup().realtime().build(),
             None => builder.catchup().realtime().build(),
@@ -788,6 +876,38 @@ mod tests {
 
         assert_eq!((batch.from_block, batch.to_block), (100, 105));
         assert_eq!(methods(&mock), vec!["eth_blockNumber", "eth_getLogs"]);
+    }
+
+    #[tokio::test]
+    async fn test_realtime_stream_yields_empty_ranges_when_asked() {
+        let mock =
+            HeadMockService::new(1_000, vec![TaggedHead::Block(105), TaggedHead::Block(110)])
+                .with_logs(vec![ScriptedLogs::Logs(vec![]), ScriptedLogs::Logs(vec![])]);
+        let mut stream = realtime_only_stream_with(&mock, 100, Some(HeadBlockTag::Finalized), true);
+
+        let first = stream.next().await.expect("first batch");
+        let second = stream.next().await.expect("second batch");
+
+        assert_eq!((first.from_block, first.to_block), (100, 105));
+        assert_eq!((second.from_block, second.to_block), (106, 110));
+        assert!(first.logs.is_empty());
+        assert!(second.logs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_realtime_stream_skips_empty_ranges_by_default() {
+        let mock =
+            HeadMockService::new(1_000, vec![TaggedHead::Block(105), TaggedHead::Block(110)])
+                .with_logs(vec![ScriptedLogs::Logs(vec![]), ScriptedLogs::Logs(vec![])]);
+        let mut stream = realtime_only_stream(&mock, 100, Some(HeadBlockTag::Finalized));
+
+        let next = tokio::time::timeout(Duration::from_millis(100), stream.next()).await;
+
+        assert!(next.is_err(), "an empty range must not be yielded");
+        assert!(
+            methods(&mock).iter().any(|method| method == "eth_getLogs"),
+            "eth_getLogs was still called"
+        );
     }
 
     #[test]

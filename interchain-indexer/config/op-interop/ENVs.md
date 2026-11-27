@@ -171,6 +171,7 @@ takes ~12k calls at `max_rps` `2`. Use one RPC backend per chain, as above.
 INTERCHAIN_INDEXER__CHAINS_CONFIG=config/op-interop/chains-demo.json
 INTERCHAIN_INDEXER__BRIDGES_CONFIG=config/op-interop/bridges-demo.json
 INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__BATCH_SIZE=10000
+INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__OPTIMISTIC_OVERLAY=true
 ```
 
 `just run-op-demo` starts the service with exactly these values.
@@ -279,7 +280,14 @@ Applies to whichever set is loaded. The values are the defaults.
 INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__PULL_INTERVAL_MS=2000
 INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__BATCH_SIZE=500
 INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__CONFIRMATION_BLOCK_TAG=finalized
+INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__OPTIMISTIC_OVERLAY=false
 ```
+
+`OPTIMISTIC_OVERLAY=true` also reads above the confirmation tag and shows
+messages as provisional within seconds; it roughly doubles `eth_getLogs` per
+chain. `just run-op-demo` and `just run-op-devnet` turn it on. On the Lagoon
+devnets, whose tags have stalled for days, every relayed message then stays
+`pending_finality`.
 
 `CONFIRMATION_BLOCK_TAG` is `finalized` or `safe`; `latest` is not accepted.
 See `README.md`'s `INTERCHAIN_INDEXER__OP_INTEROP_INDEXER__*` block for the
